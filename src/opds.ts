@@ -18,6 +18,13 @@ export function escapeXml(str: string): string {
 }
 
 /**
+ * Кодирует путь для URL (сохраняя слэши)
+ */
+function encodeUrlPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+/**
  * Генерирует ISO 8601 timestamp
  */
 function timestamp(): string {
@@ -46,7 +53,7 @@ export function buildNavigationFeed(
   entries: NavigationEntry[],
   baseUrl: string
 ): string {
-  const selfHref = path ? `${baseUrl}/opds/${path}` : `${baseUrl}/opds`;
+  const selfHref = path ? `${baseUrl}/opds/${encodeUrlPath(path)}` : `${baseUrl}/opds`;
   const updated = timestamp();
 
   const entriesXml = entries
@@ -56,7 +63,7 @@ export function buildNavigationFeed(
     <id>${feedId(entry.href)}</id>
     <updated>${updated}</updated>
     <link rel="subsection"
-          href="${escapeXml(baseUrl)}/opds/${escapeXml(entry.href)}"
+          href="${baseUrl}/opds/${encodeUrlPath(entry.href)}"
           type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
     ${entry.count !== undefined ? `<content type="text">${entry.count} книг</content>` : ""}
   </entry>`
@@ -68,8 +75,8 @@ export function buildNavigationFeed(
   <id>${feedId(path)}</id>
   <title>${escapeXml(title)}</title>
   <updated>${updated}</updated>
-  <link rel="self" href="${escapeXml(selfHref)}" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-  <link rel="start" href="${escapeXml(baseUrl)}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="self" href="${selfHref}" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 ${entriesXml}
 </feed>`;
 }
@@ -83,7 +90,7 @@ export function buildAcquisitionFeed(
   books: BookMeta[],
   baseUrl: string
 ): string {
-  const selfHref = `${baseUrl}/opds/${path}`;
+  const selfHref = `${baseUrl}/opds/${encodeUrlPath(path)}`;
   const updated = timestamp();
 
   const entriesXml = books
@@ -94,9 +101,9 @@ export function buildAcquisitionFeed(
     <updated>${updated}</updated>
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
-    <link rel="${OPDS_SPEC}/acquisition/open-access"
-          href="${escapeXml(baseUrl)}/download/${escapeXml(book.filePath)}"
-          type="${escapeXml(book.mimeType)}"/>
+    <link rel="${OPDS_SPEC}/acquisition"
+          href="${baseUrl}/download/${encodeUrlPath(book.filePath)}"
+          type="${book.mimeType}"/>
   </entry>`
     )
     .join("\n");
@@ -106,8 +113,8 @@ export function buildAcquisitionFeed(
   <id>${feedId(path)}</id>
   <title>${escapeXml(title)}</title>
   <updated>${updated}</updated>
-  <link rel="self" href="${escapeXml(selfHref)}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  <link rel="start" href="${escapeXml(baseUrl)}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="self" href="${selfHref}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 ${entriesXml}
 </feed>`;
 }
@@ -122,7 +129,7 @@ export function buildMixedFeed(
   books: BookMeta[],
   baseUrl: string
 ): string {
-  const selfHref = path ? `${baseUrl}/opds/${path}` : `${baseUrl}/opds`;
+  const selfHref = path ? `${baseUrl}/opds/${encodeUrlPath(path)}` : `${baseUrl}/opds`;
   const updated = timestamp();
 
   // Navigation entries для подпапок
@@ -133,7 +140,7 @@ export function buildMixedFeed(
     <id>${feedId(entry.href)}</id>
     <updated>${updated}</updated>
     <link rel="subsection"
-          href="${escapeXml(baseUrl)}/opds/${escapeXml(entry.href)}"
+          href="${baseUrl}/opds/${encodeUrlPath(entry.href)}"
           type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
     ${entry.count !== undefined ? `<content type="text">${entry.count} книг</content>` : ""}
   </entry>`
@@ -152,11 +159,11 @@ export function buildMixedFeed(
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
     <link rel="${OPDS_SPEC}/image"
-          href="${escapeXml(baseUrl)}/cover/${escapeXml(book.filePath)}"
+          href="${baseUrl}/cover/${encodeUrlPath(book.filePath)}"
           type="image/jpeg"/>
-    <link rel="${OPDS_SPEC}/acquisition/open-access"
-          href="${escapeXml(baseUrl)}/download/${escapeXml(book.filePath)}"
-          type="${escapeXml(book.mimeType)}"/>
+    <link rel="${OPDS_SPEC}/acquisition"
+          href="${baseUrl}/download/${encodeUrlPath(book.filePath)}"
+          type="${book.mimeType}"/>
   </entry>`
     )
     .join("\n");
@@ -169,8 +176,8 @@ export function buildMixedFeed(
   <id>${feedId(path)}</id>
   <title>${escapeXml(title)}</title>
   <updated>${updated}</updated>
-  <link rel="self" href="${escapeXml(selfHref)}" type="application/atom+xml;profile=opds-catalog;kind=${kind}"/>
-  <link rel="start" href="${escapeXml(baseUrl)}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="self" href="${selfHref}" type="application/atom+xml;profile=opds-catalog;kind=${kind}"/>
+  <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 ${folderEntriesXml}
 ${bookEntriesXml}
 </feed>`;
