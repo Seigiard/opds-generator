@@ -1,5 +1,8 @@
 FROM oven/bun:1-alpine
 
+# unzip package includes both unzip and zipinfo binaries
+RUN apk add --no-cache unzip
+
 WORKDIR /app
 
 COPY package.json bun.lock* ./
