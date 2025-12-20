@@ -135,13 +135,36 @@ export async function extractCoverLazy(
     return true;
   }
 
-  // Нет источника обложки в метаданных
-  if (!meta.coverSourcePath) {
+  const fullPath = join(filesPath, meta.filePath);
+  let coverSourcePath = meta.coverSourcePath;
+
+  // Fallback: если coverSourcePath нет (старый кэш), пробуем извлечь из файла
+  if (!coverSourcePath) {
+    coverSourcePath = await detectCoverPath(fullPath, meta.format.toLowerCase());
+  }
+
+  if (!coverSourcePath) {
     return false;
   }
 
-  const fullPath = join(filesPath, meta.filePath);
-  return extractCover(fullPath, meta.coverSourcePath, meta.filePath, dataPath);
+  return extractCover(fullPath, coverSourcePath, meta.filePath, dataPath);
+}
+
+/**
+ * Определяет путь к обложке внутри архива
+ */
+async function detectCoverPath(filePath: string, format: string): Promise<string | undefined> {
+  if (format === "epub") {
+    const epub = await extractEpubMeta(filePath);
+    return epub.coverPath;
+  }
+
+  if (format === "cbz" || format === "cbr" || format === "zip") {
+    const cbz = await extractCbzMeta(filePath);
+    return cbz.coverPath;
+  }
+
+  return undefined;
 }
 
 /**
