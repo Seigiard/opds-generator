@@ -275,7 +275,7 @@ const server = Bun.serve({
     }
 
     if (path === "/opds" || path.startsWith("/opds/")) {
-      const feedPath = path === "/opds" ? "" : path.slice(6);
+      const feedPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
       return handleOpds(feedPath);
     }
 
