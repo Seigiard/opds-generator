@@ -24,21 +24,11 @@ export interface FolderInfo {
   files: FileInfo[];
 }
 
-/** Метаданные книги */
 export interface BookMeta {
-  /** Название (из имени файла или метаданных) */
   title: string;
-  /** Автор (если извлечён) */
-  author?: string;
-  /** Описание */
-  description?: string;
-  /** Формат файла */
   format: string;
-  /** MIME-тип для OPDS */
   mimeType: string;
-  /** Относительный путь к файлу */
   filePath: string;
-  /** Размер файла */
   fileSize: number;
 }
 

@@ -92,7 +92,6 @@ export function buildAcquisitionFeed(
     <title>${escapeXml(book.title)}</title>
     <id>urn:opds:book:${escapeXml(book.filePath)}</id>
     <updated>${updated}</updated>
-    ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
     <link rel="${OPDS_SPEC}/acquisition/open-access"
@@ -148,7 +147,6 @@ export function buildMixedFeed(
     <title>${escapeXml(book.title)}</title>
     <id>urn:opds:book:${escapeXml(book.filePath)}</id>
     <updated>${updated}</updated>
-    ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
     <link rel="${OPDS_SPEC}/acquisition/open-access"
