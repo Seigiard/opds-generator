@@ -1,9 +1,14 @@
 import { watch } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, basename, extname } from "node:path";
-import { scanDirectory, buildFolderStructure, computeHash } from "./scanner.ts";
+import { scanDirectory, buildFolderStructure, computeHash, computeFileHash } from "./scanner.ts";
 import { readManifest, writeManifest, createManifest } from "./manifest.ts";
-import { extractBasicMeta } from "./metadata.ts";
+import {
+  extractBasicMeta,
+  listCachedMeta,
+  writeCachedMeta,
+  deleteCachedMeta,
+} from "./metadata.ts";
 import { buildMixedFeed, pathToFilename } from "./opds.ts";
 import type { FolderInfo, BookMeta } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
@@ -65,20 +70,72 @@ async function rebuild(): Promise<void> {
   const startTime = Date.now();
 
   try {
+    // Сканируем файловую систему
     const files = await scanDirectory(FILES_PATH);
     console.log(`[Rebuild] Found ${files.length} books`);
 
+    // Загружаем кэш метаданных
+    const cached = await listCachedMeta(DATA_PATH);
+    console.log(`[Rebuild] Cached: ${cached.size} entries`);
+
+    // Сравниваем и определяем изменения
+    const currentPaths = new Set(files.map((f) => f.relativePath));
+    const cachedPaths = new Set(cached.keys());
+
+    const added: string[] = [];
+    const changed: string[] = [];
+    const removed: string[] = [];
+
+    // Новые и изменённые файлы
+    for (const file of files) {
+      const cachedMeta = cached.get(file.relativePath);
+      if (!cachedMeta) {
+        added.push(file.relativePath);
+      } else {
+        const newHash = computeFileHash(file);
+        if (cachedMeta.hash !== newHash) {
+          changed.push(file.relativePath);
+        }
+      }
+    }
+
+    // Удалённые файлы
+    for (const path of cachedPaths) {
+      if (!currentPaths.has(path)) {
+        removed.push(path);
+      }
+    }
+
+    console.log(
+      `[Rebuild] Changes: +${added.length} ~${changed.length} -${removed.length}`
+    );
+
+    // Удаляем устаревшие из кэша
+    for (const path of removed) {
+      await deleteCachedMeta(DATA_PATH, path);
+      cached.delete(path);
+    }
+
+    // Добавляем/обновляем метаданные
+    for (const path of [...added, ...changed]) {
+      const file = files.find((f) => f.relativePath === path)!;
+      const meta = extractBasicMeta(file);
+      await writeCachedMeta(DATA_PATH, path, meta);
+      cached.set(path, meta);
+    }
+
+    // Вычисляем хэш каталога
     currentHash = computeHash(files);
     console.log(`[Rebuild] Hash: ${currentHash}`);
 
+    // Строим структуру папок
     folders = buildFolderStructure(FILES_PATH, files);
     console.log(`[Rebuild] Found ${folders.length} folders`);
 
+    // Группируем книги по папкам (из кэша)
     booksByFolder = new Map();
-    for (const file of files) {
-      const folderPath = file.relativePath.split("/").slice(0, -1).join("/");
-      const meta = extractBasicMeta(file);
-
+    for (const meta of cached.values()) {
+      const folderPath = meta.filePath.split("/").slice(0, -1).join("/");
       if (!booksByFolder.has(folderPath)) {
         booksByFolder.set(folderPath, []);
       }

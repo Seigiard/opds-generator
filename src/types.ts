@@ -30,38 +30,28 @@ export interface BookMeta {
   mimeType: string;
   filePath: string;
   fileSize: number;
+  hash: string;
 }
 
-/** Манифест каталога — хранится в $DATA/manifest.json */
 export interface Manifest {
-  /** Версия формата манифеста */
   version: 1;
-  /** Хэш каталога (для определения изменений) */
   hash: string;
-  /** Время последнего сканирования */
   lastScan: number;
-  /** Индекс файлов: relativePath → hash файла */
   files: Record<string, string>;
-  /** Структура папок */
   folders: string[];
 }
 
-/** Результат сравнения манифестов */
 export interface ManifestDiff {
   added: string[];
   removed: string[];
   changed: string[];
 }
 
-/** Структура каталога для генерации OPDS */
 export interface CatalogStructure {
-  /** Корневые папки */
   rootFolders: FolderInfo[];
-  /** Все книги (плоский список) */
   allBooks: BookMeta[];
 }
 
-/** MIME-типы для поддерживаемых форматов */
 export const MIME_TYPES: Record<string, string> = {
   epub: "application/epub+zip",
   pdf: "application/pdf",

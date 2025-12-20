@@ -15,6 +15,7 @@
 - [x] Кэширование фидов в $DATA/opds/
 - [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
 - [x] Dockerfile + docker-compose
+- [x] Инкрементальное обновление метаданных ($DATA/raw/)
 
 ### Планируется
 - [ ] Извлечение метаданных из EPUB (обложки, автор, описание)
@@ -33,10 +34,13 @@ BASE_URL=http://...     # Базовый URL для ссылок
 ```
 $DATA/
 ├── manifest.json       # Хэш каталога + индекс файлов
-└── opds/               # Сгенерированные OPDS фиды
-    ├── root.xml        # GET /opds
-    ├── fiction.xml     # GET /opds/fiction
-    └── fiction--scifi.xml  # GET /opds/fiction/scifi
+├── opds/               # Сгенерированные OPDS фиды
+│   ├── root.xml        # GET /opds
+│   ├── fiction.xml     # GET /opds/fiction
+│   └── fiction--scifi.xml  # GET /opds/fiction/scifi
+└── raw/                # Кэш метаданных отдельных книг
+    ├── f8a2c1d3-Foundation.epub.json
+    └── b7e4f9a2-Dune.epub.json
 ```
 
 ### Структура проекта
