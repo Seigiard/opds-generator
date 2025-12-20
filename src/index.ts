@@ -1,10 +1,12 @@
+import { watch } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { join, basename, extname } from "node:path";
 import { scanDirectory, buildFolderStructure, computeHash } from "./scanner.ts";
 import { readManifest, writeManifest, createManifest } from "./manifest.ts";
 import { extractBasicMeta } from "./metadata.ts";
 import { buildMixedFeed, pathToFilename } from "./opds.ts";
 import type { FolderInfo, BookMeta } from "./types.ts";
+import { BOOK_EXTENSIONS } from "./types.ts";
 
 const FILES_PATH = process.env.FILES || "./files";
 const DATA_PATH = process.env.DATA || "./data";
@@ -15,6 +17,7 @@ let currentHash = "";
 let folders: FolderInfo[] = [];
 let booksByFolder: Map<string, BookMeta[]> = new Map();
 let isRebuilding = false;
+let rebuildTimer: Timer | null = null;
 
 async function generateFeeds(): Promise<void> {
   const opdsPath = join(DATA_PATH, "opds");
@@ -96,23 +99,30 @@ async function rebuild(): Promise<void> {
   }
 }
 
-async function checkAndRebuild(): Promise<void> {
-  try {
-    const files = await scanDirectory(FILES_PATH);
-    const newHash = computeHash(files);
+function isBookFile(filename: string): boolean {
+  const ext = extname(filename).slice(1).toLowerCase();
+  return BOOK_EXTENSIONS.includes(ext);
+}
 
-    if (newHash !== currentHash) {
-      console.log("[Check] Hash changed, triggering rebuild");
-      rebuild();
+function scheduleRebuild(): void {
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => {
+    rebuild();
+    rebuildTimer = null;
+  }, 500);
+}
+
+function startWatcher(): void {
+  watch(FILES_PATH, { recursive: true }, (event, filename) => {
+    if (filename && isBookFile(filename)) {
+      console.log(`[Watch] ${event}: ${filename}`);
+      scheduleRebuild();
     }
-  } catch (error) {
-    console.error("[Check] Error:", error);
-  }
+  });
+  console.log(`[Watch] Watching ${FILES_PATH}`);
 }
 
 async function handleOpds(feedPath: string): Promise<Response> {
-  checkAndRebuild();
-
   const filename = pathToFilename(feedPath);
   const file = Bun.file(join(DATA_PATH, "opds", filename));
 
@@ -120,8 +130,6 @@ async function handleOpds(feedPath: string): Promise<Response> {
     return new Response(file, {
       headers: {
         "Content-Type": "application/atom+xml;charset=utf-8",
-        "ETag": `"${currentHash}"`,
-        "Cache-Control": "public, max-age=60",
       },
     });
   }
@@ -183,4 +191,5 @@ if (oldManifest) {
 }
 
 await rebuild();
+startWatcher();
 console.log(`[Server] Listening on http://localhost:${server.port}`);
