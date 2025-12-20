@@ -8,6 +8,7 @@ import {
   listCachedMeta,
   writeCachedMeta,
   deleteCachedMeta,
+  getCoverPath,
 } from "./metadata.ts";
 import { buildMixedFeed, pathToFilename } from "./opds.ts";
 import type { FolderInfo, BookMeta } from "./types.ts";
@@ -119,7 +120,7 @@ async function rebuild(): Promise<void> {
     // Добавляем/обновляем метаданные
     for (const path of [...added, ...changed]) {
       const file = files.find((f) => f.relativePath === path)!;
-      const meta = extractBasicMeta(file);
+      const meta = await extractBasicMeta(file, DATA_PATH);
       await writeCachedMeta(DATA_PATH, path, meta);
       cached.set(path, meta);
     }
@@ -208,6 +209,22 @@ async function handleDownload(filePath: string): Promise<Response> {
   return new Response("File not found", { status: 404 });
 }
 
+async function handleCover(filePath: string): Promise<Response> {
+  const coverPath = getCoverPath(filePath, DATA_PATH);
+  const file = Bun.file(coverPath);
+
+  if (await file.exists()) {
+    return new Response(file, {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=31536000",
+      },
+    });
+  }
+
+  return new Response("Cover not found", { status: 404 });
+}
+
 const server = Bun.serve({
   port: PORT,
 
@@ -227,6 +244,11 @@ const server = Bun.serve({
     if (path.startsWith("/download/")) {
       const filePath = decodeURIComponent(path.slice(10));
       return handleDownload(filePath);
+    }
+
+    if (path.startsWith("/cover/")) {
+      const filePath = decodeURIComponent(path.slice(7));
+      return handleCover(filePath);
     }
 
     return new Response("Not found", { status: 404 });

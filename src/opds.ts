@@ -146,9 +146,14 @@ export function buildMixedFeed(
       (book) => `  <entry>
     <title>${escapeXml(book.title)}</title>
     <id>urn:opds:book:${escapeXml(book.filePath)}</id>
-    <updated>${updated}</updated>
+    <updated>${updated}</updated>${book.author ? `
+    <author><name>${escapeXml(book.author)}</name></author>` : ""}${book.description ? `
+    <summary>${escapeXml(book.description)}</summary>` : ""}
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
+    <link rel="${OPDS_SPEC}/image"
+          href="${escapeXml(baseUrl)}/cover/${escapeXml(book.filePath)}"
+          type="image/jpeg"/>
     <link rel="${OPDS_SPEC}/acquisition/open-access"
           href="${escapeXml(baseUrl)}/download/${escapeXml(book.filePath)}"
           type="${escapeXml(book.mimeType)}"/>

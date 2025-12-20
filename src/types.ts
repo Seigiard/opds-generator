@@ -26,6 +26,8 @@ export interface FolderInfo {
 
 export interface BookMeta {
   title: string;
+  author?: string;
+  description?: string;
   format: string;
   mimeType: string;
   filePath: string;
@@ -60,6 +62,7 @@ export const MIME_TYPES: Record<string, string> = {
   fb2: "application/x-fictionbook+xml",
   cbz: "application/vnd.comicbook+zip",
   cbr: "application/vnd.comicbook-rar",
+  zip: "application/zip", // Определяется по содержимому
   djvu: "image/vnd.djvu",
   txt: "text/plain",
 };
