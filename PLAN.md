@@ -6,17 +6,17 @@
 
 ## Текущий статус
 
-### Реализовано (MVP)
+### Реализовано
 - [x] Сканирование директории с книгами
 - [x] Stat-based хэширование (path + size + mtime, без чтения содержимого)
 - [x] Генерация OPDS Navigation + Acquisition feeds
-- [x] Парсинг имён файлов: "Автор - Название.epub" → author + title
-- [x] HTTP сервер (Bun.serve)
+- [x] Имя файла (без расширения) → title
+- [x] HTTP сервер (Bun.serve + Bun.file)
 - [x] Кэширование фидов в $DATA/opds/
 - [x] Автоматический ребилд при изменении файлов
+- [x] Dockerfile + docker-compose
 
 ### Планируется
-- [x] Dockerfile + docker-compose
 - [ ] ETag + 304 Not Modified
 - [ ] fs.watch для hot reload
 - [ ] Извлечение метаданных из EPUB (обложки, автор, описание)
@@ -44,7 +44,7 @@ $DATA/
 ### Структура проекта
 ```
 src/
-├── index.ts      # Entry point: init + Bun.serve()
+├── index.ts      # Entry point: Bun.serve()
 ├── scanner.ts    # scanDirectory, computeHash
 ├── manifest.ts   # readManifest, writeManifest
 ├── metadata.ts   # extractBasicMeta
