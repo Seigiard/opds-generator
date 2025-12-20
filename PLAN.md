@@ -13,12 +13,10 @@
 - [x] Имя файла (без расширения) → title
 - [x] HTTP сервер (Bun.serve + Bun.file)
 - [x] Кэширование фидов в $DATA/opds/
-- [x] Автоматический ребилд при изменении файлов
+- [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
 - [x] Dockerfile + docker-compose
 
 ### Планируется
-- [ ] ETag + 304 Not Modified
-- [ ] fs.watch для hot reload
 - [ ] Извлечение метаданных из EPUB (обложки, автор, описание)
 
 ## Архитектура
@@ -44,7 +42,7 @@ $DATA/
 ### Структура проекта
 ```
 src/
-├── index.ts      # Entry point: Bun.serve()
+├── index.ts      # Entry point: Bun.serve() + fs.watch
 ├── scanner.ts    # scanDirectory, computeHash
 ├── manifest.ts   # readManifest, writeManifest
 ├── metadata.ts   # extractBasicMeta
