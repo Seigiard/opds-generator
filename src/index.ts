@@ -5,6 +5,7 @@ import { scanDirectory, buildFolderStructure, computeHash, computeFileHash } fro
 import { readManifest, writeManifest, createManifest } from "./manifest.ts";
 import {
   extractBasicMeta,
+  extractCoverLazy,
   listCachedMeta,
   writeCachedMeta,
   deleteCachedMeta,
@@ -117,10 +118,10 @@ async function rebuild(): Promise<void> {
       cached.delete(path);
     }
 
-    // Добавляем/обновляем метаданные
+    // Добавляем/обновляем метаданные (обложки извлекаются лениво)
     for (const path of [...added, ...changed]) {
       const file = files.find((f) => f.relativePath === path)!;
-      const meta = await extractBasicMeta(file, DATA_PATH);
+      const meta = await extractBasicMeta(file);
       await writeCachedMeta(DATA_PATH, path, meta);
       cached.set(path, meta);
     }
@@ -209,12 +210,29 @@ async function handleDownload(filePath: string): Promise<Response> {
   return new Response("File not found", { status: 404 });
 }
 
+/** 1x1 серый PNG placeholder (минимальный валидный PNG) */
+const PLACEHOLDER_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+  0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0x78, 0x78, 0x78, 0x00,
+  0x00, 0x02, 0x3d, 0x01, 0x26, 0xf8, 0x7e, 0xb1, 0xa8, 0x00, 0x00, 0x00,
+  0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+]);
+
+function findBookMeta(filePath: string): BookMeta | undefined {
+  const folderPath = filePath.split("/").slice(0, -1).join("/");
+  const books = booksByFolder.get(folderPath);
+  return books?.find((b) => b.filePath === filePath);
+}
+
 async function handleCover(filePath: string): Promise<Response> {
   const coverPath = getCoverPath(filePath, DATA_PATH);
-  const file = Bun.file(coverPath);
+  const coverFile = Bun.file(coverPath);
 
-  if (await file.exists()) {
-    return new Response(file, {
+  // Обложка уже закэширована
+  if (await coverFile.exists()) {
+    return new Response(coverFile, {
       headers: {
         "Content-Type": "image/jpeg",
         "Cache-Control": "public, max-age=31536000",
@@ -222,7 +240,27 @@ async function handleCover(filePath: string): Promise<Response> {
     });
   }
 
-  return new Response("Cover not found", { status: 404 });
+  // Lazy extraction: пробуем извлечь обложку
+  const meta = findBookMeta(filePath);
+  if (meta) {
+    const extracted = await extractCoverLazy(meta, FILES_PATH, DATA_PATH);
+    if (extracted) {
+      return new Response(Bun.file(coverPath), {
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "public, max-age=31536000",
+        },
+      });
+    }
+  }
+
+  // Fallback: placeholder
+  return new Response(PLACEHOLDER_PNG, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=3600", // Короткий кэш для placeholder
+    },
+  });
 }
 
 const server = Bun.serve({

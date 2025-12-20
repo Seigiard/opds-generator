@@ -39,11 +39,9 @@ async function detectZipType(zipPath: string): Promise<ZipContentType> {
 
 /**
  * Извлекает метаданные из файла (EPUB, CBZ или fallback на имя файла)
+ * Обложки НЕ извлекаются здесь — это делается лениво при первом запросе
  */
-export async function extractBasicMeta(
-  file: FileInfo,
-  dataPath?: string
-): Promise<BookMeta> {
+export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
   const fileName = basename(file.relativePath);
   const titleFromFilename = fileName.replace(/\.[^.]+$/, "");
   const mimeType = MIME_TYPES[file.extension] ?? "application/octet-stream";
@@ -53,17 +51,15 @@ export async function extractBasicMeta(
   let author: string | undefined;
   let description: string | undefined;
 
+  let coverSourcePath: string | undefined;
+
   // EPUB
   if (file.extension === "epub") {
     const epub = await extractEpubMeta(file.path);
     title = epub.title || titleFromFilename;
     author = epub.author;
     description = epub.description;
-
-    // Извлекаем обложку
-    if (dataPath && epub.coverPath) {
-      await extractCover(file.path, epub.coverPath, file.relativePath, dataPath);
-    }
+    coverSourcePath = epub.coverPath;
   }
 
   // CBZ/CBR (комиксы)
@@ -71,11 +67,7 @@ export async function extractBasicMeta(
     const cbz = await extractCbzMeta(file.path);
     title = cbz.title || titleFromFilename;
     author = cbz.author;
-
-    // Извлекаем обложку
-    if (dataPath && cbz.coverPath) {
-      await extractCover(file.path, cbz.coverPath, file.relativePath, dataPath);
-    }
+    coverSourcePath = cbz.coverPath;
   }
 
   // ZIP — определяем по содержимому (комикс или fb2)
@@ -86,10 +78,7 @@ export async function extractBasicMeta(
       const cbz = await extractCbzMeta(file.path);
       title = cbz.title || titleFromFilename;
       author = cbz.author;
-
-      if (dataPath && cbz.coverPath) {
-        await extractCover(file.path, cbz.coverPath, file.relativePath, dataPath);
-      }
+      coverSourcePath = cbz.coverPath;
     }
     // TODO: fb2.zip обработка если нужно
   }
@@ -103,25 +92,56 @@ export async function extractBasicMeta(
     filePath: file.relativePath,
     fileSize: file.size,
     hash,
+    coverSourcePath,
   };
 }
 
 /**
  * Извлекает обложку из архива и сохраняет в data/covers/
+ * @returns true если обложка успешно извлечена
  */
 async function extractCover(
   zipPath: string,
   coverEntryPath: string,
   relativePath: string,
   dataPath: string
-): Promise<void> {
-  const coversDir = join(dataPath, COVERS_DIR);
-  await mkdir(coversDir, { recursive: true });
+): Promise<boolean> {
+  try {
+    const coversDir = join(dataPath, COVERS_DIR);
+    await mkdir(coversDir, { recursive: true });
 
-  const coverFilename = coverFilenameFor(relativePath);
-  const destPath = join(coversDir, coverFilename);
+    const coverFilename = coverFilenameFor(relativePath);
+    const destPath = join(coversDir, coverFilename);
 
-  await extractZipEntry(zipPath, coverEntryPath, destPath);
+    await extractZipEntry(zipPath, coverEntryPath, destPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Lazy extraction: извлекает обложку по требованию
+ * Вызывается при запросе /cover/{path}
+ * @returns true если обложка успешно извлечена или уже существует
+ */
+export async function extractCoverLazy(
+  meta: BookMeta,
+  filesPath: string,
+  dataPath: string
+): Promise<boolean> {
+  // Обложка уже есть
+  if (await hasCover(meta.filePath, dataPath)) {
+    return true;
+  }
+
+  // Нет источника обложки в метаданных
+  if (!meta.coverSourcePath) {
+    return false;
+  }
+
+  const fullPath = join(filesPath, meta.filePath);
+  return extractCover(fullPath, meta.coverSourcePath, meta.filePath, dataPath);
 }
 
 /**

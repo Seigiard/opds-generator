@@ -33,6 +33,8 @@ export interface BookMeta {
   filePath: string;
   fileSize: number;
   hash: string;
+  /** Путь к обложке внутри архива (для lazy extraction) */
+  coverSourcePath?: string;
 }
 
 export interface Manifest {
