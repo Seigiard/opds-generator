@@ -2,7 +2,7 @@ import type { BookMeta, FolderInfo } from "./types.ts";
 import { formatFileSize } from "./metadata.ts";
 
 const OPDS_NS = "http://www.w3.org/2005/Atom";
-const DC_NS = "http://purl.org/dc/elements/1.1/";
+const DC_NS = "http://purl.org/dc/terms/";
 const OPDS_SPEC = "http://opds-spec.org";
 
 /**
@@ -98,9 +98,17 @@ export function buildAcquisitionFeed(
       (book) => `  <entry>
     <title>${escapeXml(book.title)}</title>
     <id>urn:opds:book:${escapeXml(book.filePath)}</id>
-    <updated>${updated}</updated>
+    <updated>${updated}</updated>${book.author ? `
+    <author><name>${escapeXml(book.author)}</name></author>` : ""}${book.description ? `
+    <summary>${escapeXml(book.description)}</summary>` : ""}
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
+    <link rel="${OPDS_SPEC}/image"
+          href="${baseUrl}/cover/${encodeUrlPath(book.filePath)}"
+          type="image/jpeg"/>
+    <link rel="${OPDS_SPEC}/image/thumbnail"
+          href="${baseUrl}/cover/${encodeUrlPath(book.filePath)}"
+          type="image/jpeg"/>
     <link rel="${OPDS_SPEC}/acquisition"
           href="${baseUrl}/download/${encodeUrlPath(book.filePath)}"
           type="${book.mimeType}"/>
@@ -159,6 +167,9 @@ export function buildMixedFeed(
     <dc:format>${escapeXml(book.format)}</dc:format>
     <content type="text">${formatFileSize(book.fileSize)}</content>
     <link rel="${OPDS_SPEC}/image"
+          href="${baseUrl}/cover/${encodeUrlPath(book.filePath)}"
+          type="image/jpeg"/>
+    <link rel="${OPDS_SPEC}/image/thumbnail"
           href="${baseUrl}/cover/${encodeUrlPath(book.filePath)}"
           type="image/jpeg"/>
     <link rel="${OPDS_SPEC}/acquisition"
