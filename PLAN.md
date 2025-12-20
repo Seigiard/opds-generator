@@ -16,9 +16,10 @@
 - [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
 - [x] Dockerfile + docker-compose
 - [x] Инкрементальное обновление метаданных ($DATA/raw/)
-
-### Планируется
-- [ ] Извлечение метаданных из EPUB (обложки, автор, описание)
+- [x] Извлечение метаданных из EPUB (title, author, description)
+- [x] Извлечение обложек из EPUB, CBZ, ZIP
+- [x] Автоопределение типа ZIP (комикс/fb2)
+- [x] Endpoint /cover/{path}
 
 ## Архитектура
 
@@ -35,12 +36,12 @@ BASE_URL=http://...     # Базовый URL для ссылок
 $DATA/
 ├── manifest.json       # Хэш каталога + индекс файлов
 ├── opds/               # Сгенерированные OPDS фиды
-│   ├── root.xml        # GET /opds
-│   ├── fiction.xml     # GET /opds/fiction
-│   └── fiction--scifi.xml  # GET /opds/fiction/scifi
-└── raw/                # Кэш метаданных отдельных книг
-    ├── f8a2c1d3-Foundation.epub.json
-    └── b7e4f9a2-Dune.epub.json
+│   ├── root.xml
+│   └── fiction--scifi.xml
+├── raw/                # Кэш метаданных
+│   └── f8a2c1d3-Foundation.epub.json
+└── covers/             # Обложки
+    └── f8a2c1d3-Foundation.epub.jpg
 ```
 
 ### Структура проекта
@@ -49,9 +50,12 @@ src/
 ├── index.ts      # Entry point: Bun.serve() + fs.watch
 ├── scanner.ts    # scanDirectory, computeHash
 ├── manifest.ts   # readManifest, writeManifest
-├── metadata.ts   # extractBasicMeta
+├── metadata.ts   # extractBasicMeta, cover extraction
 ├── opds.ts       # buildFeed, escapeXml
-└── types.ts      # FileInfo, BookMeta, Manifest
+├── types.ts      # FileInfo, BookMeta, Manifest
+├── zip.ts        # ZIP utilities (unzip wrapper)
+├── epub.ts       # EPUB metadata parser
+└── cbz.ts        # CBZ/comic metadata parser
 ```
 
 ## API
@@ -61,6 +65,7 @@ src/
 | `GET /opds` | Корневой каталог (Navigation Feed) |
 | `GET /opds/{path}` | Подкаталог или список книг |
 | `GET /download/{path}` | Скачивание файла |
+| `GET /cover/{path}` | Обложка книги |
 
 ## Запуск
 
@@ -76,7 +81,7 @@ docker-compose up
 ```
 
 ## Поддерживаемые форматы
-epub, pdf, mobi, azw3, fb2, cbz, cbr, djvu, txt
+epub, pdf, mobi, azw3, fb2, cbz, cbr, zip, djvu, txt
 
 ## OPDS Specification
 https://specs.opds.io/opds-1.2
