@@ -1,0 +1,88 @@
+/** Информация о файле из файловой системы */
+export interface FileInfo {
+  /** Абсолютный путь к файлу */
+  path: string;
+  /** Относительный путь от корня $FILES */
+  relativePath: string;
+  /** Размер в байтах */
+  size: number;
+  /** Время последней модификации (ms timestamp) */
+  mtime: number;
+  /** Расширение файла (epub, pdf, etc.) */
+  extension: string;
+}
+
+/** Информация о папке */
+export interface FolderInfo {
+  /** Относительный путь от корня $FILES */
+  path: string;
+  /** Имя папки */
+  name: string;
+  /** Вложенные папки */
+  subfolders: string[];
+  /** Файлы книг в папке */
+  files: FileInfo[];
+}
+
+/** Метаданные книги */
+export interface BookMeta {
+  /** Название (из имени файла или метаданных) */
+  title: string;
+  /** Автор (если извлечён) */
+  author?: string;
+  /** Описание */
+  description?: string;
+  /** Формат файла */
+  format: string;
+  /** MIME-тип для OPDS */
+  mimeType: string;
+  /** Относительный путь к файлу */
+  filePath: string;
+  /** Размер файла */
+  fileSize: number;
+}
+
+/** Манифест каталога — хранится в $DATA/manifest.json */
+export interface Manifest {
+  /** Версия формата манифеста */
+  version: 1;
+  /** Хэш каталога (для определения изменений) */
+  hash: string;
+  /** Время последнего сканирования */
+  lastScan: number;
+  /** Индекс файлов: relativePath → hash файла */
+  files: Record<string, string>;
+  /** Структура папок */
+  folders: string[];
+}
+
+/** Результат сравнения манифестов */
+export interface ManifestDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+/** Структура каталога для генерации OPDS */
+export interface CatalogStructure {
+  /** Корневые папки */
+  rootFolders: FolderInfo[];
+  /** Все книги (плоский список) */
+  allBooks: BookMeta[];
+}
+
+/** MIME-типы для поддерживаемых форматов */
+export const MIME_TYPES: Record<string, string> = {
+  epub: "application/epub+zip",
+  pdf: "application/pdf",
+  mobi: "application/x-mobipocket-ebook",
+  azw3: "application/x-mobi8-ebook",
+  fb2: "application/x-fictionbook+xml",
+  cbz: "application/vnd.comicbook+zip",
+  cbr: "application/vnd.comicbook-rar",
+  djvu: "image/vnd.djvu",
+  txt: "text/plain",
+};
+
+/** Расширения файлов, которые считаются книгами */
+export const BOOK_EXTENSIONS = Object.keys(MIME_TYPES);
