@@ -300,6 +300,8 @@ console.log(`[Init] BASE_URL: ${BASE_URL}`);
 
 await mkdir(DATA_PATH, { recursive: true });
 await mkdir(join(DATA_PATH, "opds"), { recursive: true });
+await mkdir(join(DATA_PATH, "covers"), { recursive: true });
+await mkdir(join(DATA_PATH, "raw"), { recursive: true });
 
 const oldManifest = await readManifest(DATA_PATH);
 if (oldManifest) {
