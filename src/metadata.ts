@@ -13,23 +13,17 @@ const COVERS_DIR = "covers";
 
 type ZipContentType = "comic" | "fb2" | "unknown";
 
-/**
- * Определяет тип содержимого ZIP-архива
- */
 async function detectZipType(zipPath: string): Promise<ZipContentType> {
   const entries = await listZipEntries(zipPath);
 
-  // Есть .fb2 файл → это fb2.zip
   if (entries.some((e) => e.toLowerCase().endsWith(".fb2"))) {
     return "fb2";
   }
 
-  // Считаем изображения
   const images = entries.filter((e) =>
     IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
   );
 
-  // Если больше 50% файлов — изображения, это комикс
   if (images.length > 0 && images.length / entries.length >= 0.5) {
     return "comic";
   }
@@ -37,10 +31,6 @@ async function detectZipType(zipPath: string): Promise<ZipContentType> {
   return "unknown";
 }
 
-/**
- * Извлекает метаданные из файла (EPUB, CBZ или fallback на имя файла)
- * Обложки НЕ извлекаются здесь — это делается лениво при первом запросе
- */
 export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
   const fileName = basename(file.relativePath);
   const titleFromFilename = fileName.replace(/\.[^.]+$/, "");
@@ -53,7 +43,6 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
 
   let coverSourcePath: string | undefined;
 
-  // EPUB
   if (file.extension === "epub") {
     const epub = await extractEpubMeta(file.path);
     title = epub.title || titleFromFilename;
@@ -62,7 +51,6 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
     coverSourcePath = epub.coverPath;
   }
 
-  // CBZ/CBR (комиксы)
   if (file.extension === "cbz" || file.extension === "cbr") {
     const cbz = await extractCbzMeta(file.path);
     title = cbz.title || titleFromFilename;
@@ -70,7 +58,6 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
     coverSourcePath = cbz.coverPath;
   }
 
-  // ZIP — определяем по содержимому (комикс или fb2)
   if (file.extension === "zip") {
     const zipType = await detectZipType(file.path);
 
@@ -80,7 +67,7 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
       author = cbz.author;
       coverSourcePath = cbz.coverPath;
     }
-    // TODO: fb2.zip обработка если нужно
+    // TODO: fb2.zip handling if needed
   }
 
   return {
@@ -96,10 +83,6 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
   };
 }
 
-/**
- * Извлекает обложку из архива и сохраняет в data/covers/
- * @returns true если обложка успешно извлечена
- */
 async function extractCover(
   zipPath: string,
   coverEntryPath: string,
@@ -120,17 +103,11 @@ async function extractCover(
   }
 }
 
-/**
- * Lazy extraction: извлекает обложку по требованию
- * Вызывается при запросе /cover/{path}
- * @returns true если обложка успешно извлечена или уже существует
- */
 export async function extractCoverLazy(
   meta: BookMeta,
   filesPath: string,
   dataPath: string
 ): Promise<boolean> {
-  // Обложка уже есть
   if (await hasCover(meta.filePath, dataPath)) {
     return true;
   }
@@ -138,7 +115,6 @@ export async function extractCoverLazy(
   const fullPath = join(filesPath, meta.filePath);
   let coverSourcePath = meta.coverSourcePath;
 
-  // Fallback: если coverSourcePath нет (старый кэш), пробуем извлечь из файла
   if (!coverSourcePath) {
     coverSourcePath = await detectCoverPath(fullPath, meta.format.toLowerCase());
   }
@@ -150,9 +126,6 @@ export async function extractCoverLazy(
   return extractCover(fullPath, coverSourcePath, meta.filePath, dataPath);
 }
 
-/**
- * Определяет путь к обложке внутри архива
- */
 async function detectCoverPath(filePath: string, format: string): Promise<string | undefined> {
   if (format === "epub") {
     const epub = await extractEpubMeta(filePath);
@@ -167,18 +140,12 @@ async function detectCoverPath(filePath: string, format: string): Promise<string
   return undefined;
 }
 
-/**
- * Генерирует имя файла обложки
- */
 function coverFilenameFor(relativePath: string): string {
-  const hash = Bun.hash(relativePath).toString(16).slice(0, 8);
+  const hash = Bun.hash(relativePath).toString(16).slice(0, 16);
   const name = basename(relativePath);
   return `${hash}-${name}.jpg`;
 }
 
-/**
- * Проверяет существует ли обложка
- */
 export async function hasCover(
   relativePath: string,
   dataPath: string
@@ -188,9 +155,6 @@ export async function hasCover(
   return await Bun.file(coverPath).exists();
 }
 
-/**
- * Возвращает путь к обложке
- */
 export function getCoverPath(relativePath: string, dataPath: string): string {
   const coverFilename = coverFilenameFor(relativePath);
   return join(dataPath, COVERS_DIR, coverFilename);
@@ -204,33 +168,20 @@ export function formatFileSize(bytes: number): string {
 
 const RAW_DIR = "raw";
 
-/**
- * Генерирует короткий хэш от пути (первые 8 символов xxhash)
- */
 function shortHash(path: string): string {
-  return Bun.hash(path).toString(16).slice(0, 8);
+  return Bun.hash(path).toString(16).slice(0, 16);
 }
 
-/**
- * Генерирует имя JSON файла для кэша метаданных
- * "fiction/scifi/Foundation.epub" → "f8a2c1d3-Foundation.epub.json"
- */
 export function metaFilename(relativePath: string): string {
   const hash = shortHash(relativePath);
   const name = basename(relativePath);
   return `${hash}-${name}.json`;
 }
 
-/**
- * Путь к директории кэша метаданных
- */
 function rawPath(dataPath: string): string {
   return join(dataPath, RAW_DIR);
 }
 
-/**
- * Читает закэшированные метаданные файла
- */
 export async function readCachedMeta(
   dataPath: string,
   relativePath: string
@@ -244,9 +195,6 @@ export async function readCachedMeta(
   return null;
 }
 
-/**
- * Записывает метаданные файла в кэш
- */
 export async function writeCachedMeta(
   dataPath: string,
   relativePath: string,
@@ -258,9 +206,6 @@ export async function writeCachedMeta(
   await Bun.write(join(dir, filename), JSON.stringify(meta, null, 2));
 }
 
-/**
- * Удаляет закэшированные метаданные файла
- */
 export async function deleteCachedMeta(
   dataPath: string,
   relativePath: string
@@ -269,13 +214,9 @@ export async function deleteCachedMeta(
   try {
     await unlink(join(rawPath(dataPath), filename));
   } catch {
-    // Файл уже удалён — ок
   }
 }
 
-/**
- * Возвращает Map: relativePath → BookMeta для всех закэшированных файлов
- */
 export async function listCachedMeta(
   dataPath: string
 ): Promise<Map<string, BookMeta>> {
@@ -291,7 +232,6 @@ export async function listCachedMeta(
       result.set(meta.filePath, meta);
     }
   } catch {
-    // Директория не существует — возвращаем пустой Map
   }
 
   return result;

@@ -5,9 +5,6 @@ const OPDS_NS = "http://www.w3.org/2005/Atom";
 const DC_NS = "http://purl.org/dc/terms/";
 const OPDS_SPEC = "http://opds-spec.org";
 
-/**
- * Экранирует спецсимволы для XML
- */
 export function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -17,23 +14,14 @@ export function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/**
- * Кодирует путь для URL (сохраняя слэши)
- */
 function encodeUrlPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-/**
- * Генерирует ISO 8601 timestamp
- */
 function timestamp(): string {
   return new Date().toISOString();
 }
 
-/**
- * Генерирует уникальный ID для фида
- */
 function feedId(path: string): string {
   return `urn:opds:catalog:${path || "root"}`;
 }
@@ -44,9 +32,6 @@ interface NavigationEntry {
   count?: number;
 }
 
-/**
- * Генерирует Navigation Feed (список папок)
- */
 export function buildNavigationFeed(
   title: string,
   path: string,
@@ -65,7 +50,7 @@ export function buildNavigationFeed(
     <link rel="subsection"
           href="${baseUrl}/opds/${encodeUrlPath(entry.href)}"
           type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-    ${entry.count !== undefined ? `<content type="text">${entry.count} книг</content>` : ""}
+    ${entry.count !== undefined ? `<content type="text">${entry.count} books</content>` : ""}
   </entry>`
     )
     .join("\n");
@@ -81,9 +66,6 @@ ${entriesXml}
 </feed>`;
 }
 
-/**
- * Генерирует Acquisition Feed (список книг)
- */
 export function buildAcquisitionFeed(
   title: string,
   path: string,
@@ -127,9 +109,6 @@ ${entriesXml}
 </feed>`;
 }
 
-/**
- * Генерирует смешанный фид (папки + книги)
- */
 export function buildMixedFeed(
   title: string,
   path: string,
@@ -140,7 +119,6 @@ export function buildMixedFeed(
   const selfHref = path ? `${baseUrl}/opds/${encodeUrlPath(path)}` : `${baseUrl}/opds`;
   const updated = timestamp();
 
-  // Navigation entries для подпапок
   const folderEntriesXml = subfolders
     .map(
       (entry) => `  <entry>
@@ -150,12 +128,11 @@ export function buildMixedFeed(
     <link rel="subsection"
           href="${baseUrl}/opds/${encodeUrlPath(entry.href)}"
           type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-    ${entry.count !== undefined ? `<content type="text">${entry.count} книг</content>` : ""}
+    ${entry.count !== undefined ? `<content type="text">${entry.count} books</content>` : ""}
   </entry>`
     )
     .join("\n");
 
-  // Acquisition entries для книг
   const bookEntriesXml = books
     .map(
       (book) => `  <entry>
@@ -194,19 +171,11 @@ ${bookEntriesXml}
 </feed>`;
 }
 
-/**
- * Преобразует путь папки в имя файла для кэша
- * "fiction/scifi" → "fiction--scifi.xml"
- */
 export function pathToFilename(path: string): string {
   if (!path) return "root.xml";
   return path.replace(/\//g, "--") + ".xml";
 }
 
-/**
- * Преобразует имя файла обратно в путь
- * "fiction--scifi.xml" → "fiction/scifi"
- */
 export function filenameToPath(filename: string): string {
   if (filename === "root.xml") return "";
   return filename.replace(/\.xml$/, "").replace(/--/g, "/");

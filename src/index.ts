@@ -42,7 +42,7 @@ async function generateFeeds(): Promise<void> {
     });
 
     const books = booksByFolder.get(folder.path) || [];
-    const title = folder.name || "Каталог";
+    const title = folder.name || "Catalog";
     const xml = buildMixedFeed(title, folder.path, subfolderEntries, books, BASE_URL);
     const filename = pathToFilename(folder.path);
 
@@ -72,15 +72,12 @@ async function rebuild(): Promise<void> {
   const startTime = Date.now();
 
   try {
-    // Сканируем файловую систему
     const files = await scanDirectory(FILES_PATH);
     console.log(`[Rebuild] Found ${files.length} books`);
 
-    // Загружаем кэш метаданных
     const cached = await listCachedMeta(DATA_PATH);
     console.log(`[Rebuild] Cached: ${cached.size} entries`);
 
-    // Сравниваем и определяем изменения
     const currentPaths = new Set(files.map((f) => f.relativePath));
     const cachedPaths = new Set(cached.keys());
 
@@ -88,7 +85,6 @@ async function rebuild(): Promise<void> {
     const changed: string[] = [];
     const removed: string[] = [];
 
-    // Новые и изменённые файлы
     for (const file of files) {
       const cachedMeta = cached.get(file.relativePath);
       if (!cachedMeta) {
@@ -101,7 +97,6 @@ async function rebuild(): Promise<void> {
       }
     }
 
-    // Удалённые файлы
     for (const path of cachedPaths) {
       if (!currentPaths.has(path)) {
         removed.push(path);
@@ -112,13 +107,11 @@ async function rebuild(): Promise<void> {
       `[Rebuild] Changes: +${added.length} ~${changed.length} -${removed.length}`
     );
 
-    // Удаляем устаревшие из кэша
     for (const path of removed) {
       await deleteCachedMeta(DATA_PATH, path);
       cached.delete(path);
     }
 
-    // Добавляем/обновляем метаданные (обложки извлекаются лениво)
     for (const path of [...added, ...changed]) {
       const file = files.find((f) => f.relativePath === path)!;
       const meta = await extractBasicMeta(file);
@@ -126,15 +119,12 @@ async function rebuild(): Promise<void> {
       cached.set(path, meta);
     }
 
-    // Вычисляем хэш каталога
     currentHash = computeHash(files);
     console.log(`[Rebuild] Hash: ${currentHash}`);
 
-    // Строим структуру папок
     folders = buildFolderStructure(FILES_PATH, files);
     console.log(`[Rebuild] Found ${folders.length} folders`);
 
-    // Группируем книги по папкам (из кэша)
     booksByFolder = new Map();
     for (const meta of cached.values()) {
       const folderPath = meta.filePath.split("/").slice(0, -1).join("/");
@@ -210,7 +200,6 @@ async function handleDownload(filePath: string): Promise<Response> {
   return new Response("File not found", { status: 404 });
 }
 
-/** 1x1 серый PNG placeholder (минимальный валидный PNG) */
 const PLACEHOLDER_PNG = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
   0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
@@ -230,7 +219,6 @@ async function handleCover(filePath: string): Promise<Response> {
   const coverPath = getCoverPath(filePath, DATA_PATH);
   const coverFile = Bun.file(coverPath);
 
-  // Обложка уже закэширована
   if (await coverFile.exists()) {
     return new Response(coverFile, {
       headers: {
@@ -240,7 +228,6 @@ async function handleCover(filePath: string): Promise<Response> {
     });
   }
 
-  // Lazy extraction: пробуем извлечь обложку
   const meta = findBookMeta(filePath);
   if (meta) {
     const extracted = await extractCoverLazy(meta, FILES_PATH, DATA_PATH);
@@ -254,11 +241,10 @@ async function handleCover(filePath: string): Promise<Response> {
     }
   }
 
-  // Fallback: placeholder
   return new Response(PLACEHOLDER_PNG, {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=3600", // Короткий кэш для placeholder
+      "Cache-Control": "public, max-age=3600",
     },
   });
 }

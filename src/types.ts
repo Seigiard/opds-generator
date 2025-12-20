@@ -1,26 +1,15 @@
-/** Информация о файле из файловой системы */
 export interface FileInfo {
-  /** Абсолютный путь к файлу */
   path: string;
-  /** Относительный путь от корня $FILES */
   relativePath: string;
-  /** Размер в байтах */
   size: number;
-  /** Время последней модификации (ms timestamp) */
   mtime: number;
-  /** Расширение файла (epub, pdf, etc.) */
   extension: string;
 }
 
-/** Информация о папке */
 export interface FolderInfo {
-  /** Относительный путь от корня $FILES */
   path: string;
-  /** Имя папки */
   name: string;
-  /** Вложенные папки */
   subfolders: string[];
-  /** Файлы книг в папке */
   files: FileInfo[];
 }
 
@@ -33,7 +22,6 @@ export interface BookMeta {
   filePath: string;
   fileSize: number;
   hash: string;
-  /** Путь к обложке внутри архива (для lazy extraction) */
   coverSourcePath?: string;
 }
 
@@ -64,10 +52,9 @@ export const MIME_TYPES: Record<string, string> = {
   fb2: "application/x-fictionbook+xml",
   cbz: "application/vnd.comicbook+zip",
   cbr: "application/vnd.comicbook-rar",
-  zip: "application/zip", // Определяется по содержимому
+  zip: "application/zip",
   djvu: "image/vnd.djvu",
   txt: "text/plain",
 };
 
-/** Расширения файлов, которые считаются книгами */
 export const BOOK_EXTENSIONS = Object.keys(MIME_TYPES);

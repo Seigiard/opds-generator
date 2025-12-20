@@ -1,16 +1,12 @@
-/**
- * Минимальные утилиты для работы с ZIP через unzip
- */
+// Full path to unzip (BusyBox intercepts short call in Alpine)
+const UNZIP = "/usr/bin/unzip";
 
-/**
- * Читает файл из ZIP архива в строку
- */
 export async function readZipEntry(
   zipPath: string,
   entryPath: string
 ): Promise<string | null> {
   try {
-    const proc = Bun.spawn(["unzip", "-p", zipPath, entryPath], {
+    const proc = Bun.spawn([UNZIP, "-p", zipPath, entryPath], {
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -25,16 +21,13 @@ export async function readZipEntry(
   }
 }
 
-/**
- * Извлекает файл из ZIP в указанный путь
- */
 export async function extractZipEntry(
   zipPath: string,
   entryPath: string,
   destPath: string
 ): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["unzip", "-p", zipPath, entryPath], {
+    const proc = Bun.spawn([UNZIP, "-p", zipPath, entryPath], {
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -51,12 +44,10 @@ export async function extractZipEntry(
   }
 }
 
-/**
- * Возвращает список файлов в ZIP архиве
- */
 export async function listZipEntries(zipPath: string): Promise<string[]> {
   try {
-    const proc = Bun.spawn(["unzip", "-Z1", zipPath], {
+    // zipinfo -1 works better than unzip -Z1 in Alpine
+    const proc = Bun.spawn(["zipinfo", "-1", zipPath], {
       stdout: "pipe",
       stderr: "pipe",
     });
