@@ -57,9 +57,8 @@ export function buildAcquisitionFeed(title: string, path: string, books: BookMet
     e.setDcMetadataField("format", book.format);
     e.setContent({ type: "text", value: formatFileSize(book.fileSize) });
 
-    const coverUrl = `${baseUrl}/cover/${encodeUrlPath(book.filePath)}`;
-    e.addImage(coverUrl);
-    e.addThumbnail(coverUrl);
+    e.addImage(`${baseUrl}/cover/${encodeUrlPath(book.filePath)}`);
+    e.addThumbnail(`${baseUrl}/thumbnail/${encodeUrlPath(book.filePath)}`);
 
     e.addAcquisition(`${baseUrl}/download/${encodeUrlPath(book.filePath)}`, book.mimeType, "open-access");
 
@@ -107,9 +106,8 @@ export function buildMixedFeed(
     e.setDcMetadataField("format", book.format);
     e.setContent({ type: "text", value: formatFileSize(book.fileSize) });
 
-    const coverUrl = `${baseUrl}/cover/${encodeUrlPath(book.filePath)}`;
-    e.addImage(coverUrl);
-    e.addThumbnail(coverUrl);
+    e.addImage(`${baseUrl}/cover/${encodeUrlPath(book.filePath)}`);
+    e.addThumbnail(`${baseUrl}/thumbnail/${encodeUrlPath(book.filePath)}`);
 
     e.addAcquisition(`${baseUrl}/download/${encodeUrlPath(book.filePath)}`, book.mimeType, "open-access");
 

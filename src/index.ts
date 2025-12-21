@@ -10,6 +10,7 @@ import {
   writeCachedMeta,
   deleteCachedMeta,
   getCoverPath,
+  getThumbnailPath,
 } from "./metadata.ts";
 import { buildMixedFeed, pathToFilename } from "./opds.ts";
 import type { FolderInfo, BookMeta } from "./types.ts";
@@ -19,6 +20,7 @@ const FILES_PATH = process.env.FILES || "./files";
 const DATA_PATH = process.env.DATA || "./data";
 const PORT = parseInt(process.env.PORT || "8080", 10);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const DEV_MODE = process.env.DEV_MODE === "true";
 
 let currentHash = "";
 let folders: FolderInfo[] = [];
@@ -176,11 +178,13 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
   const file = Bun.file(join(DATA_PATH, "opds", filename));
 
   if (await file.exists()) {
-    const etag = `"${currentHash}-${file.lastModified}"`;
+    const etag = DEV_MODE
+      ? `"dev-${Date.now()}"`
+      : `"${currentHash}-${file.lastModified}"`;
     const lastModified = new Date(file.lastModified).toUTCString();
     const ifNoneMatch = req.headers.get("If-None-Match");
 
-    if (ifNoneMatch === etag) {
+    if (!DEV_MODE && ifNoneMatch === etag) {
       return new Response(null, { status: 304 });
     }
 
@@ -189,7 +193,7 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
         "Content-Type": "application/atom+xml;charset=utf-8",
         "ETag": etag,
         "Last-Modified": lastModified,
-        "Cache-Control": "no-cache",
+        "Cache-Control": DEV_MODE ? "no-store" : "no-cache",
       },
     });
   }
@@ -226,6 +230,9 @@ function findBookMeta(filePath: string): BookMeta | undefined {
   return books?.find((b) => b.filePath === filePath);
 }
 
+const imageCacheControl = DEV_MODE ? "no-store" : "public, max-age=31536000";
+const placeholderCacheControl = DEV_MODE ? "no-store" : "public, max-age=3600";
+
 async function handleCover(filePath: string): Promise<Response> {
   const coverPath = getCoverPath(filePath, DATA_PATH);
   const coverFile = Bun.file(coverPath);
@@ -234,7 +241,7 @@ async function handleCover(filePath: string): Promise<Response> {
     return new Response(coverFile, {
       headers: {
         "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=31536000",
+        "Cache-Control": imageCacheControl,
       },
     });
   }
@@ -246,7 +253,7 @@ async function handleCover(filePath: string): Promise<Response> {
       return new Response(Bun.file(coverPath), {
         headers: {
           "Content-Type": "image/jpeg",
-          "Cache-Control": "public, max-age=31536000",
+          "Cache-Control": imageCacheControl,
         },
       });
     }
@@ -255,7 +262,41 @@ async function handleCover(filePath: string): Promise<Response> {
   return new Response(PLACEHOLDER_PNG, {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": placeholderCacheControl,
+    },
+  });
+}
+
+async function handleThumbnail(filePath: string): Promise<Response> {
+  const thumbnailPath = getThumbnailPath(filePath, DATA_PATH);
+  const thumbnailFile = Bun.file(thumbnailPath);
+
+  if (await thumbnailFile.exists()) {
+    return new Response(thumbnailFile, {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": imageCacheControl,
+      },
+    });
+  }
+
+  const meta = findBookMeta(filePath);
+  if (meta) {
+    const extracted = await extractCoverLazy(meta, FILES_PATH, DATA_PATH);
+    if (extracted) {
+      return new Response(Bun.file(thumbnailPath), {
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": imageCacheControl,
+        },
+      });
+    }
+  }
+
+  return new Response(PLACEHOLDER_PNG, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": placeholderCacheControl,
     },
   });
 }
@@ -286,6 +327,11 @@ const server = Bun.serve({
       return handleCover(filePath);
     }
 
+    if (path.startsWith("/thumbnail/")) {
+      const filePath = decodeURIComponent(path.slice(11));
+      return handleThumbnail(filePath);
+    }
+
     return new Response("Not found", { status: 404 });
   },
 });
@@ -294,10 +340,12 @@ console.log(`[Init] FILES: ${FILES_PATH}`);
 console.log(`[Init] DATA: ${DATA_PATH}`);
 console.log(`[Init] PORT: ${PORT}`);
 console.log(`[Init] BASE_URL: ${BASE_URL}`);
+if (DEV_MODE) console.log(`[Init] DEV_MODE: enabled (no caching)`);
 
 await mkdir(DATA_PATH, { recursive: true });
 await mkdir(join(DATA_PATH, "opds"), { recursive: true });
 await mkdir(join(DATA_PATH, "covers"), { recursive: true });
+await mkdir(join(DATA_PATH, "thumbnails"), { recursive: true });
 await mkdir(join(DATA_PATH, "raw"), { recursive: true });
 
 const oldManifest = await readManifest(DATA_PATH);

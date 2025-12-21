@@ -10,6 +10,7 @@ import { extractZipEntry, listZipEntries } from "./zip.ts";
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
 const COVERS_DIR = "covers";
+const THUMBNAILS_DIR = "thumbnails";
 
 type ZipContentType = "comic" | "fb2" | "unknown";
 
@@ -83,6 +84,23 @@ export async function extractBasicMeta(file: FileInfo): Promise<BookMeta> {
   };
 }
 
+async function resizeImage(
+  srcPath: string,
+  destPath: string,
+  maxSize: number
+): Promise<boolean> {
+  try {
+    const resize = `${maxSize}x${maxSize}>`;
+    await Bun.$`magick ${srcPath} -resize ${resize} -colorspace sRGB -quality 90 ${destPath}`.quiet();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const COVER_MAX_SIZE = 1400;
+const THUMBNAIL_MAX_SIZE = 512;
+
 async function extractCover(
   zipPath: string,
   coverEntryPath: string,
@@ -91,12 +109,22 @@ async function extractCover(
 ): Promise<boolean> {
   try {
     const coversDir = join(dataPath, COVERS_DIR);
+    const thumbnailsDir = join(dataPath, THUMBNAILS_DIR);
     await mkdir(coversDir, { recursive: true });
+    await mkdir(thumbnailsDir, { recursive: true });
 
     const coverFilename = coverFilenameFor(relativePath);
-    const destPath = join(coversDir, coverFilename);
+    const coverDestPath = join(coversDir, coverFilename);
+    const thumbnailDestPath = join(thumbnailsDir, coverFilename);
 
-    await extractZipEntry(zipPath, coverEntryPath, destPath);
+    await extractZipEntry(zipPath, coverEntryPath, coverDestPath);
+    await resizeImage(coverDestPath, coverDestPath, COVER_MAX_SIZE);
+
+    const thumbnailOk = await resizeImage(coverDestPath, thumbnailDestPath, THUMBNAIL_MAX_SIZE);
+    if (!thumbnailOk) {
+      await Bun.write(thumbnailDestPath, Bun.file(coverDestPath));
+    }
+
     return true;
   } catch {
     return false;
@@ -158,6 +186,19 @@ export async function hasCover(
 export function getCoverPath(relativePath: string, dataPath: string): string {
   const coverFilename = coverFilenameFor(relativePath);
   return join(dataPath, COVERS_DIR, coverFilename);
+}
+
+export function getThumbnailPath(relativePath: string, dataPath: string): string {
+  const coverFilename = coverFilenameFor(relativePath);
+  return join(dataPath, THUMBNAILS_DIR, coverFilename);
+}
+
+export async function hasThumbnail(
+  relativePath: string,
+  dataPath: string
+): Promise<boolean> {
+  const thumbnailPath = getThumbnailPath(relativePath, dataPath);
+  return await Bun.file(thumbnailPath).exists();
 }
 
 export function formatFileSize(bytes: number): string {
