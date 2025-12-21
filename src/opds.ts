@@ -5,6 +5,12 @@ function stripXmlDeclaration(xml: string): string {
   return xml.replace(/<\?xml[^?]*\?>\s*/g, "").trim();
 }
 
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+function naturalSort(a: string, b: string): number {
+  return collator.compare(a, b);
+}
+
 export async function buildFeed(folderPath: string, dataPath: string): Promise<string | null> {
   const folderDataDir = join(dataPath, folderPath);
   const feedHeaderPath = join(folderDataDir, "_feed.xml");
@@ -20,6 +26,7 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
 
   try {
     const items = await readdir(folderDataDir);
+    items.sort(naturalSort);
 
     for (const item of items) {
       if (item.startsWith("_")) continue;
