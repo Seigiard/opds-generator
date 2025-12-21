@@ -91,9 +91,13 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function encodeUrlPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
 function buildFeedHeaderXml(title: string, path: string, baseUrl: string): string {
   const id = path === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${path}`;
-  const selfHref = path === "" ? `${baseUrl}/opds` : `${baseUrl}/opds/${encodeURIComponent(path)}`;
+  const selfHref = path === "" ? `${baseUrl}/opds` : `${baseUrl}/opds/${encodeUrlPath(path)}`;
   const updated = new Date().toISOString();
 
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -108,7 +112,7 @@ function buildFeedHeaderXml(title: string, path: string, baseUrl: string): strin
 
 function buildFolderEntryXml(title: string, path: string, baseUrl: string): string {
   const id = `urn:opds:catalog:${path}`;
-  const href = `${baseUrl}/opds/${encodeURIComponent(path)}`;
+  const href = `${baseUrl}/opds/${encodeUrlPath(path)}`;
   const updated = new Date().toISOString();
 
   return `  <entry>
@@ -122,7 +126,7 @@ function buildFolderEntryXml(title: string, path: string, baseUrl: string): stri
 function buildBookEntryXml(entry: BookEntry, baseUrl: string): string {
   const id = `urn:opds:book:${entry.filePath}`;
   const updated = new Date().toISOString();
-  const encodedPath = encodeURIComponent(entry.filePath);
+  const encodedPath = encodeUrlPath(entry.filePath);
 
   let xml = `  <entry>
     <id>${escapeXml(id)}</id>

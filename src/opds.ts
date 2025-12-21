@@ -10,8 +10,9 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
     return null;
   }
 
-  const feedHeader = await feedHeaderFile.text();
+  let feedHeader = await feedHeaderFile.text();
   const entries: string[] = [];
+  let hasBooks = false;
 
   try {
     const items = await readdir(folderDataDir);
@@ -33,6 +34,7 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
           entries.push(await folderEntryFile.text());
         } else if (await bookEntryFile.exists()) {
           entries.push(await bookEntryFile.text());
+          hasBooks = true;
         }
       }
     }
@@ -40,16 +42,9 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
     // Empty folder
   }
 
-  return feedHeader.replace("</feed>", entries.join("\n") + "\n</feed>");
-}
-
-export async function getFeedUpdated(folderPath: string, dataPath: string): Promise<Date | null> {
-  const feedHeaderPath = join(dataPath, folderPath, "_feed.xml");
-  const file = Bun.file(feedHeaderPath);
-
-  if (await file.exists()) {
-    return new Date(file.lastModified);
+  if (hasBooks) {
+    feedHeader = feedHeader.replace("kind=navigation", "kind=acquisition");
   }
 
-  return null;
+  return feedHeader.replace("</feed>", entries.join("\n") + "\n</feed>");
 }
