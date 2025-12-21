@@ -40,6 +40,28 @@ src/
 - Each folder → _feed.xml (header) + _entry.xml (for parent)
 - Feed assembly: read _feed.xml + all nested entry.xml/_entry.xml
 
+## opds-ts Library
+
+Use opds-ts for OPDS XML generation:
+```typescript
+import { Entry, Feed } from "opds-ts/v1.2";
+
+// Create book entry
+const entry = new Entry(id, title)
+  .setAuthor(author)
+  .setSummary(description)
+  .addImage(coverUrl)
+  .addThumbnail(thumbUrl)
+  .addAcquisition(downloadUrl, mimeType, "open-access");
+
+const xml = entry.toXml({ prettyPrint: true });
+
+// Create feed
+const feed = new Feed(id, title)
+  .setKind("navigation")
+  .addSelfLink(href, "navigation");
+```
+
 ## Adding New Format Handler
 
 1. Create `src/formats/{format}.ts`
