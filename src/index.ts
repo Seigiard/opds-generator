@@ -357,6 +357,19 @@ const server = Bun.serve({
       return Response.redirect(`${BASE_URL}/opds`, 302);
     }
 
+    if (path === "/health") {
+      const bookCount = Array.from(booksByFolder.values()).reduce(
+        (sum, books) => sum + books.length,
+        0
+      );
+      return Response.json({
+        status: isRebuilding ? "rebuilding" : "ready",
+        books: bookCount,
+        folders: folders.length,
+        hash: currentHash,
+      });
+    }
+
     if (path === "/opds" || path.startsWith("/opds/")) {
       const feedPath = path === "/opds" ? "" : sanitizePath(decodeURIComponent(path.slice(6)));
       if (feedPath === null) return new Response("Invalid path", { status: 400 });
