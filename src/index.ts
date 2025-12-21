@@ -171,14 +171,25 @@ function startWatcher(): void {
   console.log(`[Watch] Watching ${FILES_PATH}`);
 }
 
-async function handleOpds(feedPath: string): Promise<Response> {
+async function handleOpds(feedPath: string, req: Request): Promise<Response> {
   const filename = pathToFilename(feedPath);
   const file = Bun.file(join(DATA_PATH, "opds", filename));
 
   if (await file.exists()) {
+    const etag = `"${currentHash}-${file.lastModified}"`;
+    const lastModified = new Date(file.lastModified).toUTCString();
+    const ifNoneMatch = req.headers.get("If-None-Match");
+
+    if (ifNoneMatch === etag) {
+      return new Response(null, { status: 304 });
+    }
+
     return new Response(file, {
       headers: {
         "Content-Type": "application/atom+xml;charset=utf-8",
+        "ETag": etag,
+        "Last-Modified": lastModified,
+        "Cache-Control": "no-cache",
       },
     });
   }
@@ -262,7 +273,7 @@ const server = Bun.serve({
 
     if (path === "/opds" || path.startsWith("/opds/")) {
       const feedPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
-      return handleOpds(feedPath);
+      return handleOpds(feedPath, req);
     }
 
     if (path.startsWith("/download/")) {
