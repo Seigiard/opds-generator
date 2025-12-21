@@ -3,7 +3,7 @@ import { join, extname, relative } from "node:path";
 import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 
-export async function scanDirectory(rootPath: string): Promise<FileInfo[]> {
+export async function scanFiles(rootPath: string): Promise<FileInfo[]> {
   const files: FileInfo[] = [];
 
   async function scan(dirPath: string): Promise<void> {
@@ -35,54 +35,117 @@ export async function scanDirectory(rootPath: string): Promise<FileInfo[]> {
   return files;
 }
 
-export function buildFolderStructure(
-  rootPath: string,
-  files: FileInfo[]
-): FolderInfo[] {
-  const folderMap = new Map<string, FolderInfo>();
-
-  folderMap.set("", {
-    path: "",
-    name: "Catalog",
-    subfolders: [],
-    files: [],
-  });
+export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
+  const folderSet = new Set<string>();
+  folderSet.add("");
 
   for (const file of files) {
     const parts = file.relativePath.split("/");
     parts.pop();
 
     let currentPath = "";
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (part === undefined) continue;
-
-      const parentPath = currentPath;
+    for (const part of parts) {
       currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-      if (!folderMap.has(currentPath)) {
-        folderMap.set(currentPath, {
-          path: currentPath,
-          name: part,
-          subfolders: [],
-          files: [],
-        });
-
-        const parent = folderMap.get(parentPath);
-        if (parent && !parent.subfolders.includes(currentPath)) {
-          parent.subfolders.push(currentPath);
-        }
-      }
-    }
-
-    const folderPath = parts.join("/");
-    const folder = folderMap.get(folderPath);
-    if (folder) {
-      folder.files.push(file);
+      folderSet.add(currentPath);
     }
   }
 
-  return Array.from(folderMap.values());
+  const folders: FolderInfo[] = [];
+
+  for (const path of folderSet) {
+    const subfolders = Array.from(folderSet).filter((f) => {
+      if (f === path) return false;
+      const prefix = path === "" ? "" : path + "/";
+      if (!f.startsWith(prefix)) return false;
+      const rest = f.slice(prefix.length);
+      return !rest.includes("/");
+    });
+
+    folders.push({
+      path,
+      name: path.split("/").pop() || "Catalog",
+      subfolders,
+    });
+  }
+
+  return folders;
+}
+
+export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
+  const paths = new Set<string>();
+
+  async function scan(dirPath: string, relativePath: string): Promise<void> {
+    try {
+      const entries = await readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith("_")) continue;
+
+        const entryPath = join(dirPath, entry.name);
+        const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+        const hasEntryXml = await Bun.file(join(entryPath, "entry.xml")).exists();
+        const hasFeedXml = await Bun.file(join(entryPath, "_feed.xml")).exists();
+
+        if (hasEntryXml) {
+          paths.add(entryRelPath);
+        } else if (hasFeedXml) {
+          paths.add(entryRelPath);
+          await scan(entryPath, entryRelPath);
+        } else {
+          await scan(entryPath, entryRelPath);
+        }
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+
+  await scan(dataPath, "");
+  return paths;
+}
+
+export interface SyncPlan {
+  toProcess: FileInfo[];
+  toDelete: string[];
+  folders: FolderInfo[];
+}
+
+export async function createSyncPlan(
+  files: FileInfo[],
+  dataPath: string
+): Promise<SyncPlan> {
+  const folders = buildFolderStructure(files);
+  const existingPaths = await scanDataMirror(dataPath);
+
+  const currentFilePaths = new Set(files.map((f) => f.relativePath));
+  const currentFolderPaths = new Set(folders.map((f) => f.path).filter((p) => p !== ""));
+
+  const toProcess: FileInfo[] = [];
+  const toDelete: string[] = [];
+
+  for (const file of files) {
+    const dataDir = join(dataPath, file.relativePath);
+    const entryFile = Bun.file(join(dataDir, "entry.xml"));
+
+    if (!(await entryFile.exists())) {
+      toProcess.push(file);
+    } else {
+      const entryStat = await stat(join(dataDir, "entry.xml"));
+      if (file.mtime > entryStat.mtimeMs) {
+        toProcess.push(file);
+      }
+    }
+  }
+
+  for (const path of existingPaths) {
+    if (!currentFilePaths.has(path) && !currentFolderPaths.has(path)) {
+      toDelete.push(path);
+    }
+  }
+
+  return { toProcess, toDelete, folders };
 }
 
 export function computeHash(files: FileInfo[]): string {
@@ -94,10 +157,5 @@ export function computeHash(files: FileInfo[]): string {
     .map((f) => `${f.relativePath}|${f.size}|${Math.floor(f.mtime)}`)
     .join("\n");
 
-  return Bun.hash(data).toString(16);
-}
-
-export function computeFileHash(file: FileInfo): string {
-  const data = `${file.relativePath}|${file.size}|${Math.floor(file.mtime)}`;
   return Bun.hash(data).toString(16);
 }

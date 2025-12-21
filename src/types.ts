@@ -10,10 +10,9 @@ export interface FolderInfo {
   path: string;
   name: string;
   subfolders: string[];
-  files: FileInfo[];
 }
 
-export interface BookMeta {
+export interface BookEntry {
   title: string;
   author?: string;
   description?: string;
@@ -21,27 +20,7 @@ export interface BookMeta {
   mimeType: string;
   filePath: string;
   fileSize: number;
-  hash: string;
-  coverSourcePath?: string;
-}
-
-export interface Manifest {
-  version: 1;
-  hash: string;
-  lastScan: number;
-  files: Record<string, string>;
-  folders: string[];
-}
-
-export interface ManifestDiff {
-  added: string[];
-  removed: string[];
-  changed: string[];
-}
-
-export interface CatalogStructure {
-  rootFolders: FolderInfo[];
-  allBooks: BookMeta[];
+  hasCover: boolean;
 }
 
 export const MIME_TYPES: Record<string, string> = {

@@ -1,128 +1,55 @@
-import { Feed, Entry } from "opds-ts/v1.2";
-import type { BookMeta } from "./types.ts";
-import { formatFileSize } from "./metadata.ts";
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 
-function encodeUrlPath(path: string): string {
-  return path.split("/").map(encodeURIComponent).join("/");
-}
+export async function buildFeed(folderPath: string, dataPath: string): Promise<string | null> {
+  const folderDataDir = join(dataPath, folderPath);
+  const feedHeaderPath = join(folderDataDir, "_feed.xml");
 
-function feedId(path: string): string {
-  return `urn:opds:catalog:${path || "root"}`;
-}
+  const feedHeaderFile = Bun.file(feedHeaderPath);
+  if (!(await feedHeaderFile.exists())) {
+    return null;
+  }
 
-interface NavigationEntry {
-  title: string;
-  href: string;
-  count?: number;
-}
+  const feedHeader = await feedHeaderFile.text();
+  const entries: string[] = [];
 
-export function buildNavigationFeed(title: string, path: string, entries: NavigationEntry[], baseUrl: string): string {
-  const selfHref = path ? `${baseUrl}/opds/${encodeUrlPath(path)}` : `${baseUrl}/opds`;
+  try {
+    const items = await readdir(folderDataDir);
 
-  const feed = new Feed(feedId(path), title)
-    .setKind("navigation")
-    .addSelfLink(selfHref, "navigation")
-    .addNavigationLink("start", `${baseUrl}/opds`);
+    for (const item of items) {
+      if (item.startsWith("_")) continue;
 
-  for (const entry of entries) {
-    const e = new Entry(feedId(entry.href), entry.title).addSubsection(
-      `${baseUrl}/opds/${encodeUrlPath(entry.href)}`,
-      "navigation",
-    );
+      const itemPath = join(folderDataDir, item);
+      const itemStat = await stat(itemPath);
 
-    if (entry.count !== undefined) {
-      e.setContent({ type: "text", value: `${entry.count} books` });
+      if (itemStat.isDirectory()) {
+        const folderEntryPath = join(itemPath, "_entry.xml");
+        const bookEntryPath = join(itemPath, "entry.xml");
+
+        const folderEntryFile = Bun.file(folderEntryPath);
+        const bookEntryFile = Bun.file(bookEntryPath);
+
+        if (await folderEntryFile.exists()) {
+          entries.push(await folderEntryFile.text());
+        } else if (await bookEntryFile.exists()) {
+          entries.push(await bookEntryFile.text());
+        }
+      }
     }
-
-    feed.addEntry(e);
+  } catch {
+    // Empty folder
   }
 
-  return feed.toXml({ prettyPrint: true });
+  return feedHeader.replace("</feed>", entries.join("\n") + "\n</feed>");
 }
 
-export function buildAcquisitionFeed(title: string, path: string, books: BookMeta[], baseUrl: string): string {
-  const selfHref = `${baseUrl}/opds/${encodeUrlPath(path)}`;
+export async function getFeedUpdated(folderPath: string, dataPath: string): Promise<Date | null> {
+  const feedHeaderPath = join(dataPath, folderPath, "_feed.xml");
+  const file = Bun.file(feedHeaderPath);
 
-  const feed = new Feed(feedId(path), title)
-    .setKind("acquisition")
-    .addSelfLink(selfHref, "acquisition")
-    .addNavigationLink("start", `${baseUrl}/opds`);
-
-  for (const book of books) {
-    const e = new Entry(`urn:opds:book:${book.filePath}`, book.title);
-
-    if (book.author) e.setAuthor(book.author);
-    if (book.description) e.setSummary(book.description);
-
-    e.setDcMetadataField("format", book.format);
-    e.setContent({ type: "text", value: formatFileSize(book.fileSize) });
-
-    e.addImage(`${baseUrl}/cover/${encodeUrlPath(book.filePath)}`);
-    e.addThumbnail(`${baseUrl}/thumbnail/${encodeUrlPath(book.filePath)}`);
-
-    e.addAcquisition(`${baseUrl}/download/${encodeUrlPath(book.filePath)}`, book.mimeType, "open-access");
-
-    feed.addEntry(e);
+  if (await file.exists()) {
+    return new Date(file.lastModified);
   }
 
-  return feed.toXml({ prettyPrint: true });
-}
-
-export function buildMixedFeed(
-  title: string,
-  path: string,
-  subfolders: NavigationEntry[],
-  books: BookMeta[],
-  baseUrl: string,
-): string {
-  const selfHref = path ? `${baseUrl}/opds/${encodeUrlPath(path)}` : `${baseUrl}/opds`;
-
-  const kind = subfolders.length > 0 && books.length === 0 ? "navigation" : "acquisition";
-
-  const feed = new Feed(feedId(path), title)
-    .setKind(kind)
-    .addSelfLink(selfHref, kind)
-    .addNavigationLink("start", `${baseUrl}/opds`);
-
-  for (const entry of subfolders) {
-    const e = new Entry(feedId(entry.href), entry.title).addSubsection(
-      `${baseUrl}/opds/${encodeUrlPath(entry.href)}`,
-      "navigation",
-    );
-
-    if (entry.count !== undefined) {
-      e.setContent({ type: "text", value: `${entry.count} books` });
-    }
-
-    feed.addEntry(e);
-  }
-
-  for (const book of books) {
-    const e = new Entry(`urn:opds:book:${book.filePath}`, book.title);
-
-    if (book.author) e.setAuthor(book.author);
-    if (book.description) e.setSummary(book.description);
-
-    e.setDcMetadataField("format", book.format);
-    e.setContent({ type: "text", value: formatFileSize(book.fileSize) });
-
-    e.addImage(`${baseUrl}/cover/${encodeUrlPath(book.filePath)}`);
-    e.addThumbnail(`${baseUrl}/thumbnail/${encodeUrlPath(book.filePath)}`);
-
-    e.addAcquisition(`${baseUrl}/download/${encodeUrlPath(book.filePath)}`, book.mimeType, "open-access");
-
-    feed.addEntry(e);
-  }
-
-  return feed.toXml({ prettyPrint: true });
-}
-
-export function pathToFilename(path: string): string {
-  if (!path) return "root.xml";
-  return path.replace(/\//g, "--") + ".xml";
-}
-
-export function filenameToPath(filename: string): string {
-  if (filename === "root.xml") return "";
-  return filename.replace(/\.xml$/, "").replace(/--/g, "/");
+  return null;
 }

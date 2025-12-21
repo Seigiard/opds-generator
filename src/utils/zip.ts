@@ -1,4 +1,3 @@
-// Full path to unzip (BusyBox intercepts short call in Alpine)
 const UNZIP = "/usr/bin/unzip";
 
 export async function readZipEntry(
@@ -21,11 +20,10 @@ export async function readZipEntry(
   }
 }
 
-export async function extractZipEntry(
+export async function readZipEntryBinary(
   zipPath: string,
-  entryPath: string,
-  destPath: string
-): Promise<boolean> {
+  entryPath: string
+): Promise<Buffer | null> {
   try {
     const proc = Bun.spawn([UNZIP, "-p", zipPath, entryPath], {
       stdout: "pipe",
@@ -35,18 +33,15 @@ export async function extractZipEntry(
     const data = await new Response(proc.stdout).arrayBuffer();
     const exitCode = await proc.exited;
 
-    if (exitCode !== 0 || data.byteLength === 0) return false;
-
-    await Bun.write(destPath, data);
-    return true;
+    if (exitCode !== 0 || data.byteLength === 0) return null;
+    return Buffer.from(data);
   } catch {
-    return false;
+    return null;
   }
 }
 
 export async function listZipEntries(zipPath: string): Promise<string[]> {
   try {
-    // zipinfo -1 works better than unzip -Z1 in Alpine
     const proc = Bun.spawn(["zipinfo", "-1", zipPath], {
       stdout: "pipe",
       stderr: "pipe",
