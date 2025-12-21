@@ -31,8 +31,10 @@ export async function processBook(
   let description: string | undefined;
   let hasCover = false;
 
+  let meta: import("./formats/types.ts").BookMetadata = { title: "" };
+
   if (handler) {
-    const meta = await handler.getMetadata(file.path);
+    meta = await handler.getMetadata(file.path);
     if (meta.title) title = meta.title;
     author = meta.author;
     description = meta.description;
@@ -68,6 +70,14 @@ export async function processBook(
   if (description) entry.setSummary(description);
   entry.setDcMetadataField("format", bookEntry.format);
   entry.setContent({ type: "text", value: formatFileSize(file.size) });
+
+  if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
+  if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
+  if (meta.language) entry.setDcMetadataField("language", meta.language);
+  if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
+  if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
+  if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
+  if (meta.rights) entry.setRights(meta.rights);
 
   if (hasCover) {
     entry.addImage(`${baseUrl}/cover/${encodedPath}`);

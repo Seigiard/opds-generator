@@ -1,40 +1,45 @@
 import type { FormatHandler, BookMetadata } from "./types.ts";
-import { readZipEntry, readZipEntryBinary } from "../utils/zip.ts";
+import { readEntry, readEntryText } from "../utils/archive.ts";
 
 export const epubHandler: FormatHandler = {
   extensions: ["epub"],
 
   async getMetadata(filePath: string): Promise<BookMetadata> {
-    const container = await readZipEntry(filePath, "META-INF/container.xml");
+    const container = await readEntryText(filePath, "META-INF/container.xml");
     if (!container) return { title: "" };
 
     const opfPath = parseRootfile(container);
     if (!opfPath) return { title: "" };
 
-    const opf = await readZipEntry(filePath, opfPath);
+    const opf = await readEntryText(filePath, opfPath);
     if (!opf) return { title: "" };
 
     return {
       title: parseXmlTag(opf, "dc:title") ?? "",
       author: parseXmlTag(opf, "dc:creator"),
       description: parseDescription(opf),
+      publisher: parseXmlTag(opf, "dc:publisher"),
+      issued: parseDate(opf),
+      language: parseXmlTag(opf, "dc:language"),
+      subjects: parseSubjects(opf),
+      rights: parseXmlTag(opf, "dc:rights"),
     };
   },
 
   async getCover(filePath: string): Promise<Buffer | null> {
-    const container = await readZipEntry(filePath, "META-INF/container.xml");
+    const container = await readEntryText(filePath, "META-INF/container.xml");
     if (!container) return null;
 
     const opfPath = parseRootfile(container);
     if (!opfPath) return null;
 
-    const opf = await readZipEntry(filePath, opfPath);
+    const opf = await readEntryText(filePath, opfPath);
     if (!opf) return null;
 
     const coverPath = parseCoverPath(opf, opfPath);
     if (!coverPath) return null;
 
-    return readZipEntryBinary(filePath, coverPath);
+    return readEntry(filePath, coverPath);
   },
 };
 
@@ -77,4 +82,22 @@ function parseCoverPath(opf: string, opfPath: string): string | undefined {
 
   const opfDir = opfPath.replace(/[^/]+$/, "");
   return opfDir + coverHref;
+}
+
+function parseDate(opf: string): string | undefined {
+  const date = parseXmlTag(opf, "dc:date");
+  if (!date) return undefined;
+  const match = date.match(/^(\d{4})(?:-(\d{2}))?/);
+  if (!match) return undefined;
+  return match[2] ? `${match[1]}-${match[2]}` : match[1];
+}
+
+function parseSubjects(opf: string): string[] | undefined {
+  const regex = /<dc:subject[^>]*>([^<]+)<\/dc:subject>/gi;
+  const subjects: string[] = [];
+  let match;
+  while ((match = regex.exec(opf)) !== null) {
+    if (match[1]) subjects.push(match[1].trim());
+  }
+  return subjects.length > 0 ? subjects : undefined;
 }

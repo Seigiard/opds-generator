@@ -1,8 +1,8 @@
 import type { FormatHandler } from "./types.ts";
 import { epubHandler } from "./epub.ts";
-import { cbzHandler } from "./cbz.ts";
+import { comicHandler } from "./comic.ts";
 
-const handlers: FormatHandler[] = [epubHandler, cbzHandler];
+const handlers: FormatHandler[] = [epubHandler, comicHandler];
 
 const handlerMap = new Map<string, FormatHandler>();
 

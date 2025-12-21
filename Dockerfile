@@ -1,5 +1,5 @@
 FROM oven/bun:1-alpine AS base
-RUN apk add --no-cache unzip imagemagick imagemagick-jpeg
+RUN apk add --no-cache unzip 7zip imagemagick imagemagick-jpeg
 WORKDIR /app
 
 FROM base AS development
