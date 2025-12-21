@@ -1,6 +1,6 @@
 import { watch } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { join, basename, extname } from "node:path";
+import { join, basename, extname, normalize, isAbsolute } from "node:path";
 import { scanDirectory, buildFolderStructure, computeHash, computeFileHash } from "./scanner.ts";
 import { readManifest, writeManifest, createManifest } from "./manifest.ts";
 import {
@@ -21,6 +21,14 @@ const DATA_PATH = process.env.DATA || "./data";
 const PORT = parseInt(process.env.PORT || "8080", 10);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const DEV_MODE = process.env.DEV_MODE === "true";
+
+function sanitizePath(userPath: string): string | null {
+  const normalized = normalize(userPath);
+  if (normalized.startsWith("..") || isAbsolute(normalized)) {
+    return null;
+  }
+  return normalized;
+}
 
 let currentHash = "";
 let folders: FolderInfo[] = [];
@@ -148,6 +156,43 @@ async function rebuild(): Promise<void> {
   } finally {
     isRebuilding = false;
   }
+}
+
+async function hydrateFromCache(): Promise<boolean> {
+  const cached = await listCachedMeta(DATA_PATH);
+  if (cached.size === 0) return false;
+
+  booksByFolder = new Map();
+  for (const meta of cached.values()) {
+    const folderPath = meta.filePath.split("/").slice(0, -1).join("/");
+    if (!booksByFolder.has(folderPath)) {
+      booksByFolder.set(folderPath, []);
+    }
+    booksByFolder.get(folderPath)!.push(meta);
+  }
+
+  const folderPaths = new Set<string>();
+  for (const p of booksByFolder.keys()) {
+    folderPaths.add(p);
+    const parts = p.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      folderPaths.add(parts.slice(0, i).join("/"));
+    }
+  }
+  folderPaths.add("");
+
+  folders = Array.from(folderPaths).map((p) => ({
+    path: p,
+    name: p.split("/").pop() || "Catalog",
+    subfolders: Array.from(folderPaths).filter(
+      (f) =>
+        f.startsWith(p ? p + "/" : "") &&
+        f.split("/").length === (p ? p.split("/").length + 1 : 1)
+    ),
+  }));
+
+  console.log(`[Hydrate] Loaded ${cached.size} books, ${folders.length} folders`);
+  return true;
 }
 
 function isBookFile(filename: string): boolean {
@@ -313,22 +358,26 @@ const server = Bun.serve({
     }
 
     if (path === "/opds" || path.startsWith("/opds/")) {
-      const feedPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
+      const feedPath = path === "/opds" ? "" : sanitizePath(decodeURIComponent(path.slice(6)));
+      if (feedPath === null) return new Response("Invalid path", { status: 400 });
       return handleOpds(feedPath, req);
     }
 
     if (path.startsWith("/download/")) {
-      const filePath = decodeURIComponent(path.slice(10));
+      const filePath = sanitizePath(decodeURIComponent(path.slice(10)));
+      if (!filePath) return new Response("Invalid path", { status: 400 });
       return handleDownload(filePath);
     }
 
     if (path.startsWith("/cover/")) {
-      const filePath = decodeURIComponent(path.slice(7));
+      const filePath = sanitizePath(decodeURIComponent(path.slice(7)));
+      if (!filePath) return new Response("Invalid path", { status: 400 });
       return handleCover(filePath);
     }
 
     if (path.startsWith("/thumbnail/")) {
-      const filePath = decodeURIComponent(path.slice(11));
+      const filePath = sanitizePath(decodeURIComponent(path.slice(11)));
+      if (!filePath) return new Response("Invalid path", { status: 400 });
       return handleThumbnail(filePath);
     }
 
@@ -354,6 +403,13 @@ if (oldManifest) {
   console.log(`[Init] Found existing manifest, hash: ${currentHash}`);
 }
 
-await rebuild();
-startWatcher();
-console.log(`[Server] Listening on http://localhost:${server.port}`);
+const hydrated = await hydrateFromCache();
+if (hydrated) {
+  console.log(`[Server] Listening on http://localhost:${server.port}`);
+  startWatcher();
+  rebuild();
+} else {
+  await rebuild();
+  startWatcher();
+  console.log(`[Server] Listening on http://localhost:${server.port}`);
+}
