@@ -1,6 +1,10 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
+function stripXmlDeclaration(xml: string): string {
+  return xml.replace(/<\?xml[^?]*\?>\s*/g, "").trim();
+}
+
 export async function buildFeed(folderPath: string, dataPath: string): Promise<string | null> {
   const folderDataDir = join(dataPath, folderPath);
   const feedHeaderPath = join(folderDataDir, "_feed.xml");
@@ -10,7 +14,7 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
     return null;
   }
 
-  let feedHeader = await feedHeaderFile.text();
+  let feedXml = await feedHeaderFile.text();
   const entries: string[] = [];
   let hasBooks = false;
 
@@ -31,9 +35,11 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
         const bookEntryFile = Bun.file(bookEntryPath);
 
         if (await folderEntryFile.exists()) {
-          entries.push(await folderEntryFile.text());
+          const entryXml = await folderEntryFile.text();
+          entries.push(stripXmlDeclaration(entryXml));
         } else if (await bookEntryFile.exists()) {
-          entries.push(await bookEntryFile.text());
+          const entryXml = await bookEntryFile.text();
+          entries.push(stripXmlDeclaration(entryXml));
           hasBooks = true;
         }
       }
@@ -43,8 +49,8 @@ export async function buildFeed(folderPath: string, dataPath: string): Promise<s
   }
 
   if (hasBooks) {
-    feedHeader = feedHeader.replace("kind=navigation", "kind=acquisition");
+    feedXml = feedXml.replace("kind=navigation", "kind=acquisition");
   }
 
-  return feedHeader.replace("</feed>", entries.join("\n") + "\n</feed>");
+  return feedXml.replace("</feed>", entries.join("\n") + "\n</feed>");
 }

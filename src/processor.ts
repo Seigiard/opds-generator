@@ -1,15 +1,27 @@
 import { mkdir, rm } from "node:fs/promises";
-import { join, basename, dirname } from "node:path";
+import { join, basename } from "node:path";
+import { Entry, Feed } from "opds-ts/v1.2";
 import type { FileInfo, BookEntry } from "./types.ts";
 import { MIME_TYPES } from "./types.ts";
 import { getHandler } from "./formats/index.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
+
+function encodeUrlPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export async function processBook(
   file: FileInfo,
   filesPath: string,
   dataPath: string
 ): Promise<BookEntry> {
+  const baseUrl = process.env.BASE_URL || "http://localhost:8080";
   const bookDataDir = join(dataPath, file.relativePath);
   await mkdir(bookDataDir, { recursive: true });
 
@@ -38,7 +50,7 @@ export async function processBook(
     }
   }
 
-  const entry: BookEntry = {
+  const bookEntry: BookEntry = {
     title,
     author,
     description,
@@ -49,10 +61,25 @@ export async function processBook(
     hasCover,
   };
 
-  const entryXml = buildBookEntryXml(entry, process.env.BASE_URL || "http://localhost:8080");
+  const encodedPath = encodeUrlPath(file.relativePath);
+
+  const entry = new Entry(`urn:opds:book:${file.relativePath}`, title);
+  if (author) entry.setAuthor(author);
+  if (description) entry.setSummary(description);
+  entry.setDcMetadataField("format", bookEntry.format);
+  entry.setContent({ type: "text", value: formatFileSize(file.size) });
+
+  if (hasCover) {
+    entry.addImage(`${baseUrl}/cover/${encodedPath}`);
+    entry.addThumbnail(`${baseUrl}/thumbnail/${encodedPath}`);
+  }
+
+  entry.addAcquisition(`${baseUrl}/download/${encodedPath}`, bookEntry.mimeType, "open-access");
+
+  const entryXml = entry.toXml({ prettyPrint: true });
   await Bun.write(join(bookDataDir, "entry.xml"), entryXml);
 
-  return entry;
+  return bookEntry;
 }
 
 export async function processFolder(
@@ -64,11 +91,22 @@ export async function processFolder(
   await mkdir(folderDataDir, { recursive: true });
 
   const folderName = folderPath.split("/").pop() || "Catalog";
-  const feedXml = buildFeedHeaderXml(folderName, folderPath, baseUrl);
+  const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
+  const selfHref = folderPath === "" ? `${baseUrl}/opds` : `${baseUrl}/opds/${encodeUrlPath(folderPath)}`;
+
+  const feed = new Feed(feedId, folderName)
+    .setKind("navigation")
+    .addSelfLink(selfHref, "navigation")
+    .addNavigationLink("start", `${baseUrl}/opds`);
+
+  const feedXml = feed.toXml({ prettyPrint: true });
   await Bun.write(join(folderDataDir, "_feed.xml"), feedXml);
 
   if (folderPath !== "") {
-    const entryXml = buildFolderEntryXml(folderName, folderPath, baseUrl);
+    const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName)
+      .addSubsection(`${baseUrl}/opds/${encodeUrlPath(folderPath)}`, "navigation");
+
+    const entryXml = entry.toXml({ prettyPrint: true });
     await Bun.write(join(folderDataDir, "_entry.xml"), entryXml);
   }
 }
@@ -80,83 +118,4 @@ export async function cleanupOrphan(dataPath: string, relativePath: string): Pro
   } catch {
     // Already deleted or doesn't exist
   }
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function encodeUrlPath(path: string): string {
-  return path.split("/").map(encodeURIComponent).join("/");
-}
-
-function buildFeedHeaderXml(title: string, path: string, baseUrl: string): string {
-  const id = path === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${path}`;
-  const selfHref = path === "" ? `${baseUrl}/opds` : `${baseUrl}/opds/${encodeUrlPath(path)}`;
-  const updated = new Date().toISOString();
-
-  return `<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
-  <id>${escapeXml(id)}</id>
-  <title>${escapeXml(title)}</title>
-  <updated>${updated}</updated>
-  <link rel="self" href="${escapeXml(selfHref)}" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-  <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-</feed>`;
-}
-
-function buildFolderEntryXml(title: string, path: string, baseUrl: string): string {
-  const id = `urn:opds:catalog:${path}`;
-  const href = `${baseUrl}/opds/${encodeUrlPath(path)}`;
-  const updated = new Date().toISOString();
-
-  return `  <entry>
-    <id>${escapeXml(id)}</id>
-    <title>${escapeXml(title)}</title>
-    <updated>${updated}</updated>
-    <link rel="subsection" href="${escapeXml(href)}" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-  </entry>`;
-}
-
-function buildBookEntryXml(entry: BookEntry, baseUrl: string): string {
-  const id = `urn:opds:book:${entry.filePath}`;
-  const updated = new Date().toISOString();
-  const encodedPath = encodeUrlPath(entry.filePath);
-
-  let xml = `  <entry>
-    <id>${escapeXml(id)}</id>
-    <title>${escapeXml(entry.title)}</title>
-    <updated>${updated}</updated>`;
-
-  if (entry.author) {
-    xml += `
-    <author><name>${escapeXml(entry.author)}</name></author>`;
-  }
-
-  xml += `
-    <dc:format>${escapeXml(entry.format)}</dc:format>
-    <content type="text">${formatFileSize(entry.fileSize)}</content>`;
-
-  if (entry.hasCover) {
-    xml += `
-    <link rel="http://opds-spec.org/image" href="${baseUrl}/cover/${encodedPath}" type="image/jpeg"/>
-    <link rel="http://opds-spec.org/image/thumbnail" href="${baseUrl}/thumbnail/${encodedPath}" type="image/jpeg"/>`;
-  }
-
-  xml += `
-    <link rel="http://opds-spec.org/acquisition/open-access" href="${baseUrl}/download/${encodedPath}" type="${escapeXml(entry.mimeType)}"/>
-  </entry>`;
-
-  return xml;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
