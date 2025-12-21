@@ -2,24 +2,26 @@
 
 Генератор статического OPDS каталога из файловой структуры.
 
-**Философия**: примитивные функции, 0 зависимостей, максимальная простота.
+**Философия**: примитивные функции, минимум зависимостей (opds-ts), максимальная простота.
 
 ## Текущий статус
 
 ### Реализовано
 - [x] Сканирование директории с книгами
 - [x] Stat-based хэширование (path + size + mtime, без чтения содержимого)
-- [x] Генерация OPDS Navigation + Acquisition feeds
+- [x] Генерация OPDS Navigation + Acquisition feeds (opds-ts)
 - [x] Имя файла (без расширения) → title
 - [x] HTTP сервер (Bun.serve + Bun.file)
 - [x] Кэширование фидов в $DATA/opds/
 - [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
-- [x] Dockerfile + docker-compose
+- [x] Dockerfile + docker-compose (dev/prod multi-stage)
 - [x] Инкрементальное обновление метаданных ($DATA/raw/)
 - [x] Извлечение метаданных из EPUB (title, author, description)
 - [x] Извлечение обложек из EPUB, CBZ, ZIP
 - [x] Автоопределение типа ZIP (комикс/fb2)
-- [x] Endpoint /cover/{path}
+- [x] Endpoint /cover/{path} (1400px max)
+- [x] Endpoint /thumbnail/{path} (512px max)
+- [x] ETag + If-None-Match для кэширования OPDS
 
 ## Архитектура
 
@@ -40,7 +42,9 @@ $DATA/
 │   └── fiction--scifi.xml
 ├── raw/                # Кэш метаданных
 │   └── f8a2c1d3-Foundation.epub.json
-└── covers/             # Обложки
+├── covers/             # Обложки (1400px max)
+│   └── f8a2c1d3-Foundation.epub.jpg
+└── thumbnails/         # Превью (512px max)
     └── f8a2c1d3-Foundation.epub.jpg
 ```
 
@@ -65,19 +69,23 @@ src/
 | `GET /opds` | Корневой каталог (Navigation Feed) |
 | `GET /opds/{path}` | Подкаталог или список книг |
 | `GET /download/{path}` | Скачивание файла |
-| `GET /cover/{path}` | Обложка книги |
+| `GET /cover/{path}` | Обложка книги (1400px max) |
+| `GET /thumbnail/{path}` | Превью книги (512px max) |
 
 ## Запуск
 
 ```bash
-# Разработка
+# Разработка (локально)
 bun run dev
 
 # Продакшен
 FILES=/books DATA=/data PORT=8080 bun run start
 
-# Docker
-docker-compose up
+# Docker (prod)
+docker compose up
+
+# Docker (dev с hot-reload)
+docker compose -f docker-compose.dev.yml up
 ```
 
 ## Поддерживаемые форматы
