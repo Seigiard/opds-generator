@@ -2,18 +2,16 @@ services:
   opds:
     build:
       context: .
-      target: production
+      target: development
     ports:
       - "8080:8080"
     volumes:
+      - ./src:/app/src:ro
       - ./files:/books:ro
-      - opds-data:/data
+      - ./data:/data
     environment:
       - FILES=/books
       - DATA=/data
       - PORT=8080
       - BASE_URL=http://localhost:8080
-    restart: unless-stopped
-
-volumes:
-  opds-data:
+    command: ["bun", "run", "dev"]
