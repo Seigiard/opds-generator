@@ -11,7 +11,8 @@
 - Извлечение обложек из EPUB, CBZ, ZIP
 - Автоопределение типа ZIP (комикс или fb2)
 - Авто-ребилд при изменении файлов (fs.watch)
-- Инкрементальное кэширование метаданных
+- Mirror архитектура — легкое удаление orphan-файлов
+- Расширяемые format handlers
 
 ## Поддерживаемые форматы
 
@@ -81,6 +82,7 @@ docker-compose up -d --build
 | `DATA` | `/data` | Путь для кэша и метаданных |
 | `PORT` | `8080` | HTTP порт |
 | `BASE_URL` | `http://localhost:8080` | Базовый URL для ссылок в OPDS |
+| `DEV_MODE` | `false` | Отключить кэширование |
 
 ## API
 
@@ -89,29 +91,35 @@ docker-compose up -d --build
 | `GET /opds` | Корневой каталог |
 | `GET /opds/{path}` | Подкаталог или список книг |
 | `GET /download/{path}` | Скачивание файла |
-| `GET /cover/{path}` | Обложка книги |
+| `GET /cover/{path}` | Обложка книги (1400px max) |
+| `GET /thumbnail/{path}` | Превью книги (512px max) |
+| `GET /health` | Статус сервера (JSON) |
 
 ## Структура директорий
 
 ```
 /books/                    # Ваши книги (монтируется)
 ├── fiction/
-│   ├── scifi/
-│   │   └── Foundation.epub
-│   └── fantasy/
-│       └── Dune.epub
+│   └── Foundation.epub
 └── comics/
     └── Batman.cbz
 
-/data/                     # Кэш (автоматически)
-├── manifest.json
-├── opds/
-│   ├── root.xml
-│   └── fiction--scifi.xml
-├── raw/                   # Метаданные книг
-│   └── abc123-Foundation.epub.json
-└── covers/                # Обложки
-    └── abc123-Foundation.epub.jpg
+/data/                     # Mirror-кэш (автоматически)
+├── _feed.xml              # Root feed header
+├── fiction/
+│   ├── _feed.xml
+│   ├── _entry.xml
+│   └── Foundation.epub/
+│       ├── entry.xml
+│       ├── cover.jpg
+│       └── thumb.jpg
+└── comics/
+    ├── _feed.xml
+    ├── _entry.xml
+    └── Batman.cbz/
+        ├── entry.xml
+        ├── cover.jpg
+        └── thumb.jpg
 ```
 
 ## Разработка

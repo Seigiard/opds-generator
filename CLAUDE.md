@@ -1,106 +1,73 @@
-
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
 - Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
+- Use `bun install` instead of `npm install`
+- Use `bun run <script>` instead of `npm run <script>`
 - Bun automatically loads .env, so don't use dotenv.
 
-## APIs
+## Bun APIs
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+- `Bun.serve()` for HTTP server. Don't use `express`.
+- `Bun.file()` for file operations. Prefer over `node:fs` readFile/writeFile.
+- `Bun.$\`cmd\`` for shell commands. Don't use `execa`.
+- `Bun.hash()` for hashing. Don't use `crypto`.
+- `Bun.write()` for writing files.
+
+## Project Structure
+
+```
+src/
+├── index.ts           # HTTP server + fs.watch
+├── scanner.ts         # File scanning, sync planning
+├── processor.ts       # Book/folder processing, XML generation
+├── opds.ts            # Feed assembly from XML files
+├── types.ts           # Shared types
+├── formats/           # Format handlers (FormatHandler interface)
+│   ├── types.ts       # FormatHandler, BookMetadata
+│   ├── index.ts       # Handler registry
+│   ├── epub.ts        # EPUB handler
+│   └── cbz.ts         # CBZ/CBR handler
+└── utils/
+    ├── zip.ts         # ZIP extraction (unzip wrapper)
+    └── image.ts       # ImageMagick resize
+```
+
+## Architecture: Mirror Structure
+
+/data mirrors /files structure:
+- Each book → folder with entry.xml, cover.jpg, thumb.jpg
+- Each folder → _feed.xml (header) + _entry.xml (for parent)
+- Feed assembly: read _feed.xml + all nested entry.xml/_entry.xml
+
+## Adding New Format Handler
+
+1. Create `src/formats/{format}.ts`
+2. Implement `FormatHandler` interface:
+   ```typescript
+   export const handler: FormatHandler = {
+     extensions: ["ext1", "ext2"],
+     async getMetadata(filePath) { ... },
+     async getCover(filePath) { ... }
+   };
+   ```
+3. Register in `src/formats/index.ts`
+
+## Docker Development
+
+```bash
+# Dev with hot-reload
+docker compose -f docker-compose.dev.yml up
+
+# Check logs
+docker compose -f docker-compose.dev.yml logs -f
+
+# Clear data cache
+docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
+```
 
 ## Testing
 
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+```bash
+bun test
 ```
-
-## Frontend
-
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
-
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-
-// import .css files directly and it works
-import './index.css';
-
-import { createRoot } from "react-dom/client";
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
