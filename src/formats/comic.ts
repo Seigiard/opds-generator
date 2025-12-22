@@ -1,50 +1,64 @@
-import {
-  readComicFileMetadata,
-  type ComicInfo,
-  type CoMet,
-  type ComicBookInfo,
-  type MetadataCompiled,
-} from "comic-metadata-tool";
+import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
-import { listEntries, readEntry } from "../utils/archive.ts";
+import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
+import { getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  removeNSPrefix: true,
+  isArray: (name) => ["Page", "writer", "creator", "penciller", "genre"].includes(name),
+});
+
+interface ComicInfoPage {
+  "@_Image": string;
+  "@_Type"?: string;
+}
+
+interface ComicInfoDoc {
+  ComicInfo: {
+    Title?: string;
+    Series?: string;
+    Number?: string;
+    Volume?: string;
+    Summary?: string;
+    Publisher?: string;
+    Year?: string;
+    Month?: string;
+    Writer?: string;
+    Penciller?: string;
+    CoverArtist?: string;
+    Genre?: string;
+    LanguageISO?: string;
+    PageCount?: string;
+    Pages?: { Page?: ComicInfoPage[] };
+  };
+}
+
+interface CoMetDoc {
+  comet: {
+    title?: string;
+    series?: string;
+    issue?: string;
+    volume?: string;
+    description?: string;
+    publisher?: string;
+    date?: string;
+    writer?: string[];
+    creator?: string[];
+    penciller?: string[];
+    genre?: string[];
+    language?: string;
+    rights?: string;
+  };
+}
 
 function formatDateFromNumbers(year?: number, month?: number): string | undefined {
   if (!year) return undefined;
   if (month) return `${year}-${String(month).padStart(2, "0")}`;
   return String(year);
-}
-
-function formatDateFromISO(date?: string): string | undefined {
-  if (!date) return undefined;
-  const match = date.match(/^(\d{4})(?:-(\d{2}))?/);
-  if (!match) return undefined;
-  return match[2] ? `${match[1]}-${match[2]}` : match[1];
-}
-
-function formatSeriesFromComicInfo(info: ComicInfo): string | undefined {
-  const parts: string[] = [];
-  if (info.series) parts.push(info.series);
-  if (info.volume) parts.push(`Vol.${info.volume}`);
-  if (info.number) parts.push(`#${info.number}`);
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-function formatSeriesFromCoMet(comet: CoMet): string | undefined {
-  const parts: string[] = [];
-  if (comet.series) parts.push(comet.series);
-  if (comet.volume) parts.push(`Vol.${comet.volume}`);
-  if (comet.issue) parts.push(`#${comet.issue}`);
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-function formatSeriesFromCBI(payload: ComicBookInfo["ComicBookInfo/1.0"]): string | undefined {
-  const parts: string[] = [];
-  if (payload.series) parts.push(payload.series);
-  if (payload.volume) parts.push(`Vol.${payload.volume}`);
-  if (payload.issue) parts.push(`#${payload.issue}`);
-  return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
 function parseGenresString(genre?: string): string[] | undefined {
@@ -53,68 +67,88 @@ function parseGenresString(genre?: string): string[] | undefined {
   return genres.length > 0 ? genres : undefined;
 }
 
-function getWriterFromCredits(credits?: { person: string; role: string }[]): string | undefined {
-  if (!credits || credits.length === 0) return undefined;
-  const writer = credits.find((c) => c.role.toLowerCase() === "writer");
-  return writer?.person;
+function formatSeries(series?: string, volume?: string | number, number?: string | number): string | undefined {
+  const parts: string[] = [];
+  if (series) parts.push(series);
+  if (volume) parts.push(`Vol.${volume}`);
+  if (number) parts.push(`#${number}`);
+  return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
-function extractFromComicInfo(info: ComicInfo): BookMetadata {
-  return {
-    title: info.title || info.series || "",
-    author: info.writer || info.penciller || info.coverArtist,
-    description: info.summary,
-    publisher: info.publisher,
-    issued: formatDateFromNumbers(info.year, info.month),
-    language: info.languageISO,
-    subjects: parseGenresString(info.genre),
-    pageCount: info.pageCount,
-    series: formatSeriesFromComicInfo(info),
-  };
+function toStringOrUndefined(val: unknown): string | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === "string") return val;
+  if (typeof val === "number") return String(val);
+  return undefined;
 }
 
-function extractFromCoMet(comet: CoMet): BookMetadata {
-  return {
-    title: comet.title || comet.series || "",
-    author: comet.writer?.[0] || comet.creator?.[0] || comet.penciller?.[0],
-    description: comet.description,
-    publisher: comet.publisher,
-    issued: formatDateFromISO(comet.date),
-    language: comet.language,
-    subjects: comet.genre,
-    series: formatSeriesFromCoMet(comet),
-    rights: comet.rights,
-  };
-}
+async function parseComicInfo(filePath: string, entries: string[]): Promise<{ metadata: BookMetadata; pages?: ComicInfoPage[] } | null> {
+  const comicInfoPath = entries.find((e) => e.toLowerCase() === "comicinfo.xml");
+  if (!comicInfoPath) return null;
 
-function extractFromComicBookInfo(cbi: ComicBookInfo): BookMetadata {
-  const payload = cbi["ComicBookInfo/1.0"];
-  return {
-    title: payload.title || payload.series || "",
-    author: getWriterFromCredits(payload.credits),
-    description: payload.comments,
-    publisher: payload.publisher,
-    issued: formatDateFromNumbers(payload.publicationYear, payload.publicationMonth),
-    language: payload.language,
-    subjects: payload.tags?.length > 0 ? payload.tags : parseGenresString(payload.genre),
-    series: formatSeriesFromCBI(payload),
-  };
-}
+  const content = await readEntryText(filePath, comicInfoPath);
+  if (!content) return null;
 
-function mergeMetadata(compiled: MetadataCompiled): BookMetadata {
-  const comicInfo = compiled.comicInfoXml ? extractFromComicInfo(compiled.comicInfoXml) : null;
-  const comet = compiled.coMet ? extractFromCoMet(compiled.coMet) : null;
-  const cbi = compiled.comicbookinfo ? extractFromComicBookInfo(compiled.comicbookinfo) : null;
+  try {
+    const doc = xmlParser.parse(content) as ComicInfoDoc;
+    const info = doc.ComicInfo;
+    if (!info) return null;
 
-  const sources = [comicInfo, comet, cbi].filter(Boolean) as BookMetadata[];
+    const year = info.Year ? Number(info.Year) : undefined;
+    const month = info.Month ? Number(info.Month) : undefined;
+    const pageCount = info.PageCount ? Number(info.PageCount) : undefined;
 
-  if (sources.length === 0) {
-    return { title: "" };
+    const metadata: BookMetadata = {
+      title: toStringOrUndefined(info.Title) || toStringOrUndefined(info.Series) || "",
+      author: toStringOrUndefined(info.Writer) || toStringOrUndefined(info.Penciller) || toStringOrUndefined(info.CoverArtist),
+      description: cleanDescription(toStringOrUndefined(info.Summary)),
+      publisher: toStringOrUndefined(info.Publisher),
+      issued: formatDateFromNumbers(year, month),
+      language: toStringOrUndefined(info.LanguageISO),
+      subjects: parseGenresString(toStringOrUndefined(info.Genre)),
+      pageCount: pageCount && !isNaN(pageCount) ? pageCount : undefined,
+      series: formatSeries(toStringOrUndefined(info.Series), info.Volume, info.Number),
+    };
+
+    return { metadata, pages: info.Pages?.Page };
+  } catch {
+    return null;
   }
+}
 
+async function parseCoMet(filePath: string, entries: string[]): Promise<BookMetadata | null> {
+  const cometPath = entries.find((e) => e.toLowerCase() === "comet.xml");
+  if (!cometPath) return null;
+
+  const content = await readEntryText(filePath, cometPath);
+  if (!content) return null;
+
+  try {
+    const doc = xmlParser.parse(content) as CoMetDoc;
+    const comet = doc.comet;
+    if (!comet) return null;
+
+    return {
+      title: toStringOrUndefined(comet.title) || toStringOrUndefined(comet.series) || "",
+      author: getFirstString(comet.writer) || getFirstString(comet.creator) || getFirstString(comet.penciller),
+      description: cleanDescription(toStringOrUndefined(comet.description)),
+      publisher: toStringOrUndefined(comet.publisher),
+      issued: parseDate(toStringOrUndefined(comet.date)),
+      language: toStringOrUndefined(comet.language),
+      subjects: getStringArray(comet.genre),
+      series: formatSeries(toStringOrUndefined(comet.series), comet.volume, comet.issue),
+      rights: toStringOrUndefined(comet.rights),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mergeMetadata(...sources: (BookMetadata | null)[]): BookMetadata {
   const result: BookMetadata = { title: "" };
 
   for (const source of sources) {
+    if (!source) continue;
     if (!result.title && source.title) result.title = source.title;
     if (!result.author && source.author) result.author = source.author;
     if (!result.description && source.description) result.description = source.description;
@@ -130,14 +164,14 @@ function mergeMetadata(compiled: MetadataCompiled): BookMetadata {
   return result;
 }
 
-function findCoverFromPages(pages: ComicInfo["pages"], images: string[]): string | undefined {
+function findCoverFromPages(pages: ComicInfoPage[] | undefined, images: string[]): string | undefined {
   if (!pages || pages.length === 0) return undefined;
 
-  const frontCover = pages.find((p) => p.Type === "FrontCover");
+  const frontCover = pages.find((p) => p["@_Type"] === "FrontCover");
   if (frontCover !== undefined) {
-    const imageIndex = frontCover.Image;
+    const imageIndex = parseInt(frontCover["@_Image"], 10);
     const sortedImages = [...images].sort();
-    if (imageIndex < sortedImages.length) {
+    if (!isNaN(imageIndex) && imageIndex < sortedImages.length) {
       return sortedImages[imageIndex];
     }
   }
@@ -154,7 +188,7 @@ function findCoverByName(images: string[]): string | undefined {
   return undefined;
 }
 
-function selectCoverImage(images: string[], pages?: ComicInfo["pages"]): string | undefined {
+function selectCoverImage(images: string[], pages?: ComicInfoPage[]): string | undefined {
   if (images.length === 0) return undefined;
 
   const fromPages = findCoverFromPages(pages, images);
@@ -174,16 +208,13 @@ async function createComicHandler(filePath: string): Promise<FormatHandler | nul
     IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
   );
 
-  let metadata: BookMetadata = { title: "" };
-  let pages: ComicInfo["pages"] | undefined;
+  const [comicInfoResult, cometMetadata] = await Promise.all([
+    parseComicInfo(filePath, entries),
+    parseCoMet(filePath, entries),
+  ]);
 
-  try {
-    const compiled = await readComicFileMetadata(filePath);
-    metadata = mergeMetadata(compiled);
-    pages = compiled.comicInfoXml?.pages;
-  } catch {
-    // metadata extraction failed, continue with empty metadata
-  }
+  const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
+  const pages = comicInfoResult?.pages;
 
   return {
     getMetadata() {
