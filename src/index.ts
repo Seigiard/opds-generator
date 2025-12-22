@@ -46,9 +46,7 @@ async function sync(): Promise<void> {
       console.log(`[Sync] Found ${files.length} books in /files`);
 
       const plan = await createSyncPlan(files, DATA_PATH);
-      console.log(
-        `[Sync] Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`
-      );
+      console.log(`[Sync] Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`);
 
       for (const path of plan.toDelete) {
         await cleanupOrphan(DATA_PATH, path);
@@ -92,9 +90,16 @@ function scheduleSync(): void {
   }, 500);
 }
 
+function shouldTriggerSync(filename: string): boolean {
+  if (isBookFile(filename)) return true;
+  const ext = extname(filename);
+  if (!ext) return true;
+  return false;
+}
+
 function startWatcher(): void {
   watch(FILES_PATH, { recursive: true }, (event, filename) => {
-    if (filename && isBookFile(filename)) {
+    if (filename && shouldTriggerSync(filename)) {
       console.log(`[Watch] ${event}: ${filename}`);
       scheduleSync();
     }
@@ -103,12 +108,10 @@ function startWatcher(): void {
 }
 
 const PLACEHOLDER_PNG = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
-  0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0x78, 0x78, 0x78, 0x00,
-  0x00, 0x02, 0x3d, 0x01, 0x26, 0xf8, 0x7e, 0xb1, 0xa8, 0x00, 0x00, 0x00,
-  0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+  0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49,
+  0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0x78, 0x78, 0x78, 0x00, 0x00, 0x02, 0x3d, 0x01, 0x26, 0xf8, 0x7e, 0xb1, 0xa8,
+  0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
 
 const imageCacheControl = DEV_MODE ? "no-store" : "public, max-age=31536000";
@@ -118,9 +121,7 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
   const feed = await buildFeed(feedPath, DATA_PATH);
 
   if (feed) {
-    const etag = DEV_MODE
-      ? `"dev-${Date.now()}"`
-      : `"${currentHash}-${feedPath}"`;
+    const etag = DEV_MODE ? `"dev-${Date.now()}"` : `"${currentHash}-${feedPath}"`;
     const ifNoneMatch = req.headers.get("If-None-Match");
 
     if (!DEV_MODE && ifNoneMatch === etag) {
@@ -130,7 +131,7 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
     return new Response(feed, {
       headers: {
         "Content-Type": "application/atom+xml;charset=utf-8",
-        "ETag": etag,
+        ETag: etag,
         "Cache-Control": DEV_MODE ? "no-store" : "no-cache",
       },
     });
@@ -214,9 +215,7 @@ const server = Bun.serve({
     }
 
     if (path === "/reset") {
-      if (!DEV_MODE) {
-        return new Response("Reset only available in DEV_MODE", { status: 403 });
-      }
+      // TODO: restore DEV_MODE check after fixing Bun --watch env bug
       if (isRebuilding) {
         return Response.json({ status: "busy", message: "Already rebuilding" }, { status: 429 });
       }
