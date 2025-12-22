@@ -28,6 +28,10 @@
 - [x] Natural sorting (Intl.Collator)
 - [x] oxlint type-aware linting
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
+- [x] FB2: metadata + cover extraction
+- [x] Reset endpoint (/reset in DEV_MODE)
+- [x] Security: path traversal protection (resolveSafePath)
+- [x] Reliability: sync dirty flag, process lifecycle fixes
 
 ## Архитектура
 
@@ -79,10 +83,12 @@ src/
 ├── formats/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
+│   ├── utils.ts       # Shared XML parsing utilities
 │   ├── epub.ts        # EPUB handler (fast-xml-parser)
+│   ├── fb2.ts         # FB2 handler
 │   └── comic.ts       # CBZ/CBR/ZIP handler
 └── utils/
-    ├── zip.ts         # ZIP utilities (unzip wrapper)
+    ├── archive.ts     # ZIP/RAR/7z extraction
     └── image.ts       # ImageMagick resize
 ```
 
@@ -96,6 +102,7 @@ src/
 | `GET /cover/{path}`     | Обложка книги (1400px max)         |
 | `GET /thumbnail/{path}` | Превью книги (512px max)           |
 | `GET /health`           | Статус сервера (JSON)              |
+| `GET /reset`            | Очистка кэша (только DEV_MODE)     |
 
 ## Запуск
 

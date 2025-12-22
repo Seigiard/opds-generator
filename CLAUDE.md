@@ -26,10 +26,12 @@ src/
 ├── formats/           # Format handlers (FormatHandler interface)
 │   ├── types.ts       # FormatHandler, BookMetadata
 │   ├── index.ts       # Handler registry
+│   ├── utils.ts       # Shared XML parsing utilities
 │   ├── epub.ts        # EPUB handler
-│   └── cbz.ts         # CBZ/CBR handler
+│   ├── fb2.ts         # FB2 handler
+│   └── comic.ts       # CBZ/CBR/ZIP handler
 └── utils/
-    ├── zip.ts         # ZIP extraction (unzip wrapper)
+    ├── archive.ts     # ZIP/RAR/7z extraction
     └── image.ts       # ImageMagick resize
 ```
 

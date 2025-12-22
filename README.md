@@ -25,10 +25,11 @@ Static OPDS 1.2 catalog generator from your file structure.
 
 | Format | Metadata | Cover |
 |--------|----------|-------|
-| EPUB | title, author, description | ✓ |
+| EPUB | title, author, description, series | ✓ |
+| FB2 | title, author, description, series, genre | ✓ |
 | CBZ/CBR | title, author (ComicInfo.xml) | ✓ |
 | ZIP | auto-detect (comic/fb2) | ✓ |
-| PDF, MOBI, FB2, DJVU, TXT | filename | - |
+| PDF, MOBI, DJVU, TXT | filename | - |
 
 ## Quick Start with Docker
 
