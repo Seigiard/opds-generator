@@ -101,12 +101,20 @@ docker compose -f docker-compose.dev.yml logs -f
 docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
 ```
 
-## Testing
+## Testing & Linting
 
 ```bash
+# Lint (type-aware, run before commits)
+bun run lint
+
+# Lint with auto-fix
+bun run lint:fix
+
 # Type check
 bun --bun tsc --noEmit
 
 # Unit tests (if any)
 bun test
 ```
+
+**IMPORTANT**: Always run `bun run lint` before committing changes.
