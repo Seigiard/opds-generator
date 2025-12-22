@@ -118,3 +118,7 @@ bun test
 ```
 
 **IMPORTANT**: Always run `bun run lint` before committing changes.
+
+## Documentation
+
+After completing tasks, update PLAN.md and CLAUDE.md if architecture or workflow changed. Keep updates concise — no redundant info.

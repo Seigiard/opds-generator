@@ -25,6 +25,9 @@
 - [x] FormatHandler интерфейс для расширяемости
 - [x] Path sanitization (защита от path traversal)
 - [x] Health endpoint (/health)
+- [x] Natural sorting (Intl.Collator)
+- [x] oxlint type-aware linting
+- [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 
 ## Архитектура
 
@@ -76,8 +79,8 @@ src/
 ├── formats/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
-│   ├── epub.ts        # EPUB handler
-│   └── cbz.ts         # CBZ/CBR handler
+│   ├── epub.ts        # EPUB handler (fast-xml-parser)
+│   └── comic.ts       # CBZ/CBR/ZIP handler
 └── utils/
     ├── zip.ts         # ZIP utilities (unzip wrapper)
     └── image.ts       # ImageMagick resize
