@@ -5,7 +5,8 @@ import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  isArray: (name) => ["dc:subject", "dc:creator", "item", "meta"].includes(name),
+  removeNSPrefix: true,
+  isArray: (name) => ["subject", "creator", "item", "meta"].includes(name),
 });
 
 interface OPFMeta {
@@ -22,14 +23,14 @@ interface OPFItem {
 interface OPFPackage {
   package: {
     metadata: {
-      "dc:title"?: unknown;
-      "dc:creator"?: unknown;
-      "dc:description"?: unknown;
-      "dc:publisher"?: unknown;
-      "dc:date"?: unknown;
-      "dc:language"?: unknown;
-      "dc:subject"?: unknown;
-      "dc:rights"?: unknown;
+      title?: unknown;
+      creator?: unknown;
+      description?: unknown;
+      publisher?: unknown;
+      date?: unknown;
+      language?: unknown;
+      subject?: unknown;
+      rights?: unknown;
       meta?: OPFMeta[];
     };
     manifest: {
@@ -38,14 +39,31 @@ interface OPFPackage {
   };
 }
 
+interface RootFile {
+  "@_full-path"?: string;
+  "@_media-type"?: string;
+}
+
 interface ContainerXML {
   container?: {
     rootfiles?: {
-      rootfile?: {
-        "@_full-path"?: string;
-      };
+      rootfile?: RootFile | RootFile[];
     };
   };
+}
+
+function findOpfPath(containerData: ContainerXML): string | undefined {
+  const rootfiles = containerData.container?.rootfiles?.rootfile;
+  if (!rootfiles) return undefined;
+
+  const files = Array.isArray(rootfiles) ? rootfiles : [rootfiles];
+
+  // Prefer OPF by media-type
+  const opf = files.find((f) => f["@_media-type"] === "application/oebps-package+xml");
+  if (opf?.["@_full-path"]) return opf["@_full-path"];
+
+  // Fallback to first with full-path
+  return files[0]?.["@_full-path"];
 }
 
 function decodeEntities(str: string): string {
@@ -99,14 +117,14 @@ function parseDate(date: string | undefined): string | undefined {
 function extractMetadata(opfData: OPFPackage): BookMetadata {
   const meta = opfData.package.metadata;
   return {
-    title: getString(meta["dc:title"]) ?? "",
-    author: getFirstString(meta["dc:creator"]),
-    description: cleanDescription(getString(meta["dc:description"])),
-    publisher: getString(meta["dc:publisher"]),
-    issued: parseDate(getString(meta["dc:date"])),
-    language: getString(meta["dc:language"]),
-    subjects: getStringArray(meta["dc:subject"]),
-    rights: getString(meta["dc:rights"]),
+    title: getString(meta.title) ?? "",
+    author: getFirstString(meta.creator),
+    description: cleanDescription(getString(meta.description)),
+    publisher: getString(meta.publisher),
+    issued: parseDate(getString(meta.date)),
+    language: getString(meta.language),
+    subjects: getStringArray(meta.subject),
+    rights: getString(meta.rights),
   };
 }
 
@@ -161,7 +179,7 @@ async function createEpubHandler(filePath: string): Promise<FormatHandler | null
     if (!container) return null;
 
     const containerData = xmlParser.parse(container) as ContainerXML;
-    const opfPath = containerData.container?.rootfiles?.rootfile?.["@_full-path"];
+    const opfPath = findOpfPath(containerData);
     if (!opfPath) return null;
 
     const opf = await readEntryText(filePath, opfPath);

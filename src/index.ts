@@ -206,6 +206,19 @@ const server = Bun.serve({
       });
     }
 
+    if (path === "/reset") {
+      if (!DEV_MODE) {
+        return new Response("Reset only available in DEV_MODE", { status: 403 });
+      }
+      if (isRebuilding) {
+        return Response.json({ status: "busy", message: "Already rebuilding" }, { status: 429 });
+      }
+      console.log("[Reset] Clearing data and resyncing...");
+      await Bun.$`rm -rf ${DATA_PATH}/*`.quiet();
+      void sync();
+      return Response.json({ status: "reset", message: "Data cleared, resync started" });
+    }
+
     if (path === "/opds" || path.startsWith("/opds/")) {
       const feedPath = path === "/opds" ? "" : sanitizePath(decodeURIComponent(path.slice(6)));
       if (feedPath === null) return new Response("Invalid path", { status: 400 });
