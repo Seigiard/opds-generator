@@ -36,8 +36,12 @@ export async function saveBufferAsImage(
       }
     );
     proc.stdin.write(buffer);
-    void proc.stdin.end();
-    const exitCode = await proc.exited;
+    const [, , , exitCode] = await Promise.all([
+      proc.stdin.end(),
+      new Response(proc.stdout).arrayBuffer(),
+      new Response(proc.stderr).arrayBuffer(),
+      proc.exited,
+    ]);
     return exitCode === 0;
   } catch {
     return false;

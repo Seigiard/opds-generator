@@ -24,52 +24,59 @@ function resolveSafePath(basePath: string, userPath: string): string | null {
 
 let currentHash = "";
 let isRebuilding = false;
+let needsRebuild = false;
 let rebuildTimer: Timer | null = null;
 let bookCount = 0;
 let folderCount = 0;
 
 async function sync(): Promise<void> {
-  if (isRebuilding) return;
+  if (isRebuilding) {
+    needsRebuild = true;
+    return;
+  }
   isRebuilding = true;
 
-  console.log("[Sync] Starting...");
-  const startTime = Date.now();
+  do {
+    needsRebuild = false;
+    console.log("[Sync] Starting...");
+    const startTime = Date.now();
 
-  try {
-    const files = await scanFiles(FILES_PATH);
-    console.log(`[Sync] Found ${files.length} books in /files`);
+    try {
+      const files = await scanFiles(FILES_PATH);
+      console.log(`[Sync] Found ${files.length} books in /files`);
 
-    const plan = await createSyncPlan(files, DATA_PATH);
-    console.log(
-      `[Sync] Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`
-    );
+      const plan = await createSyncPlan(files, DATA_PATH);
+      console.log(
+        `[Sync] Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`
+      );
 
-    for (const path of plan.toDelete) {
-      await cleanupOrphan(DATA_PATH, path);
-      console.log(`[Sync] Deleted: ${path}`);
+      for (const path of plan.toDelete) {
+        await cleanupOrphan(DATA_PATH, path);
+        console.log(`[Sync] Deleted: ${path}`);
+      }
+
+      for (const folder of plan.folders) {
+        await processFolder(folder.path, DATA_PATH, BASE_URL);
+      }
+      console.log(`[Sync] Processed ${plan.folders.length} folders`);
+
+      for (const file of plan.toProcess) {
+        console.log(`[Sync] Processing: ${file.relativePath}`);
+        await processBook(file, FILES_PATH, DATA_PATH);
+      }
+
+      currentHash = computeHash(files);
+      bookCount = files.length;
+      folderCount = plan.folders.length;
+
+      const duration = Date.now() - startTime;
+      console.log(`[Sync] Complete in ${duration}ms, hash: ${currentHash}`);
+    } catch (error) {
+      console.error("[Sync] Error:", error);
     }
+  } while (needsRebuild);
 
-    for (const folder of plan.folders) {
-      await processFolder(folder.path, DATA_PATH, BASE_URL);
-    }
-    console.log(`[Sync] Processed ${plan.folders.length} folders`);
-
-    for (const file of plan.toProcess) {
-      console.log(`[Sync] Processing: ${file.relativePath}`);
-      await processBook(file, FILES_PATH, DATA_PATH);
-    }
-
-    currentHash = computeHash(files);
-    bookCount = files.length;
-    folderCount = plan.folders.length;
-
-    const duration = Date.now() - startTime;
-    console.log(`[Sync] Complete in ${duration}ms, hash: ${currentHash}`);
-  } catch (error) {
-    console.error("[Sync] Error:", error);
-  } finally {
-    isRebuilding = false;
-  }
+  isRebuilding = false;
 }
 
 function isBookFile(filename: string): boolean {
