@@ -36,7 +36,7 @@ export async function saveBufferAsImage(
       }
     );
     proc.stdin.write(buffer);
-    proc.stdin.end();
+    void proc.stdin.end();
     const exitCode = await proc.exited;
     return exitCode === 0;
   } catch {

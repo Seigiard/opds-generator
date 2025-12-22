@@ -78,7 +78,7 @@ function isBookFile(filename: string): boolean {
 function scheduleSync(): void {
   if (rebuildTimer) clearTimeout(rebuildTimer);
   rebuildTimer = setTimeout(() => {
-    sync();
+    void sync();
     rebuildTimer = null;
   }, 500);
 }
