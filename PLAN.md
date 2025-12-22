@@ -29,6 +29,7 @@
 - [x] oxlint type-aware linting
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction
+- [x] MOBI/AZW: binary parsing with DataView, metadata + cover
 - [x] Reset endpoint (/reset in DEV_MODE)
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes
@@ -86,6 +87,7 @@ src/
 │   ├── utils.ts       # Shared XML parsing utilities
 │   ├── epub.ts        # EPUB handler (fast-xml-parser)
 │   ├── fb2.ts         # FB2 handler
+│   ├── mobi.ts        # MOBI/AZW handler (binary parsing)
 │   └── comic.ts       # CBZ/CBR/ZIP handler
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction

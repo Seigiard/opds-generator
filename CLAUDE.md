@@ -29,6 +29,7 @@ src/
 │   ├── utils.ts       # Shared XML parsing utilities
 │   ├── epub.ts        # EPUB handler
 │   ├── fb2.ts         # FB2 handler
+│   ├── mobi.ts        # MOBI/AZW handler
 │   └── comic.ts       # CBZ/CBR/ZIP handler
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
