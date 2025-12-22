@@ -1,3 +1,8 @@
+import { createExtractorFromFile } from "node-unrar-js";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 export type ArchiveType = "zip" | "rar" | "7z";
 
 const MAGIC_BYTES: Record<ArchiveType, number[]> = {
@@ -22,13 +27,19 @@ export async function detectArchiveType(filePath: string): Promise<ArchiveType |
   }
 }
 
-export async function listEntries(filePath: string): Promise<string[]> {
-  const type = await detectArchiveType(filePath);
-  if (!type) return [];
+async function listEntriesRar(filePath: string): Promise<string[]> {
+  try {
+    const extractor = await createExtractorFromFile({ filepath: filePath });
+    const list = extractor.getFileList();
+    return [...list.fileHeaders].map((h) => h.name);
+  } catch {
+    return [];
+  }
+}
 
-  const commands: Record<ArchiveType, string[]> = {
+async function listEntriesShell(filePath: string, type: "zip" | "7z"): Promise<string[]> {
+  const commands: Record<"zip" | "7z", string[]> = {
     zip: ["zipinfo", "-1", filePath],
-    rar: ["7zz", "l", "-ba", "-slt", filePath],
     "7z": ["7zz", "l", "-ba", "-slt", filePath],
   };
 
@@ -40,30 +51,54 @@ export async function listEntries(filePath: string): Promise<string[]> {
     ]);
     if (exitCode !== 0) return [];
 
-    if (type === "7z" || type === "rar") {
-      const paths = output
+    if (type === "7z") {
+      return output
         .split("\n")
         .filter((line) => line.startsWith("Path = "))
-        .map((line) => line.slice(7));
-      return paths.slice(1);
+        .map((line) => line.slice(7))
+        .slice(1);
     }
 
-    return output
-      .trim()
-      .split("\n")
-      .filter((line) => line.length > 0);
+    return output.trim().split("\n").filter((line) => line.length > 0);
   } catch {
     return [];
   }
 }
 
-export async function readEntry(filePath: string, entryPath: string): Promise<Buffer | null> {
+export async function listEntries(filePath: string): Promise<string[]> {
   const type = await detectArchiveType(filePath);
-  if (!type) return null;
+  if (!type) return [];
 
-  const commands: Record<ArchiveType, string[]> = {
+  if (type === "rar") {
+    return listEntriesRar(filePath);
+  }
+  return listEntriesShell(filePath, type);
+}
+
+async function readEntryRar(filePath: string, entryPath: string): Promise<Buffer | null> {
+  let tempDir: string | null = null;
+  try {
+    tempDir = await mkdtemp(join(tmpdir(), "rar-"));
+    const extractor = await createExtractorFromFile({
+      filepath: filePath,
+      targetPath: tempDir,
+    });
+    const { files } = extractor.extract({ files: [entryPath] });
+    const results = [...files];
+    const found = results.find((r) => r.fileHeader.name === entryPath);
+    if (!found || found.fileHeader.flags.directory) return null;
+
+    return Buffer.from(await readFile(join(tempDir, entryPath)));
+  } catch {
+    return null;
+  } finally {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function readEntryShell(filePath: string, entryPath: string, type: "zip" | "7z"): Promise<Buffer | null> {
+  const commands: Record<"zip" | "7z", string[]> = {
     zip: ["unzip", "-p", filePath, entryPath],
-    rar: ["7zz", "e", "-so", filePath, entryPath],
     "7z": ["7zz", "e", "-so", filePath, entryPath],
   };
 
@@ -78,6 +113,16 @@ export async function readEntry(filePath: string, entryPath: string): Promise<Bu
   } catch {
     return null;
   }
+}
+
+export async function readEntry(filePath: string, entryPath: string): Promise<Buffer | null> {
+  const type = await detectArchiveType(filePath);
+  if (!type) return null;
+
+  if (type === "rar") {
+    return readEntryRar(filePath, entryPath);
+  }
+  return readEntryShell(filePath, entryPath, type);
 }
 
 export async function readEntryText(filePath: string, entryPath: string): Promise<string | null> {

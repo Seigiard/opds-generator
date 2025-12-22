@@ -16,7 +16,7 @@
 - [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
 - [x] Dockerfile + docker-compose (dev/prod multi-stage)
 - [x] Извлечение метаданных из EPUB (title, author, description)
-- [x] Извлечение обложек из EPUB, CBZ, ZIP
+- [x] Извлечение обложек из EPUB, CBZ, CBR, CB7, ZIP
 - [x] Автоопределение типа ZIP (комикс/fb2)
 - [x] Endpoint /cover/{path} (1400px max)
 - [x] Endpoint /thumbnail/{path} (512px max)
@@ -88,7 +88,7 @@ src/
 │   ├── epub.ts        # EPUB handler (fast-xml-parser)
 │   ├── fb2.ts         # FB2 handler
 │   ├── mobi.ts        # MOBI/AZW handler (binary parsing)
-│   └── comic.ts       # CBZ/CBR/ZIP handler
+│   └── comic.ts       # CBZ/CBR/CB7/ZIP handler
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
     └── image.ts       # ImageMagick resize
@@ -124,7 +124,7 @@ docker compose -f docker-compose.dev.yml up
 
 ## Поддерживаемые форматы
 
-epub, pdf, mobi, azw3, fb2, cbz, cbr, zip, djvu, txt
+epub, pdf, mobi, azw3, fb2, cbz, cbr, cb7, zip, djvu, txt
 
 ## FormatHandler Interface
 

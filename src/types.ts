@@ -31,6 +31,7 @@ export const MIME_TYPES: Record<string, string> = {
   fb2: "application/x-fictionbook+xml",
   cbz: "application/vnd.comicbook+zip",
   cbr: "application/vnd.comicbook-rar",
+  cb7: "application/vnd.comicbook+7z",
   zip: "application/zip",
   djvu: "image/vnd.djvu",
   txt: "text/plain",

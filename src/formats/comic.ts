@@ -167,30 +167,35 @@ function selectCoverImage(images: string[], pages?: ComicInfo["pages"]): string 
 }
 
 async function createComicHandler(filePath: string): Promise<FormatHandler | null> {
+  const entries = await listEntries(filePath);
+  if (entries.length === 0) return null;
+
+  const images = entries.filter((e) =>
+    IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
+  );
+
+  let metadata: BookMetadata = { title: "" };
+  let pages: ComicInfo["pages"] | undefined;
+
   try {
     const compiled = await readComicFileMetadata(filePath);
-    const metadata = mergeMetadata(compiled);
-    const pages = compiled.comicInfoXml?.pages;
-
-    const entries = await listEntries(filePath);
-    const images = entries.filter((e) =>
-      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
-    );
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-
-      async getCover() {
-        const coverPath = selectCoverImage(images, pages);
-        if (!coverPath) return null;
-        return readEntry(filePath, coverPath);
-      },
-    };
+    metadata = mergeMetadata(compiled);
+    pages = compiled.comicInfoXml?.pages;
   } catch {
-    return null;
+    // metadata extraction failed, continue with empty metadata
   }
+
+  return {
+    getMetadata() {
+      return metadata;
+    },
+
+    async getCover() {
+      const coverPath = selectCoverImage(images, pages);
+      if (!coverPath) return null;
+      return readEntry(filePath, coverPath);
+    },
+  };
 }
 
 export const comicHandlerRegistration: FormatHandlerRegistration = {

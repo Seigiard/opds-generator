@@ -16,7 +16,7 @@ Static OPDS 1.2 catalog generator from your file structure.
 
 - Automatic directory scanning with file watching
 - Metadata extraction from EPUB, FB2, MOBI/AZW
-- Cover extraction from EPUB, FB2, MOBI, CBZ, ZIP
+- Cover extraction from EPUB, FB2, MOBI, CBZ, CBR, CB7, ZIP
 - Auto-detection of ZIP content type (comic or fb2)
 - Mirror architecture for easy orphan cleanup
 - Extensible format handlers
@@ -28,7 +28,7 @@ Static OPDS 1.2 catalog generator from your file structure.
 | EPUB | title, author, description, series | ✓ |
 | FB2 | title, author, description, series, genre | ✓ |
 | MOBI/AZW/AZW3 | title, author, publisher, subjects | ✓ |
-| CBZ/CBR | title, author (ComicInfo.xml) | ✓ |
+| CBZ/CBR/CB7 | title, author (ComicInfo.xml) | ✓ |
 | ZIP | auto-detect (comic/fb2) | ✓ |
 | PDF, DJVU, TXT | filename | - |
 

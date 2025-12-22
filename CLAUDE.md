@@ -30,7 +30,7 @@ src/
 │   ├── epub.ts        # EPUB handler
 │   ├── fb2.ts         # FB2 handler
 │   ├── mobi.ts        # MOBI/AZW handler
-│   └── comic.ts       # CBZ/CBR/ZIP handler
+│   └── comic.ts       # CBZ/CBR/CB7/ZIP handler
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
     └── image.ts       # ImageMagick resize
