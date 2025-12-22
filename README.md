@@ -1,33 +1,40 @@
 # OPDS Generator
 
-Генератор статического OPDS 1.2 каталога из файловой структуры.
+Static OPDS 1.2 catalog generator from your file structure.
 
-**Философия**: примитивные функции, минимум зависимостей (opds-ts), максимальная простота.
+## Philosophy
 
-## Возможности
+**Your files, your structure.** This generator respects your existing file organization:
 
-- Автоматическое сканирование директории с книгами
-- Извлечение метаданных из EPUB (title, author, description)
-- Извлечение обложек из EPUB, CBZ, ZIP
-- Автоопределение типа ZIP (комикс или fb2)
-- Авто-ребилд при изменении файлов (fs.watch)
-- Mirror архитектура — легкое удаление orphan-файлов
-- Расширяемые format handlers
+- Files are never modified, renamed, or moved
+- No database or proprietary storage format
+- Metadata is cached separately in `/data`, mirroring your file structure
+- Delete, add, or reorganize files anytime — the catalog updates automatically
+- Minimal dependencies, maximum simplicity
 
-## Поддерживаемые форматы
+## Features
 
-| Формат | Метаданные | Обложка |
-|--------|------------|---------|
+- Automatic directory scanning with file watching
+- Metadata extraction from EPUB (title, author, description)
+- Cover extraction from EPUB, CBZ, ZIP
+- Auto-detection of ZIP content type (comic or fb2)
+- Mirror architecture for easy orphan cleanup
+- Extensible format handlers
+
+## Supported Formats
+
+| Format | Metadata | Cover |
+|--------|----------|-------|
 | EPUB | title, author, description | ✓ |
 | CBZ/CBR | title, author (ComicInfo.xml) | ✓ |
-| ZIP | автоопределение (комикс/fb2) | ✓ |
-| PDF, MOBI, FB2, DJVU, TXT | имя файла | - |
+| ZIP | auto-detect (comic/fb2) | ✓ |
+| PDF, MOBI, FB2, DJVU, TXT | filename | - |
 
-## Быстрый старт с Docker
+## Quick Start with Docker
 
-### Docker Compose (рекомендуется)
+### Docker Compose (recommended)
 
-1. Создайте `docker-compose.yml`:
+1. Create `docker-compose.yml`:
 
 ```yaml
 services:
@@ -46,13 +53,13 @@ volumes:
   opds-data:
 ```
 
-2. Запустите:
+2. Run:
 
 ```bash
 docker-compose up -d
 ```
 
-3. Откройте http://localhost:8080/opds
+3. Open http://localhost:8080/opds
 
 ### Docker Run
 
@@ -66,7 +73,7 @@ docker run -d \
   ghcr.io/seigiard/opds-generator:latest
 ```
 
-### Сборка из исходников
+### Build from Source
 
 ```bash
 git clone https://github.com/Seigiard/opds-generator.git
@@ -74,37 +81,38 @@ cd opds-generator
 docker-compose up -d --build
 ```
 
-## Переменные окружения
+## Environment Variables
 
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `FILES` | `/books` | Путь к директории с книгами |
-| `DATA` | `/data` | Путь для кэша и метаданных |
-| `PORT` | `8080` | HTTP порт |
-| `BASE_URL` | `http://localhost:8080` | Базовый URL для ссылок в OPDS |
-| `DEV_MODE` | `false` | Отключить кэширование |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FILES` | `/books` | Path to your books directory |
+| `DATA` | `/data` | Path for cache and metadata |
+| `PORT` | `8080` | HTTP port |
+| `BASE_URL` | `http://localhost:8080` | Base URL for OPDS links |
+| `DEV_MODE` | `false` | Disable caching |
 
 ## API
 
-| Endpoint | Описание |
-|----------|----------|
-| `GET /opds` | Корневой каталог |
-| `GET /opds/{path}` | Подкаталог или список книг |
-| `GET /download/{path}` | Скачивание файла |
-| `GET /cover/{path}` | Обложка книги (1400px max) |
-| `GET /thumbnail/{path}` | Превью книги (512px max) |
-| `GET /health` | Статус сервера (JSON) |
+| Endpoint | Description |
+|----------|-------------|
+| `GET /opds` | Root catalog |
+| `GET /opds/{path}` | Subcatalog or book list |
+| `GET /download/{path}` | Download file |
+| `GET /cover/{path}` | Book cover (1400px max) |
+| `GET /thumbnail/{path}` | Book thumbnail (512px max) |
+| `GET /health` | Server status (JSON) |
+| `GET /reset` | Clear cache and resync (DEV_MODE only) |
 
-## Структура директорий
+## Directory Structure
 
 ```
-/books/                    # Ваши книги (монтируется)
+/books/                    # Your books (mounted read-only)
 ├── fiction/
 │   └── Foundation.epub
 └── comics/
     └── Batman.cbz
 
-/data/                     # Mirror-кэш (автоматически)
+/data/                     # Mirror cache (auto-generated)
 ├── _feed.xml              # Root feed header
 ├── fiction/
 │   ├── _feed.xml
@@ -122,16 +130,16 @@ docker-compose up -d --build
         └── thumb.jpg
 ```
 
-## Разработка
+## Development
 
 ```bash
-# Установка зависимостей
+# Install dependencies
 bun install
 
-# Запуск dev сервера с hot reload
+# Run dev server with hot reload
 bun run dev
 
-# Продакшен
+# Production
 FILES=/books DATA=/data bun run start
 ```
 
@@ -139,6 +147,6 @@ FILES=/books DATA=/data bun run start
 
 https://specs.opds.io/opds-1.2
 
-## Лицензия
+## License
 
 MIT
