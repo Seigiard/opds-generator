@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "comic-metadata-tool": "^1.2.0",
+    "fast-xml-parser": "^5.3.3",
     "opds-ts": "^2.1.0"
   }
 }
