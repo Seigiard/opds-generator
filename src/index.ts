@@ -12,12 +12,14 @@ const PORT = parseInt(process.env.PORT || "8080", 10);
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const DEV_MODE = process.env.DEV_MODE === "true";
 
-function sanitizePath(userPath: string): string | null {
-  const normalized = normalize(userPath);
-  if (normalized.startsWith("..") || isAbsolute(normalized)) {
+function resolveSafePath(basePath: string, userPath: string): string | null {
+  if (isAbsolute(userPath)) return null;
+  const fullPath = normalize(join(basePath, userPath));
+  const normalizedBase = normalize(basePath);
+  if (!fullPath.startsWith(normalizedBase + "/") && fullPath !== normalizedBase) {
     return null;
   }
-  return normalized;
+  return fullPath;
 }
 
 let currentHash = "";
@@ -130,13 +132,13 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
   return new Response("Feed not found", { status: 404 });
 }
 
-async function handleDownload(filePath: string): Promise<Response> {
-  const file = Bun.file(join(FILES_PATH, filePath));
+async function handleDownload(fullPath: string, fileName: string): Promise<Response> {
+  const file = Bun.file(fullPath);
 
   if (await file.exists()) {
     return new Response(file, {
       headers: {
-        "Content-Disposition": `attachment; filename="${basename(filePath)}"`,
+        "Content-Disposition": `attachment; filename="${fileName}"`,
       },
     });
   }
@@ -144,9 +146,8 @@ async function handleDownload(filePath: string): Promise<Response> {
   return new Response("File not found", { status: 404 });
 }
 
-async function handleCover(filePath: string): Promise<Response> {
-  const coverPath = join(DATA_PATH, filePath, "cover.jpg");
-  const coverFile = Bun.file(coverPath);
+async function handleCover(dataDir: string): Promise<Response> {
+  const coverFile = Bun.file(join(dataDir, "cover.jpg"));
 
   if (await coverFile.exists()) {
     return new Response(coverFile, {
@@ -165,9 +166,8 @@ async function handleCover(filePath: string): Promise<Response> {
   });
 }
 
-async function handleThumbnail(filePath: string): Promise<Response> {
-  const thumbPath = join(DATA_PATH, filePath, "thumb.jpg");
-  const thumbFile = Bun.file(thumbPath);
+async function handleThumbnail(dataDir: string): Promise<Response> {
+  const thumbFile = Bun.file(join(dataDir, "thumb.jpg"));
 
   if (await thumbFile.exists()) {
     return new Response(thumbFile, {
@@ -220,27 +220,32 @@ const server = Bun.serve({
     }
 
     if (path === "/opds" || path.startsWith("/opds/")) {
-      const feedPath = path === "/opds" ? "" : sanitizePath(decodeURIComponent(path.slice(6)));
-      if (feedPath === null) return new Response("Invalid path", { status: 400 });
+      const userPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
+      const safePath = userPath === "" ? DATA_PATH : resolveSafePath(DATA_PATH, userPath);
+      if (!safePath) return new Response("Invalid path", { status: 400 });
+      const feedPath = userPath === "" ? "" : userPath;
       return handleOpds(feedPath, req);
     }
 
     if (path.startsWith("/download/")) {
-      const filePath = sanitizePath(decodeURIComponent(path.slice(10)));
-      if (!filePath) return new Response("Invalid path", { status: 400 });
-      return handleDownload(filePath);
+      const userPath = decodeURIComponent(path.slice(10));
+      const safePath = resolveSafePath(FILES_PATH, userPath);
+      if (!safePath) return new Response("Invalid path", { status: 400 });
+      return handleDownload(safePath, basename(userPath));
     }
 
     if (path.startsWith("/cover/")) {
-      const filePath = sanitizePath(decodeURIComponent(path.slice(7)));
-      if (!filePath) return new Response("Invalid path", { status: 400 });
-      return handleCover(filePath);
+      const userPath = decodeURIComponent(path.slice(7));
+      const safePath = resolveSafePath(DATA_PATH, userPath);
+      if (!safePath) return new Response("Invalid path", { status: 400 });
+      return handleCover(safePath);
     }
 
     if (path.startsWith("/thumbnail/")) {
-      const filePath = sanitizePath(decodeURIComponent(path.slice(11)));
-      if (!filePath) return new Response("Invalid path", { status: 400 });
-      return handleThumbnail(filePath);
+      const userPath = decodeURIComponent(path.slice(11));
+      const safePath = resolveSafePath(DATA_PATH, userPath);
+      if (!safePath) return new Response("Invalid path", { status: 400 });
+      return handleThumbnail(safePath);
     }
 
     return new Response("Not found", { status: 404 });

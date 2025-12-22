@@ -34,15 +34,18 @@ export async function listEntries(filePath: string): Promise<string[]> {
 
   try {
     const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
+    const [output, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      proc.exited,
+    ]);
     if (exitCode !== 0) return [];
 
     if (type === "7z" || type === "rar") {
-      return output
+      const paths = output
         .split("\n")
         .filter((line) => line.startsWith("Path = "))
         .map((line) => line.slice(7));
+      return paths.slice(1);
     }
 
     return output
@@ -66,8 +69,10 @@ export async function readEntry(filePath: string, entryPath: string): Promise<Bu
 
   try {
     const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const data = await new Response(proc.stdout).arrayBuffer();
-    const exitCode = await proc.exited;
+    const [data, exitCode] = await Promise.all([
+      new Response(proc.stdout).arrayBuffer(),
+      proc.exited,
+    ]);
     if (exitCode !== 0 || data.byteLength === 0) return null;
     return Buffer.from(data);
   } catch {
