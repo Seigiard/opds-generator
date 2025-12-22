@@ -1,23 +1,26 @@
-import type { FormatHandler } from "./types.ts";
-import { epubHandler } from "./epub.ts";
-import { comicHandler } from "./comic.ts";
+import type { FormatHandlerFactory, FormatHandlerRegistration } from "./types.ts";
+import { epubHandlerRegistration } from "./epub.ts";
+import { comicHandlerRegistration } from "./comic.ts";
 
-const handlers: FormatHandler[] = [epubHandler, comicHandler];
+const registrations: FormatHandlerRegistration[] = [
+  epubHandlerRegistration,
+  comicHandlerRegistration,
+];
 
-const handlerMap = new Map<string, FormatHandler>();
+const factoryMap = new Map<string, FormatHandlerFactory>();
 
-for (const handler of handlers) {
-  for (const ext of handler.extensions) {
-    handlerMap.set(ext.toLowerCase(), handler);
+for (const reg of registrations) {
+  for (const ext of reg.extensions) {
+    factoryMap.set(ext.toLowerCase(), reg.create);
   }
 }
 
-export function getHandler(extension: string): FormatHandler | null {
-  return handlerMap.get(extension.toLowerCase()) ?? null;
+export function getHandlerFactory(extension: string): FormatHandlerFactory | null {
+  return factoryMap.get(extension.toLowerCase()) ?? null;
 }
 
 export function hasHandler(extension: string): boolean {
-  return handlerMap.has(extension.toLowerCase());
+  return factoryMap.has(extension.toLowerCase());
 }
 
-export type { FormatHandler, BookMetadata } from "./types.ts";
+export type { FormatHandler, FormatHandlerFactory, BookMetadata } from "./types.ts";

@@ -5,7 +5,7 @@ import {
   type ComicBookInfo,
   type MetadataCompiled,
 } from "comic-metadata-tool";
-import type { FormatHandler, BookMetadata } from "./types.ts";
+import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { listEntries, readEntry } from "../utils/archive.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
@@ -166,40 +166,34 @@ function selectCoverImage(images: string[], pages?: ComicInfo["pages"]): string 
   return [...images].sort()[0];
 }
 
-export const comicHandler: FormatHandler = {
+async function createComicHandler(filePath: string): Promise<FormatHandler | null> {
+  try {
+    const compiled = await readComicFileMetadata(filePath);
+    const metadata = mergeMetadata(compiled);
+    const pages = compiled.comicInfoXml?.pages;
+
+    const entries = await listEntries(filePath);
+    const images = entries.filter((e) =>
+      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
+    );
+
+    return {
+      getMetadata() {
+        return metadata;
+      },
+
+      async getCover() {
+        const coverPath = selectCoverImage(images, pages);
+        if (!coverPath) return null;
+        return readEntry(filePath, coverPath);
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export const comicHandlerRegistration: FormatHandlerRegistration = {
   extensions: ["cbz", "cbr", "cb7", "zip"],
-
-  async getMetadata(filePath: string): Promise<BookMetadata> {
-    try {
-      const compiled = await readComicFileMetadata(filePath);
-      return mergeMetadata(compiled);
-    } catch {
-      return { title: "" };
-    }
-  },
-
-  async getCover(filePath: string): Promise<Buffer | null> {
-    try {
-      let pages: ComicInfo["pages"] | undefined;
-
-      try {
-        const compiled = await readComicFileMetadata(filePath);
-        pages = compiled.comicInfoXml?.pages;
-      } catch {
-        // No metadata, will use heuristics
-      }
-
-      const entries = await listEntries(filePath);
-      const images = entries.filter((e) =>
-        IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
-      );
-
-      const coverPath = selectCoverImage(images, pages);
-      if (!coverPath) return null;
-
-      return readEntry(filePath, coverPath);
-    } catch {
-      return null;
-    }
-  },
+  create: createComicHandler,
 };

@@ -12,7 +12,13 @@ export interface BookMetadata {
 }
 
 export interface FormatHandler {
+  getMetadata(): BookMetadata;
+  getCover(): Promise<Buffer | null>;
+}
+
+export type FormatHandlerFactory = (filePath: string) => Promise<FormatHandler | null>;
+
+export interface FormatHandlerRegistration {
   extensions: string[];
-  getMetadata(filePath: string): Promise<BookMetadata>;
-  getCover(filePath: string): Promise<Buffer | null>;
+  create: FormatHandlerFactory;
 }

@@ -3,7 +3,8 @@ import { join, basename } from "node:path";
 import { Entry, Feed } from "opds-ts/v1.2";
 import type { FileInfo, BookEntry } from "./types.ts";
 import { MIME_TYPES } from "./types.ts";
-import { getHandler } from "./formats/index.ts";
+import { getHandlerFactory } from "./formats/index.ts";
+import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
 
 function encodeUrlPath(path: string): string {
@@ -16,38 +17,37 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export async function processBook(
-  file: FileInfo,
-  filesPath: string,
-  dataPath: string
-): Promise<BookEntry> {
+export async function processBook(file: FileInfo, filesPath: string, dataPath: string): Promise<BookEntry> {
   const baseUrl = process.env.BASE_URL || "http://localhost:8080";
   const bookDataDir = join(dataPath, file.relativePath);
   await mkdir(bookDataDir, { recursive: true });
 
-  const handler = getHandler(file.extension);
+  const createHandler = getHandlerFactory(file.extension);
   let title = basename(file.relativePath).replace(/\.[^.]+$/, "");
   let author: string | undefined;
   let description: string | undefined;
   let hasCover = false;
 
-  let meta: import("./formats/types.ts").BookMetadata = { title: "" };
+  let meta: BookMetadata = { title: "" };
 
-  if (handler) {
-    meta = await handler.getMetadata(file.path);
-    if (meta.title) title = meta.title;
-    author = meta.author;
-    description = meta.description;
+  if (createHandler) {
+    const handler = await createHandler(file.path);
+    if (handler) {
+      meta = handler.getMetadata();
+      if (meta.title) title = meta.title;
+      author = meta.author;
+      description = meta.description;
 
-    const coverBuffer = await handler.getCover(file.path);
-    if (coverBuffer) {
-      const coverPath = join(bookDataDir, "cover.jpg");
-      const thumbPath = join(bookDataDir, "thumb.jpg");
+      const coverBuffer = await handler.getCover();
+      if (coverBuffer) {
+        const coverPath = join(bookDataDir, "cover.jpg");
+        const thumbPath = join(bookDataDir, "thumb.jpg");
 
-      const coverOk = await saveBufferAsImage(coverBuffer, coverPath, COVER_MAX_SIZE);
-      if (coverOk) {
-        await saveBufferAsImage(coverBuffer, thumbPath, THUMBNAIL_MAX_SIZE);
-        hasCover = true;
+        const coverOk = await saveBufferAsImage(coverBuffer, coverPath, COVER_MAX_SIZE);
+        if (coverOk) {
+          await saveBufferAsImage(coverBuffer, thumbPath, THUMBNAIL_MAX_SIZE);
+          hasCover = true;
+        }
       }
     }
   }
@@ -92,11 +92,7 @@ export async function processBook(
   return bookEntry;
 }
 
-export async function processFolder(
-  folderPath: string,
-  dataPath: string,
-  baseUrl: string
-): Promise<void> {
+export async function processFolder(folderPath: string, dataPath: string, baseUrl: string): Promise<void> {
   const folderDataDir = join(dataPath, folderPath);
   await mkdir(folderDataDir, { recursive: true });
 
@@ -113,8 +109,10 @@ export async function processFolder(
   await Bun.write(join(folderDataDir, "_feed.xml"), feedXml);
 
   if (folderPath !== "") {
-    const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName)
-      .addSubsection(`${baseUrl}/opds/${encodeUrlPath(folderPath)}`, "navigation");
+    const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName).addSubsection(
+      `${baseUrl}/opds/${encodeUrlPath(folderPath)}`,
+      "navigation",
+    );
 
     const entryXml = entry.toXml({ prettyPrint: true });
     await Bun.write(join(folderDataDir, "_entry.xml"), entryXml);

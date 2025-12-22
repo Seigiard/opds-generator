@@ -1,47 +1,5 @@
-import type { FormatHandler, BookMetadata } from "./types.ts";
+import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText } from "../utils/archive.ts";
-
-export const epubHandler: FormatHandler = {
-  extensions: ["epub"],
-
-  async getMetadata(filePath: string): Promise<BookMetadata> {
-    const container = await readEntryText(filePath, "META-INF/container.xml");
-    if (!container) return { title: "" };
-
-    const opfPath = parseRootfile(container);
-    if (!opfPath) return { title: "" };
-
-    const opf = await readEntryText(filePath, opfPath);
-    if (!opf) return { title: "" };
-
-    return {
-      title: parseXmlTag(opf, "dc:title") ?? "",
-      author: parseXmlTag(opf, "dc:creator"),
-      description: parseDescription(opf),
-      publisher: parseXmlTag(opf, "dc:publisher"),
-      issued: parseDate(opf),
-      language: parseXmlTag(opf, "dc:language"),
-      subjects: parseSubjects(opf),
-      rights: parseXmlTag(opf, "dc:rights"),
-    };
-  },
-
-  async getCover(filePath: string): Promise<Buffer | null> {
-    const container = await readEntryText(filePath, "META-INF/container.xml");
-    if (!container) return null;
-
-    const opfPath = parseRootfile(container);
-    if (!opfPath) return null;
-
-    const opf = await readEntryText(filePath, opfPath);
-    if (!opf) return null;
-
-    const coverPath = parseCoverPath(opf, opfPath);
-    if (!coverPath) return null;
-
-    return readEntry(filePath, coverPath);
-  },
-};
 
 function parseRootfile(xml: string): string | null {
   const match = xml.match(/rootfile[^>]+full-path="([^"]+)"/);
@@ -101,3 +59,50 @@ function parseSubjects(opf: string): string[] | undefined {
   }
   return subjects.length > 0 ? subjects : undefined;
 }
+
+function extractMetadata(opf: string): BookMetadata {
+  return {
+    title: parseXmlTag(opf, "dc:title") ?? "",
+    author: parseXmlTag(opf, "dc:creator"),
+    description: parseDescription(opf),
+    publisher: parseXmlTag(opf, "dc:publisher"),
+    issued: parseDate(opf),
+    language: parseXmlTag(opf, "dc:language"),
+    subjects: parseSubjects(opf),
+    rights: parseXmlTag(opf, "dc:rights"),
+  };
+}
+
+async function createEpubHandler(filePath: string): Promise<FormatHandler | null> {
+  try {
+    const container = await readEntryText(filePath, "META-INF/container.xml");
+    if (!container) return null;
+
+    const opfPath = parseRootfile(container);
+    if (!opfPath) return null;
+
+    const opf = await readEntryText(filePath, opfPath);
+    if (!opf) return null;
+
+    const metadata = extractMetadata(opf);
+    const coverPath = parseCoverPath(opf, opfPath);
+
+    return {
+      getMetadata() {
+        return metadata;
+      },
+
+      async getCover() {
+        if (!coverPath) return null;
+        return readEntry(filePath, coverPath);
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export const epubHandlerRegistration: FormatHandlerRegistration = {
+  extensions: ["epub"],
+  create: createEpubHandler,
+};
