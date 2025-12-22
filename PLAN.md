@@ -118,9 +118,15 @@ epub, pdf, mobi, azw3, fb2, cbz, cbr, zip, djvu, txt
 
 ```typescript
 interface FormatHandler {
+  getMetadata(): BookMetadata;
+  getCover(): Promise<Buffer | null>;
+}
+
+type FormatHandlerFactory = (filePath: string) => Promise<FormatHandler | null>;
+
+interface FormatHandlerRegistration {
   extensions: string[];
-  getMetadata(filePath: string): Promise<BookMetadata>;
-  getCover(filePath: string): Promise<Buffer | null>;
+  create: FormatHandlerFactory;
 }
 ```
 

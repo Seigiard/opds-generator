@@ -65,31 +65,48 @@ const feed = new Feed(id, title)
 ## Adding New Format Handler
 
 1. Create `src/formats/{format}.ts`
-2. Implement `FormatHandler` interface:
+2. Implement factory pattern:
    ```typescript
-   export const handler: FormatHandler = {
+   async function createHandler(filePath: string): Promise<FormatHandler | null> {
+     const data = await readFileOnce(filePath);
+     return {
+       getMetadata() { return data.metadata; },
+       async getCover() { return data.cover; }
+     };
+   }
+
+   export const registration: FormatHandlerRegistration = {
      extensions: ["ext1", "ext2"],
-     async getMetadata(filePath) { ... },
-     async getCover(filePath) { ... }
+     create: createHandler,
    };
    ```
 3. Register in `src/formats/index.ts`
 
-## Docker Development
+## Development Workflow
+
+**IMPORTANT**: Docker dev environment is running at http://localhost:8080 and watches for file changes automatically. Do NOT run `bun` locally to test - use curl against the running container.
 
 ```bash
-# Dev with hot-reload
+# Start dev environment (runs once, then watches for changes)
 docker compose -f docker-compose.dev.yml up
+
+# Test changes - just curl the running container
+curl http://localhost:8080/health
+curl http://localhost:8080/opds
 
 # Check logs
 docker compose -f docker-compose.dev.yml logs -f
 
-# Clear data cache
+# Clear data cache (forces full rescan)
 docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
 ```
 
 ## Testing
 
 ```bash
+# Type check
+bun --bun tsc --noEmit
+
+# Unit tests (if any)
 bun test
 ```
