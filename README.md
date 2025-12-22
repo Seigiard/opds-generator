@@ -23,14 +23,14 @@ Static OPDS 1.2 catalog generator from your file structure.
 
 ## Supported Formats
 
-| Format | Metadata | Cover |
-|--------|----------|-------|
-| EPUB | title, author, description, series | ✓ |
-| FB2 | title, author, description, series, genre | ✓ |
-| MOBI/AZW/AZW3 | title, author, publisher, subjects | ✓ |
-| CBZ/CBR/CB7 | title, author, series (ComicInfo.xml, CoMet) | ✓ |
-| ZIP | auto-detect (comic/fb2) | ✓ |
-| PDF, DJVU, TXT | filename | - |
+| Format         | Metadata                                     | Cover |
+| -------------- | -------------------------------------------- | ----- |
+| EPUB           | title, author, description, series           | ✓     |
+| FB2            | title, author, description, series, genre    | ✓     |
+| MOBI/AZW/AZW3  | title, author, publisher, subjects           | ✓     |
+| CBZ/CBR/CB7    | title, author, series (ComicInfo.xml, CoMet) | ✓     |
+| ZIP            | auto-detect (comic/fb2)                      | ✓     |
+| PDF, DJVU, TXT | filename                                     | -     |
 
 ## Quick Start with Docker
 
@@ -85,25 +85,25 @@ docker-compose up -d --build
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FILES` | `/books` | Path to your books directory |
-| `DATA` | `/data` | Path for cache and metadata |
-| `PORT` | `8080` | HTTP port |
-| `BASE_URL` | `http://localhost:8080` | Base URL for OPDS links |
-| `DEV_MODE` | `false` | Disable caching |
+| Variable   | Default                 | Description                  |
+| ---------- | ----------------------- | ---------------------------- |
+| `FILES`    | `/books`                | Path to your books directory |
+| `DATA`     | `/data`                 | Path for cache and metadata  |
+| `PORT`     | `8080`                  | HTTP port                    |
+| `BASE_URL` | `http://localhost:8080` | Base URL for OPDS links      |
+| `DEV_MODE` | `false`                 | Disable caching              |
 
 ## API
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /opds` | Root catalog |
-| `GET /opds/{path}` | Subcatalog or book list |
-| `GET /download/{path}` | Download file |
-| `GET /cover/{path}` | Book cover (1400px max) |
-| `GET /thumbnail/{path}` | Book thumbnail (512px max) |
-| `GET /health` | Server status (JSON) |
-| `GET /reset` | Clear cache and resync (DEV_MODE only) |
+| Endpoint                | Description                            |
+| ----------------------- | -------------------------------------- |
+| `GET /opds`             | Root catalog                           |
+| `GET /opds/{path}`      | Subcatalog or book list                |
+| `GET /download/{path}`  | Download file                          |
+| `GET /cover/{path}`     | Book cover (1400px max)                |
+| `GET /thumbnail/{path}` | Book thumbnail (512px max)             |
+| `GET /health`           | Server status (JSON)                   |
+| `GET /reset`            | Clear cache and resync (DEV_MODE only) |
 
 ## Directory Structure
 
