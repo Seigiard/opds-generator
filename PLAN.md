@@ -30,6 +30,7 @@
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction
 - [x] MOBI/AZW: binary parsing with DataView, metadata + cover
+- [x] CBZ/CBR/CB7: ComicInfo.xml + CoMet parsing with fast-xml-parser
 - [x] Reset endpoint (/reset in DEV_MODE)
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes

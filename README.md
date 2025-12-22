@@ -28,7 +28,7 @@ Static OPDS 1.2 catalog generator from your file structure.
 | EPUB | title, author, description, series | ✓ |
 | FB2 | title, author, description, series, genre | ✓ |
 | MOBI/AZW/AZW3 | title, author, publisher, subjects | ✓ |
-| CBZ/CBR/CB7 | title, author (ComicInfo.xml) | ✓ |
+| CBZ/CBR/CB7 | title, author, series (ComicInfo.xml, CoMet) | ✓ |
 | ZIP | auto-detect (comic/fb2) | ✓ |
 | PDF, DJVU, TXT | filename | - |
 
