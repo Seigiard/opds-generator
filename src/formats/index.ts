@@ -1,10 +1,12 @@
 import type { FormatHandlerFactory, FormatHandlerRegistration } from "./types.ts";
 import { epubHandlerRegistration } from "./epub.ts";
 import { comicHandlerRegistration } from "./comic.ts";
+import { fb2HandlerRegistration } from "./fb2.ts";
 
 const registrations: FormatHandlerRegistration[] = [
   epubHandlerRegistration,
   comicHandlerRegistration,
+  fb2HandlerRegistration,
 ];
 
 const factoryMap = new Map<string, FormatHandlerFactory>();
