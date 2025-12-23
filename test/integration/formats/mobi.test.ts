@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { mobiHandlerRegistration } from "../../../src/formats/mobi.ts";
+import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
@@ -30,13 +31,12 @@ describe("MOBI Handler Integration", () => {
         expect(metadata.subjects).toEqual(["test"]);
       });
 
-      test("extracts cover image", async () => {
+      test("extracts cover matching reference", async () => {
         const handler = await mobiHandlerRegistration.create(filePath);
         const cover = await handler!.getCover();
 
         expect(cover).not.toBeNull();
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover!.length).toBeGreaterThan(0);
+        await assertCoverMatchesReference(cover!);
       });
     });
   }

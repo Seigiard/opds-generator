@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { epubHandlerRegistration } from "../../../src/formats/epub.ts";
+import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
@@ -25,13 +26,12 @@ describe("EPUB Handler Integration", () => {
       expect(metadata.subjects).toEqual(["test"]);
     });
 
-    test("extracts cover image", async () => {
+    test("extracts cover matching reference", async () => {
       const handler = await epubHandlerRegistration.create(epubPath);
       const cover = await handler!.getCover();
 
       expect(cover).not.toBeNull();
-      expect(Buffer.isBuffer(cover)).toBe(true);
-      expect(cover!.length).toBeGreaterThan(0);
+      await assertCoverMatchesReference(cover!);
     });
   });
 
@@ -42,7 +42,7 @@ describe("EPUB Handler Integration", () => {
     });
 
     test("returns null for non-epub file", async () => {
-      const pdfPath = join(FIXTURES_DIR, "test_book_pdf.pdf");
+      const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
       const handler = await epubHandlerRegistration.create(pdfPath);
       expect(handler).toBeNull();
     });

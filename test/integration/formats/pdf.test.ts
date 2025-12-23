@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { pdfHandlerRegistration } from "../../../src/formats/pdf.ts";
+import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
@@ -24,13 +25,12 @@ describe("PDF Handler Integration", () => {
       expect(metadata.pageCount).toBe(3);
     });
 
-    test("extracts cover image", async () => {
+    test("extracts cover matching reference", async () => {
       const handler = await pdfHandlerRegistration.create(pdfPath);
       const cover = await handler!.getCover();
 
       expect(cover).not.toBeNull();
-      expect(Buffer.isBuffer(cover)).toBe(true);
-      expect(cover!.length).toBeGreaterThan(0);
+      await assertCoverMatchesReference(cover!);
     });
   });
 

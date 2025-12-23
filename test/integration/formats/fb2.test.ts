@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { fb2HandlerRegistration } from "../../../src/formats/fb2.ts";
+import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
@@ -32,13 +33,12 @@ describe("FB2 Handler Integration", () => {
         expect(metadata.series).toBe("Test Series");
       });
 
-      test("extracts cover image", async () => {
+      test("extracts cover matching reference", async () => {
         const handler = await fb2HandlerRegistration.create(filePath);
         const cover = await handler!.getCover();
 
         expect(cover).not.toBeNull();
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover!.length).toBeGreaterThan(0);
+        await assertCoverMatchesReference(cover!);
       });
     });
   }
