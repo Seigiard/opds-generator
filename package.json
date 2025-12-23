@@ -8,11 +8,11 @@
     "dev": "bun run --watch src/index.ts",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
-    "test": "bun test",
-    "test:unit": "bun test test/unit",
-    "test:integration": "bun test test/integration",
-    "test:coverage": "bun test --coverage",
-    "test:watch": "bun test --watch"
+    "test": "docker compose -f docker-compose.test.yml run --rm test",
+    "test:local": "bun test",
+    "test:unit": "docker compose -f docker-compose.test.yml run --rm test bun test test/unit",
+    "test:integration": "docker compose -f docker-compose.test.yml run --rm test bun test test/integration",
+    "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage"
   },
   "devDependencies": {
     "@types/bun": "latest",

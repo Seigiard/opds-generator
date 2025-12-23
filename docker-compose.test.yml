@@ -1,0 +1,13 @@
+services:
+  test:
+    build:
+      context: .
+      target: development
+    volumes:
+      - ./src:/app/src:ro
+      - ./test:/app/test:ro
+      - ./files:/app/files:ro
+      - ./bunfig.toml:/app/bunfig.toml:ro
+    environment:
+      - LOG_LEVEL=warn
+    command: ["bun", "test"]

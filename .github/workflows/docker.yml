@@ -26,8 +26,8 @@ jobs:
       - name: Run lint
         run: bun run lint
 
-      - name: Run tests
-        run: bun test
+      - name: Run tests in Docker
+        run: docker compose -f docker-compose.test.yml run --rm test
 
   build:
     runs-on: ubuntu-latest
