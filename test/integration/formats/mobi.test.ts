@@ -4,64 +4,42 @@ import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
+const MOBI_TEST_FILES = [
+  { file: "Test Book - Test Author.mobi", format: "MOBI" },
+  { file: "Test Book - Test Author.azw3", format: "AZW3" },
+];
+
 describe("MOBI Handler Integration", () => {
-  describe("with Test Book - Test Author.mobi", () => {
-    const mobiPath = join(FIXTURES_DIR, "Test Book - Test Author.mobi");
+  for (const { file, format } of MOBI_TEST_FILES) {
+    describe(`${format} format`, () => {
+      const filePath = join(FIXTURES_DIR, file);
 
-    test("creates handler successfully", async () => {
-      const handler = await mobiHandlerRegistration.create(mobiPath);
-      expect(handler).not.toBeNull();
+      test("creates handler successfully", async () => {
+        const handler = await mobiHandlerRegistration.create(filePath);
+        expect(handler).not.toBeNull();
+      });
+
+      test("extracts all metadata fields", async () => {
+        const handler = await mobiHandlerRegistration.create(filePath);
+        const metadata = handler!.getMetadata();
+
+        expect(metadata.title).toBe("Test Book");
+        expect(metadata.author).toBe("Test Author");
+        expect(metadata.description).toBe("Test comment Multiline");
+        expect(metadata.issued).toContain("2021-09-12");
+        expect(metadata.subjects).toEqual(["test"]);
+      });
+
+      test("extracts cover image", async () => {
+        const handler = await mobiHandlerRegistration.create(filePath);
+        const cover = await handler!.getCover();
+
+        expect(cover).not.toBeNull();
+        expect(Buffer.isBuffer(cover)).toBe(true);
+        expect(cover!.length).toBeGreaterThan(0);
+      });
     });
-
-    test("extracts all metadata fields", async () => {
-      const handler = await mobiHandlerRegistration.create(mobiPath);
-      const metadata = handler!.getMetadata();
-
-      expect(metadata.title).toBe("Test Book");
-      expect(metadata.author).toBe("Test Author");
-      expect(metadata.description).toBe("Test comment Multiline");
-      expect(metadata.issued).toContain("2021-09-12");
-      expect(metadata.subjects).toEqual(["test"]);
-    });
-
-    test("extracts cover image", async () => {
-      const handler = await mobiHandlerRegistration.create(mobiPath);
-      const cover = await handler!.getCover();
-
-      expect(cover).not.toBeNull();
-      expect(Buffer.isBuffer(cover)).toBe(true);
-      expect(cover!.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("with AZW3 format (Test Book - Test Author.azw3)", () => {
-    const azw3Path = join(FIXTURES_DIR, "Test Book - Test Author.azw3");
-
-    test("creates handler successfully", async () => {
-      const handler = await mobiHandlerRegistration.create(azw3Path);
-      expect(handler).not.toBeNull();
-    });
-
-    test("extracts all metadata fields from azw3", async () => {
-      const handler = await mobiHandlerRegistration.create(azw3Path);
-      const metadata = handler!.getMetadata();
-
-      expect(metadata.title).toBe("Test Book");
-      expect(metadata.author).toBe("Test Author");
-      expect(metadata.description).toBe("Test comment Multiline");
-      expect(metadata.issued).toContain("2021-09-12");
-      expect(metadata.subjects).toEqual(["test"]);
-    });
-
-    test("extracts cover from azw3", async () => {
-      const handler = await mobiHandlerRegistration.create(azw3Path);
-      const cover = await handler!.getCover();
-
-      expect(cover).not.toBeNull();
-      expect(Buffer.isBuffer(cover)).toBe(true);
-      expect(cover!.length).toBeGreaterThan(0);
-    });
-  });
+  }
 
   describe("edge cases", () => {
     test("returns null for non-existent file", async () => {
