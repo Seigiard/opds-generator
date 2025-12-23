@@ -8,17 +8,17 @@ import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
 import { config } from "./config.ts";
 
-function encodeUrlPath(path: string): string {
+export function encodeUrlPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-function formatFileSize(bytes: number): string {
+export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function normalizeFilenameTitle(filename: string): string {
+export function normalizeFilenameTitle(filename: string): string {
   return filename
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")

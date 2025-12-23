@@ -35,4 +35,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Runtime data
 data/
-files/
+files/*
+!files/test/
+!files/test/**
+files/test/.DS_Store

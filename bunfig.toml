@@ -1,0 +1,10 @@
+[test]
+preload = ["./test/setup.ts"]
+timeout = 30000
+coverage = true
+coverageThreshold = { line = 80, function = 80, statement = 80 }
+
+[test.env]
+NODE_ENV = "test"
+LOG_LEVEL = "error"
+DEV_MODE = "true"

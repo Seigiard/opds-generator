@@ -12,7 +12,7 @@ export interface RouterContext {
   triggerSync: () => void;
 }
 
-function resolveSafePath(basePath: string, userPath: string): string | null {
+export function resolveSafePath(basePath: string, userPath: string): string | null {
   if (isAbsolute(userPath)) return null;
   const fullPath = normalize(join(basePath, userPath));
   const normalizedBase = normalize(basePath);
