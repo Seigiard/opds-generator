@@ -34,6 +34,35 @@ describe("MOBI Handler Integration", () => {
     });
   });
 
+  describe("with AZW3 format (Test Book - Test Author.azw3)", () => {
+    const azw3Path = join(FIXTURES_DIR, "Test Book - Test Author.azw3");
+
+    test("creates handler successfully", async () => {
+      const handler = await mobiHandlerRegistration.create(azw3Path);
+      expect(handler).not.toBeNull();
+    });
+
+    test("extracts all metadata fields from azw3", async () => {
+      const handler = await mobiHandlerRegistration.create(azw3Path);
+      const metadata = handler!.getMetadata();
+
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.issued).toContain("2021-09-12");
+      expect(metadata.subjects).toEqual(["test"]);
+    });
+
+    test("extracts cover from azw3", async () => {
+      const handler = await mobiHandlerRegistration.create(azw3Path);
+      const cover = await handler!.getCover();
+
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("edge cases", () => {
     test("returns null for non-existent file", async () => {
       const handler = await mobiHandlerRegistration.create("/non/existent/file.mobi");
