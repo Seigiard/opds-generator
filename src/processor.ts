@@ -17,13 +17,21 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function normalizeFilenameTitle(filename: string): string {
+  return filename
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function processBook(file: FileInfo, filesPath: string, dataPath: string): Promise<BookEntry> {
   const baseUrl = process.env.BASE_URL || "http://localhost:8080";
   const bookDataDir = join(dataPath, file.relativePath);
   await mkdir(bookDataDir, { recursive: true });
 
   const createHandler = getHandlerFactory(file.extension);
-  let title = basename(file.relativePath).replace(/\.[^.]+$/, "");
+  const rawFilename = basename(file.relativePath).replace(/\.[^.]+$/, "");
+  let title = normalizeFilenameTitle(rawFilename);
   let author: string | undefined;
   let description: string | undefined;
   let hasCover = false;
