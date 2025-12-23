@@ -1,4 +1,5 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
+import { logHandlerError } from "../utils/errors.ts";
 
 interface PdfInfo {
   title?: string;
@@ -118,7 +119,8 @@ async function createPdfHandler(filePath: string): Promise<FormatHandler | null>
         return extractCover(filePath);
       },
     };
-  } catch {
+  } catch (error) {
+    logHandlerError("PDF", filePath, error);
     return null;
   }
 }

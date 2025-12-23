@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
 import { getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
+import { logHandlerError } from "../utils/errors.ts";
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -153,7 +154,8 @@ async function createEpubHandler(filePath: string): Promise<FormatHandler | null
         return readEntry(filePath, coverPath);
       },
     };
-  } catch {
+  } catch (error) {
+    logHandlerError("EPUB", filePath, error);
     return null;
   }
 }

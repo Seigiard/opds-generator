@@ -5,6 +5,7 @@ import { scanFiles, createSyncPlan, computeHash } from "./scanner.ts";
 import { processBook, processFolder, cleanupOrphan } from "./processor.ts";
 import { buildFeed } from "./opds.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
+import { logger } from "./utils/errors.ts";
 
 const FILES_PATH = process.env.FILES || "./files";
 const DATA_PATH = process.env.DATA || "./data";
@@ -38,28 +39,28 @@ async function sync(): Promise<void> {
 
   do {
     needsRebuild = false;
-    console.log("[Sync] Starting...");
+    logger.info("Sync", "Starting...");
     const startTime = Date.now();
 
     try {
       const files = await scanFiles(FILES_PATH);
-      console.log(`[Sync] Found ${files.length} books in /files`);
+      logger.info("Sync", `Found ${files.length} books`);
 
       const plan = await createSyncPlan(files, DATA_PATH);
-      console.log(`[Sync] Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`);
+      logger.info("Sync", `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`);
 
       for (const path of plan.toDelete) {
         await cleanupOrphan(DATA_PATH, path);
-        console.log(`[Sync] Deleted: ${path}`);
+        logger.debug("Sync", `Deleted: ${path}`);
       }
 
       for (const folder of plan.folders) {
         await processFolder(folder.path, DATA_PATH, BASE_URL);
       }
-      console.log(`[Sync] Processed ${plan.folders.length} folders`);
+      logger.debug("Sync", `Processed ${plan.folders.length} folders`);
 
       for (const file of plan.toProcess) {
-        console.log(`[Sync] Processing: ${file.relativePath}`);
+        logger.debug("Sync", `Processing: ${file.relativePath}`);
         await processBook(file, FILES_PATH, DATA_PATH);
       }
 
@@ -68,9 +69,9 @@ async function sync(): Promise<void> {
       folderCount = plan.folders.length;
 
       const duration = Date.now() - startTime;
-      console.log(`[Sync] Complete in ${duration}ms, hash: ${currentHash}`);
+      logger.info("Sync", `Complete in ${duration}ms`, { hash: currentHash, books: bookCount });
     } catch (error) {
-      console.error("[Sync] Error:", error);
+      logger.error("Sync", "Sync failed", error);
     }
   } while (needsRebuild);
 
@@ -100,11 +101,11 @@ function shouldTriggerSync(filename: string): boolean {
 function startWatcher(): void {
   watch(FILES_PATH, { recursive: true }, (event, filename) => {
     if (filename && shouldTriggerSync(filename)) {
-      console.log(`[Watch] ${event}: ${filename}`);
+      logger.debug("Watch", `${event}: ${filename}`);
       scheduleSync();
     }
   });
-  console.log(`[Watch] Watching ${FILES_PATH}`);
+  logger.info("Watch", `Watching ${FILES_PATH}`);
 }
 
 const PLACEHOLDER_PNG = new Uint8Array([
@@ -219,7 +220,7 @@ const server = Bun.serve({
       if (isRebuilding) {
         return Response.json({ status: "busy", message: "Already rebuilding" }, { status: 429 });
       }
-      console.log("[Reset] Clearing data and resyncing...");
+      logger.info("Reset", "Clearing data and resyncing...");
       await Bun.$`rm -rf ${DATA_PATH}/*`.quiet();
       void sync();
       return Response.json({ status: "reset", message: "Data cleared, resync started" });
@@ -258,13 +259,15 @@ const server = Bun.serve({
   },
 });
 
-console.log(`[Init] FILES: ${FILES_PATH}`);
-console.log(`[Init] DATA: ${DATA_PATH}`);
-console.log(`[Init] PORT: ${PORT}`);
-console.log(`[Init] BASE_URL: ${BASE_URL}`);
-if (DEV_MODE) console.log(`[Init] DEV_MODE: enabled (no caching)`);
+logger.info("Init", "Starting OPDS Generator", {
+  files: FILES_PATH,
+  data: DATA_PATH,
+  port: PORT,
+  baseUrl: BASE_URL,
+  devMode: DEV_MODE
+});
 
 await mkdir(DATA_PATH, { recursive: true });
 await sync();
 startWatcher();
-console.log(`[Server] Listening on http://localhost:${server.port}`);
+logger.info("Server", `Listening on http://localhost:${server.port}`);

@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { logger } from "./errors.ts";
 
 export const COVER_MAX_SIZE = 1400;
 export const THUMBNAIL_MAX_SIZE = 512;
@@ -14,7 +15,8 @@ export async function resizeImage(
     const resize = `${maxSize}x${maxSize}>`;
     await Bun.$`magick ${srcPath} -resize ${resize} -colorspace sRGB -quality 90 ${destPath}`.quiet();
     return true;
-  } catch {
+  } catch (error) {
+    logger.warn("Image", "Failed to resize image", { src: srcPath, dest: destPath, error: String(error) });
     return false;
   }
 }
@@ -43,7 +45,8 @@ export async function saveBufferAsImage(
       proc.exited,
     ]);
     return exitCode === 0;
-  } catch {
+  } catch (error) {
+    logger.warn("Image", "Failed to save buffer as image", { dest: destPath, error: String(error) });
     return false;
   }
 }

@@ -1,5 +1,6 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { cleanDescription } from "./utils.ts";
+import { logHandlerError } from "../utils/errors.ts";
 
 interface ExthData {
   title?: string;
@@ -159,7 +160,8 @@ async function createMobiHandler(filePath: string): Promise<FormatHandler | null
         return loadResource(buffer, offsets, mobi.firstImageIndex + coverIdx);
       },
     };
-  } catch {
+  } catch (error) {
+    logHandlerError("MOBI", filePath, error);
     return null;
   }
 }

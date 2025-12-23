@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { getString, getStringArray, cleanDescription } from "./utils.ts";
+import { logHandlerError } from "../utils/errors.ts";
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -116,7 +117,8 @@ async function createFb2Handler(filePath: string): Promise<FormatHandler | null>
         return getCoverBuffer(doc, coverId);
       },
     };
-  } catch {
+  } catch (error) {
+    logHandlerError("FB2", filePath, error);
     return null;
   }
 }
