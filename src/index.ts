@@ -5,7 +5,8 @@ import { scanFiles, createSyncPlan, computeHash } from "./scanner.ts";
 import { processBook, processFolder, cleanupOrphan } from "./processor.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 import { logger } from "./utils/errors.ts";
-import { SYNC_DEBOUNCE_MS } from "./constants.ts";
+import { SYNC_DEBOUNCE_MS, PROCESSING_CONCURRENCY } from "./constants.ts";
+import { processInBatches } from "./utils/concurrency.ts";
 import { config } from "./config.ts";
 import { createRouter } from "./routes/index.ts";
 
@@ -45,10 +46,14 @@ async function sync(): Promise<void> {
       }
       logger.debug("Sync", `Processed ${plan.folders.length} folders`);
 
-      for (const file of plan.toProcess) {
-        logger.debug("Sync", `Processing: ${file.relativePath}`);
-        await processBook(file, config.filesPath, config.dataPath);
-      }
+      await processInBatches(
+        plan.toProcess,
+        (file) => {
+          logger.debug("Sync", `Processing: ${file.relativePath}`);
+          return processBook(file, config.filesPath, config.dataPath);
+        },
+        PROCESSING_CONCURRENCY
+      );
 
       currentHash = computeHash(files);
       bookCount = files.length;
