@@ -37,7 +37,7 @@
 
 ### Известные проблемы
 
-- [ ] Нет тестов — рефакторинг опасен, регрессии неизбежны
+- [x] Нет тестов — реализовано (159 tests, 59% coverage)
 - [ ] Типобезопасность — небезопасный доступ к массивам
 - [x] Тихие ошибки — добавлен structured logging
 - [x] Magic numbers — вынесены в constants.ts
@@ -45,16 +45,16 @@
 
 ### TODO
 
-1. ~~Тесты~~ — реализовано (bun test, unit + integration)
-2. Security: Фильтрация null bytes в `resolveSafePath` — потенциальная уязвимость
+1. ~~Тесты~~ — реализовано (bun test, 159 tests, unit + integration)
+2. ~~Security: Фильтрация null bytes в `resolveSafePath`~~ — реализовано
 3. ~~Проверить поддержку форматов~~ — см. таблицу ниже
-4. Format support gaps:
-   - [ ] fbz/fb2.zip — FB2 в ZIP-контейнере (нужно: fb2.ts + распаковка ZIP)
-   - [ ] cbt — Comic Book TAR (нужно: archive.ts + TAR magic bytes + tar extraction)
-   - [ ] azw — добавить в MIME_TYPES (handler уже есть в mobi.ts)
+4. ~~Format support gaps~~:
+   - [x] fbz/fb2.zip — FB2 в ZIP-контейнере (fb2.ts + listEntries/readEntryText)
+   - [x] cbt — Comic Book TAR (archive.ts + USTAR magic bytes + tar extraction)
+   - [x] azw — добавлен в MIME_TYPES
 5. Handlers not implemented (in MIME_TYPES but no handler):
    - [ ] djvu — требует внешний инструмент (ddjvu)
-   - [ ] txt — простой handler (title from filename)
+   - [x] txt — простой handler (title from filename)
 6. вынести утилиты в utils/processor, utils/opds и т.д.
 7. Concurrent processing — параллельная обработка книг (5x быстрее)
 
@@ -67,15 +67,15 @@
 | azw/azw3 | mobi.ts  | ⚠️   | ✅ Handler есть, нет фикстуры |
 | pdf      | pdf.ts   | ✅   | ⚠️ Требует pdfinfo/pdftoppm   |
 | fb2      | fb2.ts   | ✅   | ✅ Работает                   |
-| fbz      | ❌       | ❌   | ❌ Нет поддержки              |
-| fb2.zip  | ❌       | ❌   | ❌ Нет поддержки              |
+| fbz      | fb2.ts   | ✅   | ✅ Работает (ZIP extraction)  |
+| fb2.zip  | fb2.ts   | ✅   | ✅ Работает (ZIP extraction)  |
 | cbz      | comic.ts | ✅   | ✅ Работает                   |
 | cbr      | comic.ts | ✅   | ✅ Работает                   |
 | cb7      | comic.ts | ⚠️   | ⚠️ Требует 7zz                |
-| cbt      | ❌       | ❌   | ❌ Нет поддержки              |
+| cbt      | comic.ts | ✅   | ✅ Работает (TAR extraction)  |
 | zip      | comic.ts | ❌   | ⚠️ Для комиксов               |
 | djvu     | ❌       | ❌   | ❌ Только MIME                |
-| txt      | ❌       | ❌   | ❌ Только MIME                |
+| txt      | txt.ts   | ✅   | ✅ Работает                   |
 
 ## Архитектура
 

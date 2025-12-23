@@ -28,12 +28,13 @@ src/
 │   ├── index.ts       # Handler registry
 │   ├── utils.ts       # Shared XML parsing utilities
 │   ├── epub.ts        # EPUB handler
-│   ├── fb2.ts         # FB2 handler
+│   ├── fb2.ts         # FB2/FBZ handler
 │   ├── mobi.ts        # MOBI/AZW handler
 │   ├── pdf.ts         # PDF handler (pdfinfo, pdftoppm)
-│   └── comic.ts       # CBZ/CBR/CB7/ZIP handler (ComicInfo.xml, CoMet)
+│   ├── comic.ts       # CBZ/CBR/CB7/CBT handler (ComicInfo.xml, CoMet)
+│   └── txt.ts         # TXT handler
 └── utils/
-    ├── archive.ts     # ZIP/RAR/7z extraction
+    ├── archive.ts     # ZIP/RAR/7z/TAR extraction
     └── image.ts       # ImageMagick resize
 ```
 
@@ -114,6 +115,18 @@ docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
 ## Testing & Linting
 
 ```bash
+# Run tests (always in Docker - all tools available)
+bun run test
+
+# Run unit tests only
+bun run test:unit
+
+# Run integration tests only
+bun run test:integration
+
+# Run tests with coverage
+bun run test:coverage
+
 # Lint (type-aware, run before commits)
 bun run lint
 
@@ -122,12 +135,10 @@ bun run lint:fix
 
 # Type check
 bun --bun tsc --noEmit
-
-# Unit tests (if any)
-bun test
 ```
 
 **IMPORTANT**: Always run `bun run lint:fix` before committing changes.
+**NOTE**: Tests always run in Docker to ensure all tools (pdfinfo, 7zz, imagemagick) are available.
 
 ## Documentation
 
