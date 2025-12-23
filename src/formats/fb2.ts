@@ -51,13 +51,26 @@ function extractCoverId(href: string | undefined): string | undefined {
   return href.startsWith("#") ? href.slice(1) : href;
 }
 
+function extractTextFromNode(node: unknown): string {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractTextFromNode).join(" ");
+  if (typeof node === "object") {
+    const texts: string[] = [];
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      const text = extractTextFromNode(value);
+      if (text) texts.push(text);
+    }
+    return texts.join(" ");
+  }
+  return "";
+}
+
 function getAnnotationText(annotation: unknown): string | undefined {
   if (!annotation) return undefined;
-  if (typeof annotation === "string") return annotation;
-  if (typeof annotation === "object") {
-    return JSON.stringify(annotation);
-  }
-  return undefined;
+  const text = extractTextFromNode(annotation).trim();
+  return text || undefined;
 }
 
 function extractMetadata(doc: FB2Document): BookMetadata {

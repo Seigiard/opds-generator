@@ -5,30 +5,32 @@ import { join } from "node:path";
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
 describe("MOBI Handler Integration", () => {
-  describe("with test_book_epub_more_detail.mobi", () => {
-    const mobiPath = join(FIXTURES_DIR, "test_book_epub_more_detail.mobi");
+  describe("with Test Book - Test Author.mobi", () => {
+    const mobiPath = join(FIXTURES_DIR, "Test Book - Test Author.mobi");
 
     test("creates handler successfully", async () => {
       const handler = await mobiHandlerRegistration.create(mobiPath);
       expect(handler).not.toBeNull();
     });
 
-    test("extracts metadata", async () => {
+    test("extracts all metadata fields", async () => {
       const handler = await mobiHandlerRegistration.create(mobiPath);
       const metadata = handler!.getMetadata();
 
-      expect(metadata.title).toBeTruthy();
-      expect(typeof metadata.title).toBe("string");
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.issued).toContain("2021-09-12");
+      expect(metadata.subjects).toEqual(["test"]);
     });
 
-    test("getCover returns buffer or null", async () => {
+    test("extracts cover image", async () => {
       const handler = await mobiHandlerRegistration.create(mobiPath);
       const cover = await handler!.getCover();
 
-      if (cover) {
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover.length).toBeGreaterThan(0);
-      }
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
     });
   });
 
@@ -39,7 +41,7 @@ describe("MOBI Handler Integration", () => {
     });
 
     test("returns null for non-mobi file", async () => {
-      const pdfPath = join(FIXTURES_DIR, "test_book_pdf.pdf");
+      const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
       const handler = await mobiHandlerRegistration.create(pdfPath);
       expect(handler).toBeNull();
     });

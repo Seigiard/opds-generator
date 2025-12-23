@@ -5,50 +5,93 @@ import { join } from "node:path";
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
 describe("FB2 Handler Integration", () => {
-  describe("with source_test_book_fb2.fb2", () => {
-    const fb2Path = join(FIXTURES_DIR, "source_test_book_fb2.fb2");
+  describe("with Test Book - Test Author.fb2", () => {
+    const fb2Path = join(FIXTURES_DIR, "Test Book - Test Author.fb2");
 
     test("creates handler successfully", async () => {
       const handler = await fb2HandlerRegistration.create(fb2Path);
       expect(handler).not.toBeNull();
     });
 
-    test("extracts metadata", async () => {
+    test("extracts all metadata fields", async () => {
       const handler = await fb2HandlerRegistration.create(fb2Path);
       const metadata = handler!.getMetadata();
 
-      expect(metadata.title).toBeTruthy();
-      expect(typeof metadata.title).toBe("string");
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.language).toBe("en");
+      expect(metadata.subjects).toEqual(["test"]);
+      expect(metadata.series).toBe("Test Series");
     });
 
-    test("getCover returns buffer or null", async () => {
+    test("extracts cover image", async () => {
       const handler = await fb2HandlerRegistration.create(fb2Path);
       const cover = await handler!.getCover();
 
-      if (cover) {
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover.length).toBeGreaterThan(0);
-      }
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
     });
   });
 
-  describe("with compressed FB2", () => {
-    test("handles .fbz (fb2 in zip)", async () => {
-      const fbzPath = join(FIXTURES_DIR, "source_test_book_fb2_zip.fbz");
-      const handler = await fb2HandlerRegistration.create(fbzPath);
-      expect(handler).not.toBeNull();
+  describe("with compressed FB2 (Test Book - Test Author.fb2.zip)", () => {
+    const zipPath = join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip");
 
-      const metadata = handler!.getMetadata();
-      expect(metadata.title).toBeTruthy();
-    });
-
-    test("handles .fb2.zip", async () => {
-      const zipPath = join(FIXTURES_DIR, "source_test_book_fb2_dot_zip.fb2.zip");
+    test("creates handler successfully", async () => {
       const handler = await fb2HandlerRegistration.create(zipPath);
       expect(handler).not.toBeNull();
+    });
 
+    test("extracts all metadata fields from zip", async () => {
+      const handler = await fb2HandlerRegistration.create(zipPath);
       const metadata = handler!.getMetadata();
-      expect(metadata.title).toBeTruthy();
+
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.language).toBe("en");
+      expect(metadata.subjects).toEqual(["test"]);
+      expect(metadata.series).toBe("Test Series");
+    });
+
+    test("extracts cover from zip", async () => {
+      const handler = await fb2HandlerRegistration.create(zipPath);
+      const cover = await handler!.getCover();
+
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("with FBZ format (Test Book - Test Author.fbz)", () => {
+    const fbzPath = join(FIXTURES_DIR, "Test Book - Test Author.fbz");
+
+    test("creates handler successfully", async () => {
+      const handler = await fb2HandlerRegistration.create(fbzPath);
+      expect(handler).not.toBeNull();
+    });
+
+    test("extracts all metadata fields from fbz", async () => {
+      const handler = await fb2HandlerRegistration.create(fbzPath);
+      const metadata = handler!.getMetadata();
+
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.language).toBe("en");
+      expect(metadata.subjects).toEqual(["test"]);
+      expect(metadata.series).toBe("Test Series");
+    });
+
+    test("extracts cover from fbz", async () => {
+      const handler = await fb2HandlerRegistration.create(fbzPath);
+      const cover = await handler!.getCover();
+
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
     });
   });
 
@@ -59,7 +102,7 @@ describe("FB2 Handler Integration", () => {
     });
 
     test("returns null for non-fb2 file", async () => {
-      const pdfPath = join(FIXTURES_DIR, "test_book_pdf.pdf");
+      const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
       const handler = await fb2HandlerRegistration.create(pdfPath);
       expect(handler).toBeNull();
     });

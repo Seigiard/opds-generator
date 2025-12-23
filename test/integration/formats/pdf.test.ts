@@ -5,54 +5,32 @@ import { join } from "node:path";
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
 describe("PDF Handler Integration", () => {
-  describe("with test_book_pdf.pdf", () => {
-    const pdfPath = join(FIXTURES_DIR, "test_book_pdf.pdf");
+  describe("with Test Book - Test Author.pdf", () => {
+    const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
 
-    test("creates handler successfully (requires pdfinfo)", async () => {
+    test("creates handler successfully", async () => {
       const handler = await pdfHandlerRegistration.create(pdfPath);
-      if (handler === null) {
-        console.warn("PDF test skipped: pdfinfo not available");
-        return;
-      }
       expect(handler).not.toBeNull();
     });
 
-    test("extracts metadata (if handler available)", async () => {
+    test("extracts all metadata fields", async () => {
       const handler = await pdfHandlerRegistration.create(pdfPath);
-      if (!handler) {
-        console.warn("PDF metadata test skipped: pdfinfo not available");
-        return;
-      }
+      const metadata = handler!.getMetadata();
 
-      const metadata = handler.getMetadata();
-      expect(typeof metadata.title).toBe("string");
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.issued).toBe("2025");
+      expect(metadata.subjects).toEqual(["test"]);
+      expect(metadata.pageCount).toBe(3);
     });
 
-    test("getCover returns buffer or null (requires pdftoppm)", async () => {
+    test("extracts cover image", async () => {
       const handler = await pdfHandlerRegistration.create(pdfPath);
-      if (!handler) {
-        console.warn("PDF cover test skipped: pdfinfo not available");
-        return;
-      }
+      const cover = await handler!.getCover();
 
-      const cover = await handler.getCover();
-      if (cover) {
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover.length).toBeGreaterThan(0);
-      }
-    });
-  });
-
-  describe("with test_book_pdf_more_detail.pdf", () => {
-    const pdfPath = join(FIXTURES_DIR, "test_book_pdf_more_detail.pdf");
-
-    test("creates handler for detailed PDF", async () => {
-      const handler = await pdfHandlerRegistration.create(pdfPath);
-      if (handler === null) {
-        console.warn("PDF test skipped: pdfinfo not available");
-        return;
-      }
-      expect(handler).not.toBeNull();
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
     });
   });
 
@@ -63,7 +41,7 @@ describe("PDF Handler Integration", () => {
     });
 
     test("returns null for non-pdf file", async () => {
-      const epubPath = join(FIXTURES_DIR, "test_book_epub.epub");
+      const epubPath = join(FIXTURES_DIR, "Test Book - Test Author.epub");
       const handler = await pdfHandlerRegistration.create(epubPath);
       expect(handler).toBeNull();
     });
