@@ -5,46 +5,33 @@ import { join } from "node:path";
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
 describe("EPUB Handler Integration", () => {
-  describe("with test_book_epub.epub", () => {
-    const epubPath = join(FIXTURES_DIR, "test_book_epub.epub");
+  describe("with Test Book - Test Author.epub", () => {
+    const epubPath = join(FIXTURES_DIR, "Test Book - Test Author.epub");
 
     test("creates handler successfully", async () => {
       const handler = await epubHandlerRegistration.create(epubPath);
       expect(handler).not.toBeNull();
     });
 
-    test("extracts metadata", async () => {
+    test("extracts all metadata fields", async () => {
       const handler = await epubHandlerRegistration.create(epubPath);
       const metadata = handler!.getMetadata();
 
-      expect(metadata.title).toBeTruthy();
-      expect(typeof metadata.title).toBe("string");
+      expect(metadata.title).toBe("Test Book");
+      expect(metadata.author).toBe("Test Author");
+      expect(metadata.description).toBe("Test comment Multiline");
+      expect(metadata.issued).toBe("2021-09");
+      expect(metadata.language).toBe("en");
+      expect(metadata.subjects).toEqual(["test"]);
     });
 
-    test("getCover returns buffer or null", async () => {
+    test("extracts cover image", async () => {
       const handler = await epubHandlerRegistration.create(epubPath);
       const cover = await handler!.getCover();
 
-      if (cover) {
-        expect(Buffer.isBuffer(cover)).toBe(true);
-        expect(cover.length).toBeGreaterThan(0);
-      }
-    });
-  });
-
-  describe("with test_book_epub_more_detail.epub", () => {
-    const epubPath = join(FIXTURES_DIR, "test_book_epub_more_detail.epub");
-
-    test("creates handler successfully", async () => {
-      const handler = await epubHandlerRegistration.create(epubPath);
-      expect(handler).not.toBeNull();
-    });
-
-    test("extracts detailed metadata", async () => {
-      const handler = await epubHandlerRegistration.create(epubPath);
-      const metadata = handler!.getMetadata();
-
-      expect(metadata.title).toBeTruthy();
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+      expect(cover!.length).toBeGreaterThan(0);
     });
   });
 
