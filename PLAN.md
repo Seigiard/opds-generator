@@ -45,8 +45,37 @@
 
 ### TODO
 
-1. Тесты — bun test, начать с format handlers
-2. Concurrent processing — параллельная обработка книг (5x быстрее)
+1. ~~Тесты~~ — реализовано (bun test, unit + integration)
+2. Security: Фильтрация null bytes в `resolveSafePath` — потенциальная уязвимость
+3. ~~Проверить поддержку форматов~~ — см. таблицу ниже
+4. Format support gaps:
+   - [ ] fbz/fb2.zip — FB2 в ZIP-контейнере (нужно: fb2.ts + распаковка ZIP)
+   - [ ] cbt — Comic Book TAR (нужно: archive.ts + TAR magic bytes + tar extraction)
+   - [ ] azw — добавить в MIME_TYPES (handler уже есть в mobi.ts)
+5. Handlers not implemented (in MIME_TYPES but no handler):
+   - [ ] djvu — требует внешний инструмент (ddjvu)
+   - [ ] txt — простой handler (title from filename)
+6. вынести утилиты в utils/processor, utils/opds и т.д.
+7. Concurrent processing — параллельная обработка книг (5x быстрее)
+
+### Поддержка форматов
+
+| Формат   | Handler  | Тест | Статус                        |
+| -------- | -------- | ---- | ----------------------------- |
+| epub     | epub.ts  | ✅   | ✅ Работает                   |
+| mobi     | mobi.ts  | ✅   | ✅ Работает                   |
+| azw/azw3 | mobi.ts  | ⚠️   | ✅ Handler есть, нет фикстуры |
+| pdf      | pdf.ts   | ✅   | ⚠️ Требует pdfinfo/pdftoppm   |
+| fb2      | fb2.ts   | ✅   | ✅ Работает                   |
+| fbz      | ❌       | ❌   | ❌ Нет поддержки              |
+| fb2.zip  | ❌       | ❌   | ❌ Нет поддержки              |
+| cbz      | comic.ts | ✅   | ✅ Работает                   |
+| cbr      | comic.ts | ✅   | ✅ Работает                   |
+| cb7      | comic.ts | ⚠️   | ⚠️ Требует 7zz                |
+| cbt      | ❌       | ❌   | ❌ Нет поддержки              |
+| zip      | comic.ts | ❌   | ⚠️ Для комиксов               |
+| djvu     | ❌       | ❌   | ❌ Только MIME                |
+| txt      | ❌       | ❌   | ❌ Только MIME                |
 
 ## Архитектура
 
