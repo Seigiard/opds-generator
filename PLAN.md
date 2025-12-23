@@ -22,10 +22,6 @@
 - [x] Endpoint /thumbnail/{path} (512px max)
 - [x] ETag + If-None-Match для кэширования OPDS
 - [x] Mirror архитектура (/data зеркалит /files)
-- [x] FormatHandler интерфейс для расширяемости
-- [x] Path sanitization (защита от path traversal)
-- [x] Health endpoint (/health)
-- [x] Natural sorting (Intl.Collator)
 - [x] oxlint type-aware linting
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction
@@ -38,8 +34,6 @@
 - [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
 - [x] Filename normalization for fallback titles
 - [x] Constants extraction (src/constants.ts)
-- [x] XML parser factory (createXmlParser in formats/utils.ts)
-- [x] Config validation (src/config.ts with typed config object)
 
 ### Известные проблемы
 
@@ -53,7 +47,6 @@
 
 1. Тесты — bun test, начать с format handlers
 2. Concurrent processing — параллельная обработка книг (5x быстрее)
-3. Route extraction — вынести роуты из index.ts в routes.ts
 
 ## Архитектура
 
@@ -98,13 +91,17 @@ LOG_LEVEL=info          # debug | info | warn | error
 
 ```
 src/
-├── index.ts           # Entry point: Bun.serve() + fs.watch
+├── index.ts           # Entry point: Bun.serve() + fs.watch + sync
 ├── scanner.ts         # scanFiles, createSyncPlan, computeHash
 ├── processor.ts       # processBook, processFolder, XML builders
 ├── opds.ts            # buildFeed (сборка из файлов)
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
 ├── constants.ts       # Magic numbers (sizes, timeouts, cache TTL)
 ├── config.ts          # Typed config with env validation
+├── routes/
+│   ├── index.ts       # createRouter, resolveSafePath
+│   ├── opds.ts        # handleOpds (feed serving)
+│   └── assets.ts      # handleDownload, handleCover, handleThumbnail
 ├── formats/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
