@@ -32,17 +32,23 @@ describe("FB2 Handler Integration", () => {
     });
   });
 
-  describe("with compressed FB2 (not supported by fb2 handler)", () => {
-    test(".fbz is NOT handled by fb2 handler (returns null)", async () => {
+  describe("with compressed FB2", () => {
+    test("handles .fbz (fb2 in zip)", async () => {
       const fbzPath = join(FIXTURES_DIR, "source_test_book_fb2_zip.fbz");
       const handler = await fb2HandlerRegistration.create(fbzPath);
-      expect(handler).toBeNull();
+      expect(handler).not.toBeNull();
+
+      const metadata = handler!.getMetadata();
+      expect(metadata.title).toBeTruthy();
     });
 
-    test(".fb2.zip is NOT handled by fb2 handler (returns null)", async () => {
+    test("handles .fb2.zip", async () => {
       const zipPath = join(FIXTURES_DIR, "source_test_book_fb2_dot_zip.fb2.zip");
       const handler = await fb2HandlerRegistration.create(zipPath);
-      expect(handler).toBeNull();
+      expect(handler).not.toBeNull();
+
+      const metadata = handler!.getMetadata();
+      expect(metadata.title).toBeTruthy();
     });
   });
 
@@ -60,9 +66,9 @@ describe("FB2 Handler Integration", () => {
   });
 
   describe("handler registration", () => {
-    test("has correct extensions (fb2 only)", () => {
+    test("has correct extensions", () => {
       expect(fb2HandlerRegistration.extensions).toContain("fb2");
-      expect(fb2HandlerRegistration.extensions).toHaveLength(1);
+      expect(fb2HandlerRegistration.extensions).toContain("fbz");
     });
 
     test("has create function", () => {

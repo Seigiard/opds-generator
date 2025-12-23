@@ -65,6 +65,23 @@ describe("Comic Handler Integration", () => {
     });
   });
 
+  describe("with CBT format (TAR)", () => {
+    const cbtPath = join(FIXTURES_DIR, "bobby_make_believe_sample.cbt");
+
+    test("creates handler successfully", async () => {
+      const handler = await comicHandlerRegistration.create(cbtPath);
+      expect(handler).not.toBeNull();
+    });
+
+    test("extracts cover from CBT", async () => {
+      const handler = await comicHandlerRegistration.create(cbtPath);
+      const cover = await handler!.getCover();
+
+      expect(cover).not.toBeNull();
+      expect(Buffer.isBuffer(cover)).toBe(true);
+    });
+  });
+
   describe("with magazine CBZ (Elf Receiver)", () => {
     const magazinePath = join(FIXTURES_DIR, "Elf_Receiver_Radio-Craft_August_1936.cbz");
 
@@ -92,6 +109,7 @@ describe("Comic Handler Integration", () => {
       expect(comicHandlerRegistration.extensions).toContain("cbz");
       expect(comicHandlerRegistration.extensions).toContain("cbr");
       expect(comicHandlerRegistration.extensions).toContain("cb7");
+      expect(comicHandlerRegistration.extensions).toContain("cbt");
     });
 
     test("has create function", () => {

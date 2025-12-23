@@ -3,24 +3,32 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export type ArchiveType = "zip" | "rar" | "7z";
+export type ArchiveType = "zip" | "rar" | "7z" | "tar";
 
-const MAGIC_BYTES: Record<ArchiveType, number[]> = {
+const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
   zip: [0x50, 0x4b, 0x03, 0x04],
   rar: [0x52, 0x61, 0x72, 0x21],
   "7z": [0x37, 0x7a, 0xbc, 0xaf],
 };
+
+const USTAR_MAGIC = [0x75, 0x73, 0x74, 0x61, 0x72]; // "ustar"
 
 export async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
   try {
     const file = Bun.file(filePath);
     const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
 
-    for (const [type, magic] of Object.entries(MAGIC_BYTES) as [ArchiveType, number[]][]) {
+    for (const [type, magic] of Object.entries(MAGIC_BYTES) as [Exclude<ArchiveType, "tar">, number[]][]) {
       if (magic.every((byte, i) => header[i] === byte)) {
         return type;
       }
     }
+
+    const tarHeader = new Uint8Array(await file.slice(257, 262).arrayBuffer());
+    if (USTAR_MAGIC.every((byte, i) => tarHeader[i] === byte)) {
+      return "tar";
+    }
+
     return null;
   } catch {
     return null;
@@ -37,10 +45,11 @@ async function listEntriesRar(filePath: string): Promise<string[]> {
   }
 }
 
-async function listEntriesShell(filePath: string, type: "zip" | "7z"): Promise<string[]> {
-  const commands: Record<"zip" | "7z", string[]> = {
+async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): Promise<string[]> {
+  const commands: Record<"zip" | "7z" | "tar", string[]> = {
     zip: ["zipinfo", "-1", filePath],
     "7z": ["7zz", "l", "-ba", "-slt", filePath],
+    tar: ["tar", "-tf", filePath],
   };
 
   try {
@@ -59,7 +68,7 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z"): Promise<s
         .slice(1);
     }
 
-    return output.trim().split("\n").filter((line) => line.length > 0);
+    return output.trim().split("\n").filter((line) => line.length > 0 && !line.endsWith("/"));
   } catch {
     return [];
   }
@@ -73,6 +82,17 @@ export async function listEntries(filePath: string): Promise<string[]> {
     return listEntriesRar(filePath);
   }
   return listEntriesShell(filePath, type);
+}
+
+async function readEntryTar(filePath: string, entryPath: string): Promise<Buffer | null> {
+  try {
+    const proc = Bun.spawn(["tar", "-xOf", filePath, entryPath], { stdout: "pipe", stderr: "pipe" });
+    const [data, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
+    if (exitCode !== 0 || data.byteLength === 0) return null;
+    return Buffer.from(data);
+  } catch {
+    return null;
+  }
 }
 
 async function readEntryRar(filePath: string, entryPath: string): Promise<Buffer | null> {
@@ -121,6 +141,9 @@ export async function readEntry(filePath: string, entryPath: string): Promise<Bu
 
   if (type === "rar") {
     return readEntryRar(filePath, entryPath);
+  }
+  if (type === "tar") {
+    return readEntryTar(filePath, entryPath);
   }
   return readEntryShell(filePath, entryPath, type);
 }

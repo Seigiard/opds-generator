@@ -1,6 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { createXmlParser, getString, getStringArray, cleanDescription } from "./utils.ts";
 import { logHandlerError } from "../utils/errors.ts";
+import { listEntries, readEntryText } from "../utils/archive.ts";
 
 const xmlParser = createXmlParser(["author", "genre", "binary"]);
 
@@ -91,9 +92,24 @@ function getCoverBuffer(doc: FB2Document, coverId: string): Buffer | null {
   }
 }
 
+async function readFb2Content(filePath: string): Promise<string | null> {
+  const ext = filePath.split(".").pop()?.toLowerCase();
+
+  if (ext === "fbz" || filePath.toLowerCase().endsWith(".fb2.zip")) {
+    const entries = await listEntries(filePath);
+    const fb2Entry = entries.find((e) => e.toLowerCase().endsWith(".fb2"));
+    if (!fb2Entry) return null;
+    return readEntryText(filePath, fb2Entry);
+  }
+
+  return Bun.file(filePath).text();
+}
+
 async function createFb2Handler(filePath: string): Promise<FormatHandler | null> {
   try {
-    const content = await Bun.file(filePath).text();
+    const content = await readFb2Content(filePath);
+    if (!content) return null;
+
     const doc = xmlParser.parse(content) as FB2Document;
 
     if (!doc.FictionBook) return null;
@@ -118,6 +134,6 @@ async function createFb2Handler(filePath: string): Promise<FormatHandler | null>
 }
 
 export const fb2HandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["fb2"],
+  extensions: ["fb2", "fbz"],
   create: createFb2Handler,
 };

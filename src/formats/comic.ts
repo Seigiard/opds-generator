@@ -227,6 +227,6 @@ async function createComicHandler(filePath: string): Promise<FormatHandler | nul
 }
 
 export const comicHandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["cbz", "cbr", "cb7", "zip"],
+  extensions: ["cbz", "cbr", "cb7", "cbt", "zip"],
   create: createComicHandler,
 };

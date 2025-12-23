@@ -4,6 +4,7 @@ import { comicHandlerRegistration } from "./comic.ts";
 import { fb2HandlerRegistration } from "./fb2.ts";
 import { mobiHandlerRegistration } from "./mobi.ts";
 import { pdfHandlerRegistration } from "./pdf.ts";
+import { txtHandlerRegistration } from "./txt.ts";
 
 const registrations: FormatHandlerRegistration[] = [
   epubHandlerRegistration,
@@ -11,6 +12,7 @@ const registrations: FormatHandlerRegistration[] = [
   fb2HandlerRegistration,
   mobiHandlerRegistration,
   pdfHandlerRegistration,
+  txtHandlerRegistration,
 ];
 
 const factoryMap = new Map<string, FormatHandlerFactory>();
