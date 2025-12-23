@@ -31,12 +31,11 @@
 - [x] CBZ/CBR/CB7: ComicInfo.xml + CoMet parsing with fast-xml-parser
 - [x] PDF: pdfinfo + pdftoppm (poppler-utils) for metadata + cover
 - [x] TXT: title only
+- [x] DJVU: djvused + ddjvu (djvulibre)
 
 ### TODO
 
-1. Handlers not implemented (in MIME_TYPES but no handler):
-   - [ ] djvu — требует внешний инструмент (ddjvu)
-2. Лучшая поддерка zip формата: смотреть на содержимое и решать, какой handler должен быть применён
+1. Лучшая поддерка zip формата: смотреть на содержимое и решать, какой handler должен быть применён
    Картинки или Картинки в директориях — комикс
    файл fb2 — fb2
    и т.д.
@@ -59,7 +58,7 @@
 | cb7      | comic.ts | ⚠️   | ⚠️ Требует 7zz               |
 | cbt      | comic.ts | ✅   | ✅ Работает (TAR extraction) |
 | zip      | comic.ts | ❌   | ⚠️ Для комиксов              |
-| djvu     | ❌       | ❌   | ❌ Только MIME               |
+| djvu     | djvu.ts  | ✅   | ⚠️ Требует djvulibre         |
 | txt      | txt.ts   | ✅   | ✅ Работает                  |
 
 ## Архитектура

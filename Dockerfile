@@ -1,5 +1,5 @@
 FROM oven/bun:1-alpine AS base
-RUN apk add --no-cache unzip 7zip imagemagick imagemagick-jpeg poppler-utils
+RUN apk add --no-cache unzip 7zip imagemagick imagemagick-jpeg poppler-utils djvulibre
 WORKDIR /app
 
 FROM base AS development

@@ -31,7 +31,8 @@ Static OPDS 1.2 catalog generator from your file structure.
 | CBZ/CBR/CB7/CBT | title, author, series (ComicInfo.xml, CoMet) | ✓     |
 | ZIP             | auto-detect (comic/fb2)                      | ✓     |
 | PDF             | title, author, pages (pdfinfo)               | ✓     |
-| DJVU, TXT       | filename                                     | -     |
+| DJVU            | title, author, keywords, pages (djvused)     | ✓     |
+| TXT             | filename                                     | -     |
 
 ## Quick Start with Docker
 
