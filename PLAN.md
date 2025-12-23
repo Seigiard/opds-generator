@@ -35,29 +35,23 @@
 - [x] Reset endpoint (/reset in DEV_MODE)
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes
+- [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
+- [x] Filename normalization for fallback titles
 
-Критические проблемы
+### Известные проблемы
 
-| Проблема         | Влияние                                             |
-| ---------------- | --------------------------------------------------- |
-| Нет тестов       | Рефакторинг опасен, регрессии неизбежны             |
-| Тихие ошибки     | 20+ мест с catch { return null } — дебаг невозможен |
-| Конфигурация     | env-переменные без валидации                        |
-| Типобезопасность | Небезопасный доступ к массивам                      |
+- [ ] Нет тестов — рефакторинг опасен, регрессии неизбежны
+- [ ] Конфигурация — env-переменные без валидации
+- [ ] Типобезопасность — небезопасный доступ к массивам
+- [x] Тихие ошибки — добавлен structured logging
 
-Топ-5 рекомендаций по приоритету
+### TODO
 
-1.  Error handling — src/utils/errors.ts с классами ошибок и logError()
-2.  Config validation — src/config.ts с проверкой env
-3.  Тесты — bun test, начать с format handlers
-4.  Concurrent processing — параллельная обработка книг (5x быстрее)
-5.  Route extraction — вынести 60+ строк из index.ts в routes.ts
-
-Быстрые победы (30 минут)
-
-- Убрать magic numbers → src/constants.ts
-- Вынести XML parser creation в utils.ts
-- Добавить bounds checking для массивов
+1. Config validation — src/config.ts с проверкой env
+2. Тесты — bun test, начать с format handlers
+3. Concurrent processing — параллельная обработка книг (5x быстрее)
+4. Route extraction — вынести роуты из index.ts в routes.ts
+5. Constants — убрать magic numbers в src/constants.ts
 
 ## Архитектура
 
@@ -95,6 +89,7 @@ DATA=/path/to/cache     # Кэш и метаданные
 PORT=8080               # HTTP порт
 BASE_URL=http://...     # Базовый URL для ссылок
 DEV_MODE=true           # Отключить кэширование
+LOG_LEVEL=info          # debug | info | warn | error
 ```
 
 ### Структура проекта
@@ -110,13 +105,15 @@ src/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
 │   ├── utils.ts       # Shared XML parsing utilities
-│   ├── epub.ts        # EPUB handler (fast-xml-parser)
+│   ├── epub.ts        # EPUB handler
 │   ├── fb2.ts         # FB2 handler
 │   ├── mobi.ts        # MOBI/AZW handler (binary parsing)
-│   └── comic.ts       # CBZ/CBR/CB7/ZIP handler
+│   ├── comic.ts       # CBZ/CBR/CB7/ZIP handler
+│   └── pdf.ts         # PDF handler (poppler-utils)
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
-    └── image.ts       # ImageMagick resize
+    ├── image.ts       # ImageMagick resize
+    └── errors.ts      # Logger + error classes
 ```
 
 ## API
