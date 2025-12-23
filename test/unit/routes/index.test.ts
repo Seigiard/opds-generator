@@ -123,9 +123,10 @@ describe("routes/index", () => {
     });
 
     describe("null byte attacks", () => {
-      test("null bytes are preserved (WARNING: may need sanitization)", () => {
-        const result = resolveSafePath(BASE_PATH, "file.epub\x00.jpg");
-        expect(result).toBe("/data/file.epub\x00.jpg");
+      test("rejects paths with null bytes", () => {
+        expect(resolveSafePath(BASE_PATH, "file.epub\x00.jpg")).toBeNull();
+        expect(resolveSafePath(BASE_PATH, "\x00malicious")).toBeNull();
+        expect(resolveSafePath(BASE_PATH, "path/\x00/file")).toBeNull();
       });
     });
 

@@ -13,6 +13,7 @@ export interface RouterContext {
 }
 
 export function resolveSafePath(basePath: string, userPath: string): string | null {
+  if (userPath.includes("\x00")) return null;
   if (isAbsolute(userPath)) return null;
   const fullPath = normalize(join(basePath, userPath));
   const normalizedBase = normalize(basePath);

@@ -83,6 +83,11 @@ export class ArchiveError extends BookProcessingError {
 }
 
 export function logHandlerError(tag: string, filePath: string, error: unknown): void {
+  if (error instanceof Error && error.message.includes("Executable not found")) {
+    logger.debug(tag, "External tool not available", { file: filePath, tool: error.message });
+    return;
+  }
+
   if (error instanceof BookProcessingError) {
     logger.error(tag, error.message, error.originalError, { file: filePath });
   } else if (error instanceof Error) {

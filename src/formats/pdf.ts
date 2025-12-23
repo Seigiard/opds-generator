@@ -11,7 +11,7 @@ interface PdfInfo {
   pages?: number;
 }
 
-async function parsePdfInfo(filePath: string): Promise<PdfInfo> {
+async function parsePdfInfo(filePath: string): Promise<PdfInfo | null> {
   const proc = Bun.spawn(["pdfinfo", filePath], {
     stdout: "pipe",
     stderr: "pipe",
@@ -22,7 +22,7 @@ async function parsePdfInfo(filePath: string): Promise<PdfInfo> {
     proc.exited,
   ]);
 
-  if (exitCode !== 0) return {};
+  if (exitCode !== 0) return null;
 
   const info: PdfInfo = {};
   const lines = output.split("\n");
@@ -100,7 +100,11 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
 
 async function createPdfHandler(filePath: string): Promise<FormatHandler | null> {
   try {
+    const file = Bun.file(filePath);
+    if (!(await file.exists())) return null;
+
     const info = await parsePdfInfo(filePath);
+    if (!info) return null;
 
     const metadata: BookMetadata = {
       title: info.title || "",
