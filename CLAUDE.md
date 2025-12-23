@@ -30,6 +30,7 @@ src/
 │   ├── epub.ts        # EPUB handler
 │   ├── fb2.ts         # FB2 handler
 │   ├── mobi.ts        # MOBI/AZW handler
+│   ├── pdf.ts         # PDF handler (pdfinfo, pdftoppm)
 │   └── comic.ts       # CBZ/CBR/CB7/ZIP handler (ComicInfo.xml, CoMet)
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
