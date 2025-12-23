@@ -1,5 +1,6 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { logHandlerError } from "../utils/errors.ts";
+import { COVER_MAX_SIZE } from "../constants.ts";
 
 interface PdfInfo {
   title?: string;
@@ -80,7 +81,7 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
 
 async function extractCover(filePath: string): Promise<Buffer | null> {
   const proc = Bun.spawn(
-    ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", "1400", filePath],
+    ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
     {
       stdout: "pipe",
       stderr: "pipe",

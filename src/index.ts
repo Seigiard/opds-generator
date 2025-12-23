@@ -6,6 +6,7 @@ import { processBook, processFolder, cleanupOrphan } from "./processor.ts";
 import { buildFeed } from "./opds.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 import { logger } from "./utils/errors.ts";
+import { SYNC_DEBOUNCE_MS, IMAGE_CACHE_MAX_AGE, PLACEHOLDER_CACHE_MAX_AGE } from "./constants.ts";
 
 const FILES_PATH = process.env.FILES || "./files";
 const DATA_PATH = process.env.DATA || "./data";
@@ -88,7 +89,7 @@ function scheduleSync(): void {
   rebuildTimer = setTimeout(() => {
     void sync();
     rebuildTimer = null;
-  }, 500);
+  }, SYNC_DEBOUNCE_MS);
 }
 
 function shouldTriggerSync(filename: string): boolean {
@@ -115,8 +116,8 @@ const PLACEHOLDER_PNG = new Uint8Array([
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
 
-const imageCacheControl = DEV_MODE ? "no-store" : "public, max-age=31536000";
-const placeholderCacheControl = DEV_MODE ? "no-store" : "public, max-age=3600";
+const imageCacheControl = DEV_MODE ? "no-store" : `public, max-age=${IMAGE_CACHE_MAX_AGE}`;
+const placeholderCacheControl = DEV_MODE ? "no-store" : `public, max-age=${PLACEHOLDER_CACHE_MAX_AGE}`;
 
 async function handleOpds(feedPath: string, req: Request): Promise<Response> {
   const feed = await buildFeed(feedPath, DATA_PATH);

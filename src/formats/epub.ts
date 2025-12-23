@@ -1,15 +1,9 @@
-import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
-import { getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
+import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 import { logHandlerError } from "../utils/errors.ts";
 
-const xmlParser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  removeNSPrefix: true,
-  isArray: (name) => ["subject", "creator", "item", "meta"].includes(name),
-});
+const xmlParser = createXmlParser(["subject", "creator", "item", "meta"]);
 
 interface OPFMeta {
   "@_name"?: string;

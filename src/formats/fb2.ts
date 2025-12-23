@@ -1,14 +1,8 @@
-import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
-import { getString, getStringArray, cleanDescription } from "./utils.ts";
+import { createXmlParser, getString, getStringArray, cleanDescription } from "./utils.ts";
 import { logHandlerError } from "../utils/errors.ts";
 
-const xmlParser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  removeNSPrefix: true,
-  isArray: (name) => ["author", "genre", "binary"].includes(name),
-});
+const xmlParser = createXmlParser(["author", "genre", "binary"]);
 
 interface FB2Author {
   "first-name"?: string;

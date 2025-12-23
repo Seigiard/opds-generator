@@ -1,17 +1,11 @@
-import { XMLParser } from "fast-xml-parser";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
-import { getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
+import { createXmlParser, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 import { logger } from "../utils/errors.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
-const xmlParser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  removeNSPrefix: true,
-  isArray: (name) => ["Page", "writer", "creator", "penciller", "genre"].includes(name),
-});
+const xmlParser = createXmlParser(["Page", "writer", "creator", "penciller", "genre"]);
 
 interface ComicInfoPage {
   "@_Image": string;

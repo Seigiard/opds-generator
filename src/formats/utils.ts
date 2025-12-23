@@ -1,3 +1,14 @@
+import { XMLParser } from "fast-xml-parser";
+
+export function createXmlParser(arrayElements: string[]): XMLParser {
+  return new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    removeNSPrefix: true,
+    isArray: (name) => arrayElements.includes(name),
+  });
+}
+
 export function decodeEntities(str: string): string {
   return str
     .replace(/&lt;/g, "<")

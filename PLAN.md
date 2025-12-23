@@ -37,6 +37,8 @@
 - [x] Reliability: sync dirty flag, process lifecycle fixes
 - [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
 - [x] Filename normalization for fallback titles
+- [x] Constants extraction (src/constants.ts)
+- [x] XML parser factory (createXmlParser in formats/utils.ts)
 
 ### Известные проблемы
 
@@ -44,14 +46,14 @@
 - [ ] Конфигурация — env-переменные без валидации
 - [ ] Типобезопасность — небезопасный доступ к массивам
 - [x] Тихие ошибки — добавлен structured logging
+- [x] Magic numbers — вынесены в constants.ts
 
 ### TODO
 
-1. Config validation — src/config.ts с проверкой env
-2. Тесты — bun test, начать с format handlers
+1. Тесты — bun test, начать с format handlers
+2. Config validation — src/config.ts с проверкой env
 3. Concurrent processing — параллельная обработка книг (5x быстрее)
 4. Route extraction — вынести роуты из index.ts в routes.ts
-5. Constants — убрать magic numbers в src/constants.ts
 
 ## Архитектура
 
@@ -101,10 +103,11 @@ src/
 ├── processor.ts       # processBook, processFolder, XML builders
 ├── opds.ts            # buildFeed (сборка из файлов)
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
+├── constants.ts       # Magic numbers (sizes, timeouts, cache TTL)
 ├── formats/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
-│   ├── utils.ts       # Shared XML parsing utilities
+│   ├── utils.ts       # createXmlParser + string helpers
 │   ├── epub.ts        # EPUB handler
 │   ├── fb2.ts         # FB2 handler
 │   ├── mobi.ts        # MOBI/AZW handler (binary parsing)

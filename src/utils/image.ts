@@ -1,9 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { logger } from "./errors.ts";
-
-export const COVER_MAX_SIZE = 1400;
-export const THUMBNAIL_MAX_SIZE = 512;
+export { COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../constants.ts";
 
 export async function resizeImage(
   srcPath: string,
