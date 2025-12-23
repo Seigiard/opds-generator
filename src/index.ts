@@ -7,12 +7,7 @@ import { buildFeed } from "./opds.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 import { logger } from "./utils/errors.ts";
 import { SYNC_DEBOUNCE_MS, IMAGE_CACHE_MAX_AGE, PLACEHOLDER_CACHE_MAX_AGE } from "./constants.ts";
-
-const FILES_PATH = process.env.FILES || "./files";
-const DATA_PATH = process.env.DATA || "./data";
-const PORT = parseInt(process.env.PORT || "8080", 10);
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-const DEV_MODE = process.env.DEV_MODE === "true";
+import { config } from "./config.ts";
 
 function resolveSafePath(basePath: string, userPath: string): string | null {
   if (isAbsolute(userPath)) return null;
@@ -44,25 +39,25 @@ async function sync(): Promise<void> {
     const startTime = Date.now();
 
     try {
-      const files = await scanFiles(FILES_PATH);
+      const files = await scanFiles(config.filesPath);
       logger.info("Sync", `Found ${files.length} books`);
 
-      const plan = await createSyncPlan(files, DATA_PATH);
+      const plan = await createSyncPlan(files, config.dataPath);
       logger.info("Sync", `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete`);
 
       for (const path of plan.toDelete) {
-        await cleanupOrphan(DATA_PATH, path);
+        await cleanupOrphan(config.dataPath, path);
         logger.debug("Sync", `Deleted: ${path}`);
       }
 
       for (const folder of plan.folders) {
-        await processFolder(folder.path, DATA_PATH, BASE_URL);
+        await processFolder(folder.path, config.dataPath, config.baseUrl);
       }
       logger.debug("Sync", `Processed ${plan.folders.length} folders`);
 
       for (const file of plan.toProcess) {
         logger.debug("Sync", `Processing: ${file.relativePath}`);
-        await processBook(file, FILES_PATH, DATA_PATH);
+        await processBook(file, config.filesPath, config.dataPath);
       }
 
       currentHash = computeHash(files);
@@ -100,13 +95,13 @@ function shouldTriggerSync(filename: string): boolean {
 }
 
 function startWatcher(): void {
-  watch(FILES_PATH, { recursive: true }, (event, filename) => {
+  watch(config.filesPath, { recursive: true }, (event, filename) => {
     if (filename && shouldTriggerSync(filename)) {
       logger.debug("Watch", `${event}: ${filename}`);
       scheduleSync();
     }
   });
-  logger.info("Watch", `Watching ${FILES_PATH}`);
+  logger.info("Watch", `Watching ${config.filesPath}`);
 }
 
 const PLACEHOLDER_PNG = new Uint8Array([
@@ -116,17 +111,17 @@ const PLACEHOLDER_PNG = new Uint8Array([
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
 
-const imageCacheControl = DEV_MODE ? "no-store" : `public, max-age=${IMAGE_CACHE_MAX_AGE}`;
-const placeholderCacheControl = DEV_MODE ? "no-store" : `public, max-age=${PLACEHOLDER_CACHE_MAX_AGE}`;
+const imageCacheControl = config.devMode ? "no-store" : `public, max-age=${IMAGE_CACHE_MAX_AGE}`;
+const placeholderCacheControl = config.devMode ? "no-store" : `public, max-age=${PLACEHOLDER_CACHE_MAX_AGE}`;
 
 async function handleOpds(feedPath: string, req: Request): Promise<Response> {
-  const feed = await buildFeed(feedPath, DATA_PATH);
+  const feed = await buildFeed(feedPath, config.dataPath);
 
   if (feed) {
-    const etag = DEV_MODE ? `"dev-${Date.now()}"` : `"${currentHash}-${feedPath}"`;
+    const etag = config.devMode ? `"dev-${Date.now()}"` : `"${currentHash}-${feedPath}"`;
     const ifNoneMatch = req.headers.get("If-None-Match");
 
-    if (!DEV_MODE && ifNoneMatch === etag) {
+    if (!config.devMode && ifNoneMatch === etag) {
       return new Response(null, { status: 304 });
     }
 
@@ -134,7 +129,7 @@ async function handleOpds(feedPath: string, req: Request): Promise<Response> {
       headers: {
         "Content-Type": "application/atom+xml;charset=utf-8",
         ETag: etag,
-        "Cache-Control": DEV_MODE ? "no-store" : "no-cache",
+        "Cache-Control": config.devMode ? "no-store" : "no-cache",
       },
     });
   }
@@ -197,14 +192,14 @@ async function handleThumbnail(dataDir: string): Promise<Response> {
 }
 
 const server = Bun.serve({
-  port: PORT,
+  port: config.port,
 
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;
 
     if (path === "/") {
-      return Response.redirect(`${BASE_URL}/opds`, 302);
+      return Response.redirect(`${config.baseUrl}/opds`, 302);
     }
 
     if (path === "/health") {
@@ -222,14 +217,14 @@ const server = Bun.serve({
         return Response.json({ status: "busy", message: "Already rebuilding" }, { status: 429 });
       }
       logger.info("Reset", "Clearing data and resyncing...");
-      await Bun.$`rm -rf ${DATA_PATH}/*`.quiet();
+      await Bun.$`rm -rf ${config.dataPath}/*`.quiet();
       void sync();
       return Response.json({ status: "reset", message: "Data cleared, resync started" });
     }
 
     if (path === "/opds" || path.startsWith("/opds/")) {
       const userPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
-      const safePath = userPath === "" ? DATA_PATH : resolveSafePath(DATA_PATH, userPath);
+      const safePath = userPath === "" ? config.dataPath : resolveSafePath(config.dataPath, userPath);
       if (!safePath) return new Response("Invalid path", { status: 400 });
       const feedPath = userPath === "" ? "" : userPath;
       return handleOpds(feedPath, req);
@@ -237,21 +232,21 @@ const server = Bun.serve({
 
     if (path.startsWith("/download/")) {
       const userPath = decodeURIComponent(path.slice(10));
-      const safePath = resolveSafePath(FILES_PATH, userPath);
+      const safePath = resolveSafePath(config.filesPath, userPath);
       if (!safePath) return new Response("Invalid path", { status: 400 });
       return handleDownload(safePath, basename(userPath));
     }
 
     if (path.startsWith("/cover/")) {
       const userPath = decodeURIComponent(path.slice(7));
-      const safePath = resolveSafePath(DATA_PATH, userPath);
+      const safePath = resolveSafePath(config.dataPath, userPath);
       if (!safePath) return new Response("Invalid path", { status: 400 });
       return handleCover(safePath);
     }
 
     if (path.startsWith("/thumbnail/")) {
       const userPath = decodeURIComponent(path.slice(11));
-      const safePath = resolveSafePath(DATA_PATH, userPath);
+      const safePath = resolveSafePath(config.dataPath, userPath);
       if (!safePath) return new Response("Invalid path", { status: 400 });
       return handleThumbnail(safePath);
     }
@@ -261,14 +256,14 @@ const server = Bun.serve({
 });
 
 logger.info("Init", "Starting OPDS Generator", {
-  files: FILES_PATH,
-  data: DATA_PATH,
-  port: PORT,
-  baseUrl: BASE_URL,
-  devMode: DEV_MODE
+  files: config.filesPath,
+  data: config.dataPath,
+  port: config.port,
+  baseUrl: config.baseUrl,
+  devMode: config.devMode
 });
 
-await mkdir(DATA_PATH, { recursive: true });
+await mkdir(config.dataPath, { recursive: true });
 await sync();
 startWatcher();
 logger.info("Server", `Listening on http://localhost:${server.port}`);

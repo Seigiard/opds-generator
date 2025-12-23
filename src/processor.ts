@@ -6,6 +6,7 @@ import { MIME_TYPES } from "./types.ts";
 import { getHandlerFactory } from "./formats/index.ts";
 import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
+import { config } from "./config.ts";
 
 function encodeUrlPath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
@@ -25,7 +26,6 @@ function normalizeFilenameTitle(filename: string): string {
 }
 
 export async function processBook(file: FileInfo, filesPath: string, dataPath: string): Promise<BookEntry> {
-  const baseUrl = process.env.BASE_URL || "http://localhost:8080";
   const bookDataDir = join(dataPath, file.relativePath);
   await mkdir(bookDataDir, { recursive: true });
 
@@ -88,11 +88,11 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   if (meta.rights) entry.setRights(meta.rights);
 
   if (hasCover) {
-    entry.addImage(`${baseUrl}/cover/${encodedPath}`);
-    entry.addThumbnail(`${baseUrl}/thumbnail/${encodedPath}`);
+    entry.addImage(`${config.baseUrl}/cover/${encodedPath}`);
+    entry.addThumbnail(`${config.baseUrl}/thumbnail/${encodedPath}`);
   }
 
-  entry.addAcquisition(`${baseUrl}/download/${encodedPath}`, bookEntry.mimeType, "open-access");
+  entry.addAcquisition(`${config.baseUrl}/download/${encodedPath}`, bookEntry.mimeType, "open-access");
 
   const entryXml = entry.toXml({ prettyPrint: true });
   await Bun.write(join(bookDataDir, "entry.xml"), entryXml);

@@ -39,21 +39,21 @@
 - [x] Filename normalization for fallback titles
 - [x] Constants extraction (src/constants.ts)
 - [x] XML parser factory (createXmlParser in formats/utils.ts)
+- [x] Config validation (src/config.ts with typed config object)
 
 ### Известные проблемы
 
 - [ ] Нет тестов — рефакторинг опасен, регрессии неизбежны
-- [ ] Конфигурация — env-переменные без валидации
 - [ ] Типобезопасность — небезопасный доступ к массивам
 - [x] Тихие ошибки — добавлен structured logging
 - [x] Magic numbers — вынесены в constants.ts
+- [x] Конфигурация — централизована в config.ts
 
 ### TODO
 
 1. Тесты — bun test, начать с format handlers
-2. Config validation — src/config.ts с проверкой env
-3. Concurrent processing — параллельная обработка книг (5x быстрее)
-4. Route extraction — вынести роуты из index.ts в routes.ts
+2. Concurrent processing — параллельная обработка книг (5x быстрее)
+3. Route extraction — вынести роуты из index.ts в routes.ts
 
 ## Архитектура
 
@@ -104,6 +104,7 @@ src/
 ├── opds.ts            # buildFeed (сборка из файлов)
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
 ├── constants.ts       # Magic numbers (sizes, timeouts, cache TTL)
+├── config.ts          # Typed config with env validation
 ├── formats/
 │   ├── types.ts       # FormatHandler interface
 │   ├── index.ts       # getHandler registry
