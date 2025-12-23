@@ -4,8 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "docker compose up -d --build",
-    "dev": "docker compose -f docker-compose.dev.yml up --build",
+    "start": "docker compose up -d",
+    "dev": "docker compose -f docker-compose.dev.yml up",
+    "rebuild": "docker compose build",
+    "rebuild:dev": "docker compose -f docker-compose.dev.yml build",
+    "rebuild:test": "docker compose -f docker-compose.test.yml build",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "test": "docker compose -f docker-compose.test.yml run --rm test",
