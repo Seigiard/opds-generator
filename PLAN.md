@@ -36,6 +36,29 @@
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes
 
+Критические проблемы
+
+| Проблема         | Влияние                                             |
+| ---------------- | --------------------------------------------------- |
+| Нет тестов       | Рефакторинг опасен, регрессии неизбежны             |
+| Тихие ошибки     | 20+ мест с catch { return null } — дебаг невозможен |
+| Конфигурация     | env-переменные без валидации                        |
+| Типобезопасность | Небезопасный доступ к массивам                      |
+
+Топ-5 рекомендаций по приоритету
+
+1.  Error handling — src/utils/errors.ts с классами ошибок и logError()
+2.  Config validation — src/config.ts с проверкой env
+3.  Тесты — bun test, начать с format handlers
+4.  Concurrent processing — параллельная обработка книг (5x быстрее)
+5.  Route extraction — вынести 60+ строк из index.ts в routes.ts
+
+Быстрые победы (30 минут)
+
+- Убрать magic numbers → src/constants.ts
+- Вынести XML parser creation в utils.ts
+- Добавить bounds checking для массивов
+
 ## Архитектура
 
 ### Mirror Architecture

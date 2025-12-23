@@ -10,7 +10,7 @@ Default to using Bun instead of Node.js.
 
 - `Bun.serve()` for HTTP server. Don't use `express`.
 - `Bun.file()` for file operations. Prefer over `node:fs` readFile/writeFile.
-- `Bun.$\`cmd\`` for shell commands. Don't use `execa`.
+- `Bun.$\`cmd\``for shell commands. Don't use`execa`.
 - `Bun.hash()` for hashing. Don't use `crypto`.
 - `Bun.write()` for writing files.
 
@@ -40,13 +40,15 @@ src/
 ## Architecture: Mirror Structure
 
 /data mirrors /files structure:
+
 - Each book → folder with entry.xml, cover.jpg, thumb.jpg
-- Each folder → _feed.xml (header) + _entry.xml (for parent)
-- Feed assembly: read _feed.xml + all nested entry.xml/_entry.xml
+- Each folder → \_feed.xml (header) + \_entry.xml (for parent)
+- Feed assembly: read \_feed.xml + all nested entry.xml/\_entry.xml
 
 ## opds-ts Library
 
 Use opds-ts for OPDS XML generation:
+
 ```typescript
 import { Entry, Feed } from "opds-ts/v1.2";
 
@@ -61,21 +63,24 @@ const entry = new Entry(id, title)
 const xml = entry.toXml({ prettyPrint: true });
 
 // Create feed
-const feed = new Feed(id, title)
-  .setKind("navigation")
-  .addSelfLink(href, "navigation");
+const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "navigation");
 ```
 
 ## Adding New Format Handler
 
 1. Create `src/formats/{format}.ts`
 2. Implement factory pattern:
+
    ```typescript
    async function createHandler(filePath: string): Promise<FormatHandler | null> {
      const data = await readFileOnce(filePath);
      return {
-       getMetadata() { return data.metadata; },
-       async getCover() { return data.cover; }
+       getMetadata() {
+         return data.metadata;
+       },
+       async getCover() {
+         return data.cover;
+       },
      };
    }
 
@@ -84,6 +89,7 @@ const feed = new Feed(id, title)
      create: createHandler,
    };
    ```
+
 3. Register in `src/formats/index.ts`
 
 ## Development Workflow
@@ -121,7 +127,7 @@ bun --bun tsc --noEmit
 bun test
 ```
 
-**IMPORTANT**: Always run `bun run lint` before committing changes.
+**IMPORTANT**: Always run `bun run lint:fix` before committing changes.
 
 ## Documentation
 
