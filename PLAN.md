@@ -15,25 +15,22 @@
 - [x] HTTP сервер (Bun.serve + Bun.file)
 - [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
 - [x] Dockerfile + docker-compose (dev/prod multi-stage)
-- [x] Извлечение метаданных из EPUB (title, author, description)
-- [x] Извлечение обложек из EPUB, CBZ, CBR, CB7, ZIP
 - [x] Автоопределение типа ZIP (комикс/fb2)
 - [x] Endpoint /cover/{path} (1400px max)
 - [x] Endpoint /thumbnail/{path} (512px max)
 - [x] ETag + If-None-Match для кэширования OPDS
 - [x] Mirror архитектура (/data зеркалит /files)
 - [x] oxlint type-aware linting
+- [x] Reset endpoint (/reset in DEV_MODE)
+- [x] Security: path traversal protection (resolveSafePath)
+- [x] Reliability: sync dirty flag, process lifecycle fixes
+- [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction
 - [x] MOBI/AZW: binary parsing with DataView, metadata + cover
 - [x] CBZ/CBR/CB7: ComicInfo.xml + CoMet parsing with fast-xml-parser
 - [x] PDF: pdfinfo + pdftoppm (poppler-utils) for metadata + cover
-- [x] Reset endpoint (/reset in DEV_MODE)
-- [x] Security: path traversal protection (resolveSafePath)
-- [x] Reliability: sync dirty flag, process lifecycle fixes
-- [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
-
-### Известные проблемы
+- [x] TXT: title only
 
 ### TODO
 
@@ -43,7 +40,8 @@
    Картинки или Картинки в директориях — комикс
    файл fb2 — fb2
    и т.д.
-3. Типобезопасность — небезопасный доступ к массивам
+3. Тесты для комиксов. Подготовить тестовые данные
+4. упростить генерацию xml файлов: отслеживать изменения в папках/(feed|entry).xml и только на эти изменения генерировать фид
 
 ### Поддержка форматов
 
@@ -129,8 +127,12 @@ src/
 │   └── pdf.ts         # PDF handler (poppler-utils)
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
+    ├── array.ts       # Type-safe array access helpers
+    ├── concurrency.ts # Batch processing with concurrency limit
+    ├── errors.ts      # Logger + error classes
     ├── image.ts       # ImageMagick resize
-    └── errors.ts      # Logger + error classes
+    ├── opds.ts        # XML/feed helpers
+    └── processor.ts   # URL encoding, file size formatting
 ```
 
 ## API
