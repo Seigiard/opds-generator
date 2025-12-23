@@ -36,6 +36,13 @@ src/
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z/TAR extraction
     └── image.ts       # ImageMagick resize
+
+test/
+├── helpers/
+│   └── image-compare.ts  # Cover comparison using ImageMagick RMSE
+├── unit/                 # Unit tests
+└── integration/
+    └── formats/          # Format handler integration tests
 ```
 
 ## Architecture: Mirror Structure

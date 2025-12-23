@@ -37,7 +37,7 @@
 
 ### Известные проблемы
 
-- [x] Нет тестов — реализовано (159 tests, 59% coverage)
+- [x] Нет тестов — реализовано (163 tests, 89% coverage)
 - [ ] Типобезопасность — небезопасный доступ к массивам
 - [x] Тихие ошибки — добавлен structured logging
 - [x] Magic numbers — вынесены в constants.ts
@@ -45,7 +45,7 @@
 
 ### TODO
 
-1. ~~Тесты~~ — реализовано (bun test, 159 tests, unit + integration)
+1. ~~Тесты~~ — реализовано (bun test, 163 tests, unit + integration + cover comparison)
 2. ~~Security: Фильтрация null bytes в `resolveSafePath`~~ — реализовано
 3. ~~Проверить поддержку форматов~~ — см. таблицу ниже
 4. ~~Format support gaps~~:
@@ -64,7 +64,7 @@
 | -------- | -------- | ---- | ----------------------------- |
 | epub     | epub.ts  | ✅   | ✅ Работает                   |
 | mobi     | mobi.ts  | ✅   | ✅ Работает                   |
-| azw/azw3 | mobi.ts  | ⚠️   | ✅ Handler есть, нет фикстуры |
+| azw/azw3 | mobi.ts  | ✅   | ✅ Работает                   |
 | pdf      | pdf.ts   | ✅   | ⚠️ Требует pdfinfo/pdftoppm   |
 | fb2      | fb2.ts   | ✅   | ✅ Работает                   |
 | fbz      | fb2.ts   | ✅   | ✅ Работает (ZIP extraction)  |

@@ -23,15 +23,15 @@ Static OPDS 1.2 catalog generator from your file structure.
 
 ## Supported Formats
 
-| Format         | Metadata                                     | Cover |
-| -------------- | -------------------------------------------- | ----- |
-| EPUB           | title, author, description, series           | ✓     |
-| FB2            | title, author, description, series, genre    | ✓     |
-| MOBI/AZW/AZW3  | title, author, publisher, subjects           | ✓     |
-| CBZ/CBR/CB7    | title, author, series (ComicInfo.xml, CoMet) | ✓     |
-| ZIP            | auto-detect (comic/fb2)                      | ✓     |
-| PDF            | title, author, pages (pdfinfo)               | ✓     |
-| DJVU, TXT      | filename                                     | -     |
+| Format          | Metadata                                     | Cover |
+| --------------- | -------------------------------------------- | ----- |
+| EPUB            | title, author, description, series           | ✓     |
+| FB2/FBZ         | title, author, description, series, genre    | ✓     |
+| MOBI/AZW/AZW3   | title, author, publisher, subjects           | ✓     |
+| CBZ/CBR/CB7/CBT | title, author, series (ComicInfo.xml, CoMet) | ✓     |
+| ZIP             | auto-detect (comic/fb2)                      | ✓     |
+| PDF             | title, author, pages (pdfinfo)               | ✓     |
+| DJVU, TXT       | filename                                     | -     |
 
 ## Quick Start with Docker
 
@@ -141,6 +141,12 @@ bun install
 
 # Run dev server with hot reload
 bun run dev
+
+# Run tests (in Docker)
+bun run test
+
+# Lint
+bun run lint:fix
 
 # Production
 FILES=/books DATA=/data bun run start
