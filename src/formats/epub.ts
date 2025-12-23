@@ -118,7 +118,8 @@ async function findCoverWithFallback(
   if (containsCover) return containsCover;
 
   // 3. First image as last fallback
-  return images.sort()[0];
+  const sorted = images.sort();
+  return sorted[0];
 }
 
 async function createEpubHandler(filePath: string): Promise<FormatHandler | null> {

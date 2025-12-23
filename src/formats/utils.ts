@@ -29,7 +29,7 @@ export function getString(val: unknown): string | undefined {
 }
 
 export function getFirstString(val: unknown): string | undefined {
-  if (Array.isArray(val)) return getString(val[0]);
+  if (Array.isArray(val) && val.length > 0) return getString(val[0]);
   return getString(val);
 }
 

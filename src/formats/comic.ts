@@ -168,8 +168,9 @@ function findCoverFromPages(pages: ComicInfoPage[] | undefined, images: string[]
   if (frontCover !== undefined) {
     const imageIndex = parseInt(frontCover["@_Image"], 10);
     const sortedImages = [...images].sort();
-    if (!isNaN(imageIndex) && imageIndex < sortedImages.length) {
-      return sortedImages[imageIndex];
+    if (!isNaN(imageIndex) && imageIndex >= 0 && imageIndex < sortedImages.length) {
+      const image = sortedImages[imageIndex];
+      if (image !== undefined) return image;
     }
   }
   return undefined;
@@ -194,7 +195,8 @@ function selectCoverImage(images: string[], pages?: ComicInfoPage[]): string | u
   const byName = findCoverByName(images);
   if (byName) return byName;
 
-  return [...images].sort()[0];
+  const sorted = [...images].sort();
+  return sorted[0];
 }
 
 async function createComicHandler(filePath: string): Promise<FormatHandler | null> {

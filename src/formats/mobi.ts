@@ -114,8 +114,9 @@ function parseExthRecords(record0: Uint8Array, offset: number): ExthData {
 
 function loadResource(buf: Uint8Array, offsets: number[], index: number): Buffer | null {
   if (index < 0 || index >= offsets.length - 1) return null;
-  const start = offsets[index]!;
-  const end = offsets[index + 1]!;
+  const start = offsets[index];
+  const end = offsets[index + 1];
+  if (start === undefined || end === undefined) return null;
   if (start >= buf.length || end > buf.length) return null;
   return Buffer.from(buf.subarray(start, end));
 }
@@ -132,7 +133,11 @@ async function createMobiHandler(filePath: string): Promise<FormatHandler | null
     if (numRecords === 0) return null;
 
     const offsets = parseRecordOffsets(view, numRecords, buffer.length);
-    const record0 = buffer.subarray(offsets[0], offsets[1]);
+    if (offsets.length < 2) return null;
+    const firstOffset = offsets[0];
+    const secondOffset = offsets[1];
+    if (firstOffset === undefined || secondOffset === undefined) return null;
+    const record0 = buffer.subarray(firstOffset, secondOffset);
 
     const mobi = parseMobiHeader(record0);
     if (!mobi) return null;
