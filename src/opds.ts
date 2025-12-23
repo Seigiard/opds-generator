@@ -1,15 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-
-function stripXmlDeclaration(xml: string): string {
-  return xml.replace(/<\?xml[^?]*\?>\s*/g, "").trim();
-}
-
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-function naturalSort(a: string, b: string): number {
-  return collator.compare(a, b);
-}
+import { stripXmlDeclaration, naturalSort } from "./utils/opds.ts";
 
 export async function buildFeed(folderPath: string, dataPath: string): Promise<string | null> {
   const folderDataDir = join(dataPath, folderPath);
