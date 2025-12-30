@@ -8,6 +8,7 @@ import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
 import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "./utils/processor.ts";
 import { config } from "./config.ts";
+import { scheduleFeedRegeneration } from "./feed-watcher.ts";
 
 export { encodeUrlPath, formatFileSize, normalizeFilenameTitle };
 
@@ -83,6 +84,10 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   const entryXml = entry.toXml({ prettyPrint: true });
   await Bun.write(join(bookDataDir, "entry.xml"), entryXml);
 
+  // Trigger feed regeneration for parent folder
+  const parentFolder = file.relativePath.split("/").slice(0, -1).join("/");
+  scheduleFeedRegeneration(parentFolder);
+
   return bookEntry;
 }
 
@@ -111,12 +116,18 @@ export async function processFolder(folderPath: string, dataPath: string, baseUr
     const entryXml = entry.toXml({ prettyPrint: true });
     await Bun.write(join(folderDataDir, "_entry.xml"), entryXml);
   }
+
+  // Trigger feed regeneration for this folder
+  scheduleFeedRegeneration(folderPath);
 }
 
 export async function cleanupOrphan(dataPath: string, relativePath: string): Promise<void> {
   const fullPath = join(dataPath, relativePath);
   try {
     await rm(fullPath, { recursive: true });
+    // Trigger feed regeneration for parent folder
+    const parentFolder = relativePath.split("/").slice(0, -1).join("/");
+    scheduleFeedRegeneration(parentFolder);
   } catch {
     // Already deleted or doesn't exist
   }

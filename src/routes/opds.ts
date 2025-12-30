@@ -1,4 +1,4 @@
-import { buildFeed } from "../opds.ts";
+import { join } from "node:path";
 import { config } from "../config.ts";
 
 export async function handleOpds(
@@ -6,7 +6,8 @@ export async function handleOpds(
   req: Request,
   currentHash: string,
 ): Promise<Response> {
-  const feed = await buildFeed(feedPath, config.dataPath);
+  const feedFile = Bun.file(join(config.dataPath, feedPath, "feed.xml"));
+  const feed = (await feedFile.exists()) ? await feedFile.text() : null;
 
   if (feed) {
     const etag = config.devMode ? `"dev-${Date.now()}"` : `"${currentHash}-${feedPath}"`;
