@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, symlink, unlink } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import type { FileInfo, BookEntry } from "./types.ts";
@@ -75,14 +75,23 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   if (meta.rights) entry.setRights(meta.rights);
 
   if (hasCover) {
-    entry.addImage(`${config.baseUrl}/cover/${encodedPath}`);
-    entry.addThumbnail(`${config.baseUrl}/thumbnail/${encodedPath}`);
+    entry.addImage(`${config.baseUrl}/${encodedPath}/cover.jpg`);
+    entry.addThumbnail(`${config.baseUrl}/${encodedPath}/thumb.jpg`);
   }
 
-  entry.addAcquisition(`${config.baseUrl}/download/${encodedPath}`, bookEntry.mimeType, "open-access");
+  entry.addAcquisition(`${config.baseUrl}/${encodedPath}/file`, bookEntry.mimeType, "open-access");
 
   const entryXml = entry.toXml({ prettyPrint: true });
   await Bun.write(join(bookDataDir, "entry.xml"), entryXml);
+
+  // Create symlink to original file for direct download
+  const symlinkPath = join(bookDataDir, "file");
+  try {
+    await unlink(symlinkPath);
+  } catch {
+    // Symlink doesn't exist yet
+  }
+  await symlink(file.path, symlinkPath);
 
   // Trigger feed regeneration for parent folder
   const parentFolder = file.relativePath.split("/").slice(0, -1).join("/");
@@ -99,7 +108,7 @@ export async function processFolder(folderPath: string, dataPath: string, baseUr
   if (folderPath !== "") {
     const folderName = folderPath.split("/").pop() || "Catalog";
     const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName).addSubsection(
-      `${baseUrl}/opds/${encodeUrlPath(folderPath)}`,
+      `${baseUrl}/${encodeUrlPath(folderPath)}/feed.xml`,
       "navigation",
     );
 

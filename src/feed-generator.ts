@@ -17,11 +17,11 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
   // Generate feed header dynamically
   const folderName = folderPath.split("/").pop() || "Catalog";
   const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
-  const selfHref = folderPath === "" ? `${config.baseUrl}/opds` : `${config.baseUrl}/opds/${encodeUrlPath(folderPath)}`;
+  const selfHref = folderPath === "" ? `${config.baseUrl}/feed.xml` : `${config.baseUrl}/${encodeUrlPath(folderPath)}/feed.xml`;
 
   const feed = new Feed(feedId, folderName)
     .addSelfLink(selfHref, "navigation")
-    .addNavigationLink("start", `${config.baseUrl}/opds`);
+    .addNavigationLink("start", `${config.baseUrl}/feed.xml`);
 
   // Collect entries from subfolders
   const entries: string[] = [];

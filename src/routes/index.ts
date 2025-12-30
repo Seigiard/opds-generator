@@ -1,8 +1,6 @@
-import { basename, normalize, join, isAbsolute } from "node:path";
+import { normalize, join, isAbsolute } from "node:path";
 import { config } from "../config.ts";
 import { logger } from "../utils/errors.ts";
-import { handleDownload, handleCover, handleThumbnail } from "./assets.ts";
-import { handleOpds } from "./opds.ts";
 
 export interface RouterContext {
   getCurrentHash: () => string;
@@ -28,10 +26,12 @@ export function createRouter(ctx: RouterContext) {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    if (path === "/") {
-      return Response.redirect(`${config.baseUrl}/opds`, 302);
+    // Root and /opds → feed.xml
+    if (path === "/" || path === "/opds") {
+      return Response.redirect(`${config.baseUrl}/feed.xml`, 302);
     }
 
+    // Health check
     if (path === "/health") {
       return Response.json({
         status: ctx.isRebuilding() ? "rebuilding" : "ready",
@@ -41,6 +41,7 @@ export function createRouter(ctx: RouterContext) {
       });
     }
 
+    // Reset cache
     if (path === "/reset") {
       if (ctx.isRebuilding()) {
         return Response.json({ status: "busy", message: "Already rebuilding" }, { status: 429 });
@@ -51,35 +52,18 @@ export function createRouter(ctx: RouterContext) {
       return Response.json({ status: "reset", message: "Data cleared, resync started" });
     }
 
-    if (path === "/opds" || path.startsWith("/opds/")) {
-      const userPath = path === "/opds" ? "" : decodeURIComponent(path.slice(6));
-      const safePath = userPath === "" ? config.dataPath : resolveSafePath(config.dataPath, userPath);
-      if (!safePath) return new Response("Invalid path", { status: 400 });
-      const feedPath = userPath === "" ? "" : userPath;
-      return handleOpds(feedPath, req, ctx.getCurrentHash());
+    // Static files from /data
+    const userPath = decodeURIComponent(path.slice(1)); // remove leading /
+    const safePath = resolveSafePath(config.dataPath, userPath);
+    if (!safePath) {
+      return new Response("Invalid path", { status: 400 });
     }
 
-    if (path.startsWith("/download/")) {
-      const userPath = decodeURIComponent(path.slice(10));
-      const safePath = resolveSafePath(config.filesPath, userPath);
-      if (!safePath) return new Response("Invalid path", { status: 400 });
-      return handleDownload(safePath, basename(userPath));
+    const file = Bun.file(safePath);
+    if (!(await file.exists())) {
+      return new Response("Not found", { status: 404 });
     }
 
-    if (path.startsWith("/cover/")) {
-      const userPath = decodeURIComponent(path.slice(7));
-      const safePath = resolveSafePath(config.dataPath, userPath);
-      if (!safePath) return new Response("Invalid path", { status: 400 });
-      return handleCover(safePath);
-    }
-
-    if (path.startsWith("/thumbnail/")) {
-      const userPath = decodeURIComponent(path.slice(11));
-      const safePath = resolveSafePath(config.dataPath, userPath);
-      if (!safePath) return new Response("Invalid path", { status: 400 });
-      return handleThumbnail(safePath);
-    }
-
-    return new Response("Not found", { status: 404 });
+    return new Response(file);
   };
 }
