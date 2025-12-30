@@ -1,23 +1,29 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { Feed } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort } from "./utils/opds.ts";
+import { encodeUrlPath } from "./utils/processor.ts";
 import { logger } from "./utils/errors.ts";
+import { config } from "./config.ts";
 
 /**
- * Generates a complete feed.xml file for a folder by combining _feed.xml with all child entries.
- * Returns true if successful, false if folder has no _feed.xml.
+ * Generates a complete feed.xml file for a folder.
+ * Header is generated dynamically from folder path, entries are read from child folders.
  */
 export async function generateFeedFile(folderPath: string, dataPath: string): Promise<boolean> {
   const folderDataDir = join(dataPath, folderPath);
-  const feedHeaderPath = join(folderDataDir, "_feed.xml");
   const feedOutputPath = join(folderDataDir, "feed.xml");
 
-  const feedHeaderFile = Bun.file(feedHeaderPath);
-  if (!(await feedHeaderFile.exists())) {
-    return false;
-  }
+  // Generate feed header dynamically
+  const folderName = folderPath.split("/").pop() || "Catalog";
+  const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
+  const selfHref = folderPath === "" ? `${config.baseUrl}/opds` : `${config.baseUrl}/opds/${encodeUrlPath(folderPath)}`;
 
-  let feedXml = await feedHeaderFile.text();
+  const feed = new Feed(feedId, folderName)
+    .addSelfLink(selfHref, "navigation")
+    .addNavigationLink("start", `${config.baseUrl}/opds`);
+
+  // Collect entries from subfolders
   const entries: string[] = [];
   let hasBooks = false;
 
@@ -53,10 +59,11 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
     // Empty folder or error reading
   }
 
-  if (hasBooks) {
-    feedXml = feedXml.replace("kind=navigation", "kind=acquisition");
-  }
+  // Set feed kind based on content
+  feed.setKind(hasBooks ? "acquisition" : "navigation");
 
+  // Build complete feed XML
+  let feedXml = feed.toXml({ prettyPrint: true });
   const completeFeed = feedXml.replace("</feed>", entries.join("\n") + "\n</feed>");
   await Bun.write(feedOutputPath, completeFeed);
 
@@ -65,17 +72,12 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
 }
 
 /**
- * Collects all folder paths that have _feed.xml, sorted by depth (deepest first).
+ * Collects all folder paths that have _entry.xml or are root, sorted by depth (deepest first).
  */
 async function collectFeedFolders(dataPath: string): Promise<string[]> {
-  const folders: string[] = [];
+  const folders: string[] = [""];
 
   async function scan(dirPath: string, relativePath: string): Promise<void> {
-    const feedFile = Bun.file(join(dirPath, "_feed.xml"));
-    if (await feedFile.exists()) {
-      folders.push(relativePath);
-    }
-
     try {
       const entries = await readdir(dirPath, { withFileTypes: true });
       for (const entry of entries) {
@@ -84,7 +86,13 @@ async function collectFeedFolders(dataPath: string): Promise<string[]> {
 
         const entryPath = join(dirPath, entry.name);
         const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-        await scan(entryPath, entryRelPath);
+
+        // Check if this is a folder with _entry.xml (not a book folder)
+        const hasEntryXml = await Bun.file(join(entryPath, "_entry.xml")).exists();
+        if (hasEntryXml) {
+          folders.push(entryRelPath);
+          await scan(entryPath, entryRelPath);
+        }
       }
     } catch {
       // Directory doesn't exist or can't be read

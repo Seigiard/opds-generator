@@ -1,6 +1,6 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join, basename } from "node:path";
-import { Entry, Feed } from "opds-ts/v1.2";
+import { Entry } from "opds-ts/v1.2";
 import type { FileInfo, BookEntry } from "./types.ts";
 import { MIME_TYPES } from "./types.ts";
 import { getHandlerFactory } from "./formats/index.ts";
@@ -95,19 +95,9 @@ export async function processFolder(folderPath: string, dataPath: string, baseUr
   const folderDataDir = join(dataPath, folderPath);
   await mkdir(folderDataDir, { recursive: true });
 
-  const folderName = folderPath.split("/").pop() || "Catalog";
-  const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
-  const selfHref = folderPath === "" ? `${baseUrl}/opds` : `${baseUrl}/opds/${encodeUrlPath(folderPath)}`;
-
-  const feed = new Feed(feedId, folderName)
-    .setKind("navigation")
-    .addSelfLink(selfHref, "navigation")
-    .addNavigationLink("start", `${baseUrl}/opds`);
-
-  const feedXml = feed.toXml({ prettyPrint: true });
-  await Bun.write(join(folderDataDir, "_feed.xml"), feedXml);
-
+  // Only create _entry.xml for non-root folders (for parent's feed)
   if (folderPath !== "") {
+    const folderName = folderPath.split("/").pop() || "Catalog";
     const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName).addSubsection(
       `${baseUrl}/opds/${encodeUrlPath(folderPath)}`,
       "navigation",

@@ -85,12 +85,12 @@ export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
         const entryPath = join(dirPath, entry.name);
         const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
-        const hasEntryXml = await Bun.file(join(entryPath, "entry.xml")).exists();
-        const hasFeedXml = await Bun.file(join(entryPath, "_feed.xml")).exists();
+        const hasBookEntry = await Bun.file(join(entryPath, "entry.xml")).exists();
+        const hasFolderEntry = await Bun.file(join(entryPath, "_entry.xml")).exists();
 
-        if (hasEntryXml) {
+        if (hasBookEntry) {
           paths.add(entryRelPath);
-        } else if (hasFeedXml) {
+        } else if (hasFolderEntry) {
           paths.add(entryRelPath);
           await scan(entryPath, entryRelPath);
         } else {
@@ -124,6 +124,7 @@ export async function createSyncPlan(
 
   const toProcess: FileInfo[] = [];
   const toDelete: string[] = [];
+  const foldersToProcess: FolderInfo[] = [];
 
   for (const file of files) {
     const dataDir = join(dataPath, file.relativePath);
@@ -145,7 +146,16 @@ export async function createSyncPlan(
     }
   }
 
-  return { toProcess, toDelete, folders };
+  // Only process folders that don't have _entry.xml yet (new folders)
+  for (const folder of folders) {
+    if (folder.path === "") continue; // Root doesn't need _entry.xml
+    const entryFile = Bun.file(join(dataPath, folder.path, "_entry.xml"));
+    if (!(await entryFile.exists())) {
+      foldersToProcess.push(folder);
+    }
+  }
+
+  return { toProcess, toDelete, folders: foldersToProcess };
 }
 
 export function computeHash(files: FileInfo[]): string {

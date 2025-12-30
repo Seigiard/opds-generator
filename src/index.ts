@@ -10,7 +10,7 @@ import { processInBatches } from "./utils/concurrency.ts";
 import { config } from "./config.ts";
 import { createRouter } from "./routes/index.ts";
 import { generateAllFeeds } from "./feed-generator.ts";
-import { initFeedRegeneration } from "./feed-watcher.ts";
+import { initFeedWatcher } from "./feed-watcher.ts";
 
 let currentHash = "";
 let isRebuilding = false;
@@ -89,6 +89,8 @@ function startWatcher(): void {
     ignored: (path, stats) => stats?.isFile() === true && !isBookFile(path),
     persistent: true,
     ignoreInitial: true,
+    usePolling: config.devMode,
+    interval: 1000,
   });
 
   watcher
@@ -130,8 +132,8 @@ logger.info("Init", "Starting OPDS Generator", {
 });
 
 await mkdir(config.dataPath, { recursive: true });
-initFeedRegeneration(config.dataPath);
 await sync();
 await generateAllFeeds(config.dataPath);
+initFeedWatcher(config.dataPath);
 startWatcher();
 logger.info("Server", `Listening on http://localhost:${server.port}`);
