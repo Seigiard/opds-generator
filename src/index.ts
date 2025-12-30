@@ -1,4 +1,4 @@
-import { watch } from "node:fs";
+import chokidar from "chokidar";
 import { mkdir } from "node:fs/promises";
 import { extname } from "node:path";
 import { scanFiles, createSyncPlan, computeHash } from "./scanner.ts";
@@ -10,7 +10,7 @@ import { processInBatches } from "./utils/concurrency.ts";
 import { config } from "./config.ts";
 import { createRouter } from "./routes/index.ts";
 import { generateAllFeeds } from "./feed-generator.ts";
-import { startFeedWatcher } from "./feed-watcher.ts";
+import { initFeedRegeneration } from "./feed-watcher.ts";
 
 let currentHash = "";
 let isRebuilding = false;
@@ -84,20 +84,27 @@ function scheduleSync(): void {
   }, SYNC_DEBOUNCE_MS);
 }
 
-function shouldTriggerSync(filename: string): boolean {
-  if (isBookFile(filename)) return true;
-  const ext = extname(filename);
-  if (!ext) return true;
-  return false;
-}
-
 function startWatcher(): void {
-  watch(config.filesPath, { recursive: true }, (event, filename) => {
-    if (filename && shouldTriggerSync(filename)) {
-      logger.debug("Watch", `${event}: ${filename}`);
-      scheduleSync();
-    }
+  const watcher = chokidar.watch(config.filesPath, {
+    ignored: (path, stats) => stats?.isFile() === true && !isBookFile(path),
+    persistent: true,
+    ignoreInitial: true,
   });
+
+  watcher
+    .on("add", (path) => {
+      logger.debug("Watch", `add: ${path}`);
+      scheduleSync();
+    })
+    .on("change", (path) => {
+      logger.debug("Watch", `change: ${path}`);
+      scheduleSync();
+    })
+    .on("unlink", (path) => {
+      logger.debug("Watch", `unlink: ${path}`);
+      scheduleSync();
+    });
+
   logger.info("Watch", `Watching ${config.filesPath}`);
 }
 
@@ -123,8 +130,8 @@ logger.info("Init", "Starting OPDS Generator", {
 });
 
 await mkdir(config.dataPath, { recursive: true });
+initFeedRegeneration(config.dataPath);
 await sync();
 await generateAllFeeds(config.dataPath);
-startFeedWatcher(config.dataPath);
 startWatcher();
 logger.info("Server", `Listening on http://localhost:${server.port}`);
