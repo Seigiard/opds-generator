@@ -60,6 +60,8 @@ async function sync(): Promise<void> {
       bookCount = files.length;
       folderCount = plan.folders.length;
 
+      await generateAllFeeds(config.dataPath);
+
       const duration = Date.now() - startTime;
       logger.info("Sync", `Complete in ${duration}ms`, { hash: currentHash, books: bookCount });
     } catch (error) {
@@ -132,6 +134,5 @@ logger.info("Init", "Starting OPDS Generator", {
 
 await mkdir(config.dataPath, { recursive: true });
 await sync();
-await generateAllFeeds(config.dataPath);
 startWatcher();
 logger.info("Server", `Listening on http://localhost:${server.port}`);
