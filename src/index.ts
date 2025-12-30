@@ -10,7 +10,6 @@ import { processInBatches } from "./utils/concurrency.ts";
 import { config } from "./config.ts";
 import { createRouter } from "./routes/index.ts";
 import { generateAllFeeds } from "./feed-generator.ts";
-import { initFeedWatcher } from "./feed-watcher.ts";
 
 let currentHash = "";
 let isRebuilding = false;
@@ -134,6 +133,5 @@ logger.info("Init", "Starting OPDS Generator", {
 await mkdir(config.dataPath, { recursive: true });
 await sync();
 await generateAllFeeds(config.dataPath);
-initFeedWatcher(config.dataPath);
 startWatcher();
 logger.info("Server", `Listening on http://localhost:${server.port}`);
