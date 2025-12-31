@@ -28,7 +28,7 @@ export function createRouter(ctx: RouterContext) {
 
     // Root and /opds → feed.xml
     if (path === "/" || path === "/opds") {
-      return Response.redirect(`${config.baseUrl}/feed.xml`, 302);
+      return Response.redirect("/feed.xml", 302);
     }
 
     // Health check

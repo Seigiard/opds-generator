@@ -4,7 +4,6 @@ import { Feed } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort } from "./utils/opds.ts";
 import { encodeUrlPath } from "./utils/processor.ts";
 import { logger } from "./utils/errors.ts";
-import { config } from "./config.ts";
 
 /**
  * Generates a complete feed.xml file for a folder.
@@ -17,11 +16,11 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
   // Generate feed header dynamically
   const folderName = folderPath.split("/").pop() || "Catalog";
   const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
-  const selfHref = folderPath === "" ? `${config.baseUrl}/feed.xml` : `${config.baseUrl}/${encodeUrlPath(folderPath)}/feed.xml`;
+  const selfHref = folderPath === "" ? "/feed.xml" : `/${encodeUrlPath(folderPath)}/feed.xml`;
 
   const feed = new Feed(feedId, folderName)
     .addSelfLink(selfHref, "navigation")
-    .addNavigationLink("start", `${config.baseUrl}/feed.xml`);
+    .addNavigationLink("start", "/feed.xml");
 
   // Collect entries from subfolders
   const entries: string[] = [];

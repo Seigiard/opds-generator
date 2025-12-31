@@ -4,7 +4,6 @@ export interface Config {
   filesPath: string;
   dataPath: string;
   port: number;
-  baseUrl: string;
   devMode: boolean;
   logLevel: string;
 }
@@ -34,7 +33,6 @@ function loadConfig(): Config {
     filesPath: requireEnv("FILES", "./files"),
     dataPath: requireEnv("DATA", "./data"),
     port,
-    baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",
   };

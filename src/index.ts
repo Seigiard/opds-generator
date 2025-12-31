@@ -43,7 +43,7 @@ async function sync(): Promise<void> {
       }
 
       for (const folder of plan.folders) {
-        await processFolder(folder.path, config.dataPath, config.baseUrl);
+        await processFolder(folder.path, config.dataPath);
       }
       logger.debug("Sync", `Processed ${plan.folders.length} folders`);
 
@@ -128,7 +128,6 @@ logger.info("Init", "Starting OPDS Generator", {
   files: config.filesPath,
   data: config.dataPath,
   port: config.port,
-  baseUrl: config.baseUrl,
   devMode: config.devMode,
 });
 

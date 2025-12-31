@@ -7,7 +7,6 @@ import { getHandlerFactory } from "./formats/index.ts";
 import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
 import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "./utils/processor.ts";
-import { config } from "./config.ts";
 import { scheduleFeedRegeneration } from "./feed-watcher.ts";
 
 export { encodeUrlPath, formatFileSize, normalizeFilenameTitle };
@@ -75,11 +74,11 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   if (meta.rights) entry.setRights(meta.rights);
 
   if (hasCover) {
-    entry.addImage(`${config.baseUrl}/${encodedPath}/cover.jpg`);
-    entry.addThumbnail(`${config.baseUrl}/${encodedPath}/thumb.jpg`);
+    entry.addImage(`/${encodedPath}/cover.jpg`);
+    entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
   }
 
-  entry.addAcquisition(`${config.baseUrl}/${encodedPath}/file`, bookEntry.mimeType, "open-access");
+  entry.addAcquisition(`/${encodedPath}/file`, bookEntry.mimeType, "open-access");
 
   const entryXml = entry.toXml({ prettyPrint: true });
   await Bun.write(join(bookDataDir, "entry.xml"), entryXml);
@@ -100,7 +99,7 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   return bookEntry;
 }
 
-export async function processFolder(folderPath: string, dataPath: string, baseUrl: string): Promise<void> {
+export async function processFolder(folderPath: string, dataPath: string): Promise<void> {
   const folderDataDir = join(dataPath, folderPath);
   await mkdir(folderDataDir, { recursive: true });
 
@@ -108,7 +107,7 @@ export async function processFolder(folderPath: string, dataPath: string, baseUr
   if (folderPath !== "") {
     const folderName = folderPath.split("/").pop() || "Catalog";
     const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName).addSubsection(
-      `${baseUrl}/${encodeUrlPath(folderPath)}/feed.xml`,
+      `/${encodeUrlPath(folderPath)}/feed.xml`,
       "navigation",
     );
 
