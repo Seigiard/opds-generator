@@ -9,13 +9,61 @@ export function createXmlParser(arrayElements: string[]): XMLParser {
   });
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  // XML standard entities
+  lt: "<",
+  gt: ">",
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  // Typography
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+  bull: "•",
+  middot: "·",
+  laquo: "«",
+  raquo: "»",
+  // Quotes
+  ldquo: "\u201C",
+  rdquo: "\u201D",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  sbquo: "\u201A",
+  bdquo: "\u201E",
+  // Spaces
+  nbsp: "\u00A0",
+  ensp: "\u2002",
+  emsp: "\u2003",
+  thinsp: "\u2009",
+  // Symbols
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  deg: "°",
+  plusmn: "±",
+  times: "×",
+  divide: "÷",
+  para: "¶",
+  sect: "§",
+  dagger: "†",
+  Dagger: "‡",
+  permil: "‰",
+  // Currency
+  euro: "€",
+  pound: "£",
+  yen: "¥",
+  cent: "¢",
+  // Arrows
+  larr: "←",
+  rarr: "→",
+  uarr: "↑",
+  darr: "↓",
+};
+
 export function decodeEntities(str: string): string {
   return str
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
+    .replace(/&([a-zA-Z]+);/g, (match, name) => HTML_ENTITIES[name] ?? match)
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)));
 }
