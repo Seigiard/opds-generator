@@ -61,9 +61,12 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
   // Set feed kind based on content
   feed.setKind(hasBooks ? "acquisition" : "navigation");
 
-  // Build complete feed XML
-  let feedXml = feed.toXml({ prettyPrint: true });
-  const completeFeed = feedXml.replace("</feed>", entries.join("\n") + "\n</feed>");
+  // Build complete feed XML with XSLT stylesheet reference
+  const feedXml = feed.toXml({ prettyPrint: true });
+  const stylesheet = '<?xml-stylesheet href="/layout.xsl" type="text/xsl"?>';
+  const completeFeed = feedXml
+    .replace('<?xml version="1.0" encoding="utf-8"?>', `<?xml version="1.0" encoding="utf-8"?>\n${stylesheet}`)
+    .replace("</feed>", entries.join("\n") + "\n</feed>");
   await Bun.write(feedOutputPath, completeFeed);
 
   logger.debug("FeedGen", `Generated ${folderPath || "/"}/feed.xml with ${entries.length} entries`);
