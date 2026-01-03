@@ -63,7 +63,7 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
 
   // Build complete feed XML with XSLT stylesheet reference
   const feedXml = feed.toXml({ prettyPrint: true });
-  const stylesheet = '<?xml-stylesheet href="/layout.xsl" type="text/xsl"?>';
+  const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';
   const completeFeed = feedXml
     .replace('<?xml version="1.0" encoding="utf-8"?>', `<?xml version="1.0" encoding="utf-8"?>\n${stylesheet}`)
     .replace("</feed>", entries.join("\n") + "\n</feed>");

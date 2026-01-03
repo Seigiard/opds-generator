@@ -1,6 +1,6 @@
 import chokidar from "chokidar";
 import { mkdir } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { extname } from "node:path";
 import { scanFiles, createSyncPlan, computeHash } from "./scanner.ts";
 import { processBook, processFolder, cleanupOrphan } from "./processor.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
@@ -132,10 +132,6 @@ logger.info("Init", "Starting OPDS Generator", {
 });
 
 await mkdir(config.dataPath, { recursive: true });
-
-// Copy XSLT template and styles to data folder for browser rendering
-await Bun.write(join(config.dataPath, "layout.xsl"), Bun.file("src/template/layout.xsl"));
-await Bun.write(join(config.dataPath, "style.css"), Bun.file("src/template/style.css"));
 
 await sync();
 startWatcher();

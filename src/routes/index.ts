@@ -21,6 +21,8 @@ export function resolveSafePath(basePath: string, userPath: string): string | nu
   return fullPath;
 }
 
+const STATIC_PATH = "static";
+
 export function createRouter(ctx: RouterContext) {
   return async function router(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -29,6 +31,20 @@ export function createRouter(ctx: RouterContext) {
     // Root and /opds → feed.xml
     if (path === "/" || path === "/opds") {
       return Response.redirect("/feed.xml", 302);
+    }
+
+    // Static files from /static folder
+    if (path.startsWith("/static/")) {
+      const fileName = path.slice("/static/".length);
+      const safePath = resolveSafePath(STATIC_PATH, fileName);
+      if (!safePath) {
+        return new Response("Invalid path", { status: 400 });
+      }
+      const file = Bun.file(safePath);
+      if (!(await file.exists())) {
+        return new Response("Not found", { status: 404 });
+      }
+      return new Response(file);
     }
 
     // Health check
