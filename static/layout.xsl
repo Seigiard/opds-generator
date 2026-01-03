@@ -18,9 +18,22 @@
         <link rel="stylesheet" href="/static/style.css" />
       </head>
       <body>
-        <header>
-          <nav><a href="/feed.xml">Home</a></nav>
-          <h1><xsl:value-of select="atom:feed/atom:title" /></h1>
+        <header class="header">
+          <div class="header__left">
+            <nav class="header__breadcrumb">
+              <a class="header__home" href="/feed.xml" aria-label="Home">
+                <svg class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                </svg>
+              </a>
+              <xsl:if test="atom:feed/atom:link[@rel='up']">
+                <span class="header__separator" aria-hidden="true">›</span>
+                <span class="header__breadcrumb-text"><xsl:value-of select="atom:feed/atom:title" /></span>
+              </xsl:if>
+            </nav>
+            <h1 class="header__title"><xsl:value-of select="atom:feed/atom:title" /></h1>
+          </div>
+          <!-- search hidden -->
         </header>
 
         <main class="books-grid">
