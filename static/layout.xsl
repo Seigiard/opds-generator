@@ -6,6 +6,7 @@
 
   <xsl:output method="html" encoding="UTF-8"/>
 
+  <!-- Main template -->
   <xsl:template match="/">
     <html lang="en">
       <head>
@@ -15,55 +16,185 @@
         <link rel="stylesheet" href="/static/style.css"/>
       </head>
       <body>
+        <!-- Hidden radio for closing popups -->
+        <input type="radio" name="popup" id="popup-none" class="popup-reset" checked="checked"/>
+
         <header>
           <nav><a href="/feed.xml">Home</a></nav>
           <h1><xsl:value-of select="atom:feed/atom:title"/></h1>
         </header>
-        <main>
+
+        <main class="books-grid">
           <xsl:for-each select="atom:feed/atom:entry">
-            <xsl:call-template name="entry"/>
+            <xsl:choose>
+              <xsl:when test="atom:link[@rel='subsection']">
+                <xsl:call-template name="folder"/>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:call-template name="book"/>
+              </xsl:otherwise>
+            </xsl:choose>
           </xsl:for-each>
         </main>
       </body>
     </html>
   </xsl:template>
 
-  <xsl:template name="entry">
-    <article>
-      <xsl:if test="atom:link[@rel='http://opds-spec.org/image/thumbnail']">
-        <img src="{atom:link[@rel='http://opds-spec.org/image/thumbnail']/@href}" alt=""/>
-      </xsl:if>
-
-      <h2>
-        <xsl:choose>
-          <xsl:when test="atom:link[@rel='subsection']">
+  <!-- Folder template -->
+  <xsl:template name="folder">
+    <div>
+      <article class="card card--folder">
+        <div class="book" aria-hidden="true">
+          <div class="book__cover">
+            <span><xsl:value-of select="atom:title"/></span>
+          </div>
+        </div>
+        <div class="book" aria-hidden="true">
+          <div class="book__cover">
+            <span><xsl:value-of select="atom:title"/></span>
+          </div>
+        </div>
+        <div class="book" aria-hidden="true">
+          <div class="book__cover">
+            <span><xsl:value-of select="atom:title"/></span>
+          </div>
+        </div>
+        <div class="card__info">
+          <h3 class="card__title">
             <a href="{atom:link[@rel='subsection']/@href}"><xsl:value-of select="atom:title"/></a>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:value-of select="atom:title"/>
-          </xsl:otherwise>
-        </xsl:choose>
-      </h2>
-
-      <xsl:if test="atom:author">
-        <p><xsl:value-of select="atom:author/atom:name"/></p>
-      </xsl:if>
-
-      <xsl:if test="atom:summary">
-        <p><xsl:value-of select="atom:summary"/></p>
-      </xsl:if>
-
-      <xsl:if test="dc:format or atom:content">
-        <p>
-          <xsl:if test="dc:format"><xsl:value-of select="dc:format"/></xsl:if>
-          <xsl:if test="dc:format and atom:content"> · </xsl:if>
-          <xsl:if test="atom:content"><xsl:value-of select="atom:content"/></xsl:if>
-        </p>
-      </xsl:if>
-
-      <xsl:if test="atom:link[contains(@rel,'acquisition')]">
-        <p><a href="{atom:link[contains(@rel,'acquisition')]/@href}">Download</a></p>
-      </xsl:if>
-    </article>
+          </h3>
+        </div>
+      </article>
+    </div>
   </xsl:template>
+
+  <!-- Book template -->
+  <xsl:template name="book">
+    <xsl:variable name="book-id" select="generate-id()"/>
+    <div>
+      <article class="card card--book popup-trigger__wrapper">
+        <div class="book" aria-hidden="true">
+          <div class="book__cover">
+            <xsl:choose>
+              <xsl:when test="atom:link[@rel='http://opds-spec.org/image/thumbnail']">
+                <img src="{atom:link[@rel='http://opds-spec.org/image/thumbnail']/@href}" alt="{atom:title}" loading="lazy"/>
+              </xsl:when>
+              <xsl:otherwise>
+                <span><xsl:value-of select="atom:title"/></span>
+              </xsl:otherwise>
+            </xsl:choose>
+          </div>
+        </div>
+        <div class="card__info">
+          <h3 class="card__title"><xsl:value-of select="atom:title"/></h3>
+          <xsl:if test="atom:author">
+            <p class="card__description"><xsl:value-of select="atom:author/atom:name"/></p>
+          </xsl:if>
+        </div>
+        <label class="popup-trigger" for="popup-{$book-id}">
+          <input type="radio" name="popup" id="popup-{$book-id}"/>
+          <span class="sr-only">Open Book Details</span>
+        </label>
+      </article>
+
+      <!-- Popup -->
+      <div class="popup">
+        <label class="popup__close" for="popup-none">
+          <span class="sr-only">Close</span>
+        </label>
+        <div class="popup__content">
+          <div class="popup__cover" aria-hidden="true">
+            <div class="book">
+              <div class="book__cover">
+                <xsl:choose>
+                  <xsl:when test="atom:link[@rel='http://opds-spec.org/image']">
+                    <img src="{atom:link[@rel='http://opds-spec.org/image']/@href}" alt="{atom:title}"/>
+                  </xsl:when>
+                  <xsl:when test="atom:link[@rel='http://opds-spec.org/image/thumbnail']">
+                    <img src="{atom:link[@rel='http://opds-spec.org/image/thumbnail']/@href}" alt="{atom:title}"/>
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <span><xsl:value-of select="atom:title"/></span>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </div>
+            </div>
+          </div>
+          <div class="popup__info">
+            <hgroup>
+              <h2 class="popup__title"><xsl:value-of select="atom:title"/></h2>
+              <xsl:if test="atom:author">
+                <p class="popup__author"><xsl:value-of select="atom:author/atom:name"/></p>
+              </xsl:if>
+            </hgroup>
+
+            <xsl:if test="atom:summary">
+              <p class="popup__description"><xsl:value-of select="atom:summary"/></p>
+            </xsl:if>
+
+            <div class="popup__footer">
+              <xsl:if test="dc:subject or dc:format or atom:content or dc:issued or dc:language or dc:isPartOf">
+                <div class="popup__meta">
+                  <xsl:if test="dc:subject">
+                    <span>
+                      <xsl:for-each select="dc:subject">
+                        <xsl:value-of select="."/>
+                        <xsl:if test="position() != last()">, </xsl:if>
+                      </xsl:for-each>
+                    </span>
+                  </xsl:if>
+                  <xsl:if test="dc:format or atom:content">
+                    <span>
+                      <xsl:if test="dc:format"><xsl:value-of select="dc:format"/></xsl:if>
+                      <xsl:if test="dc:format and atom:content"> · </xsl:if>
+                      <xsl:if test="atom:content"><xsl:value-of select="atom:content"/></xsl:if>
+                    </span>
+                  </xsl:if>
+                  <xsl:if test="dc:issued or dc:language">
+                    <span>
+                      <xsl:if test="dc:issued"><xsl:value-of select="dc:issued"/></xsl:if>
+                      <xsl:if test="dc:issued and dc:language"> · </xsl:if>
+                      <xsl:if test="dc:language"><xsl:value-of select="dc:language"/></xsl:if>
+                    </span>
+                  </xsl:if>
+                  <xsl:if test="dc:isPartOf">
+                    <span><xsl:value-of select="dc:isPartOf"/></span>
+                  </xsl:if>
+                </div>
+              </xsl:if>
+
+              <xsl:if test="atom:link[contains(@rel,'acquisition')]">
+                <div class="popup__downloads">
+                  <xsl:for-each select="atom:link[contains(@rel,'acquisition')]">
+                    <a href="{@href}" class="popup__download-btn">
+                      <xsl:call-template name="format-from-mime">
+                        <xsl:with-param name="type" select="@type"/>
+                      </xsl:call-template>
+                    </a>
+                  </xsl:for-each>
+                </div>
+              </xsl:if>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </xsl:template>
+
+  <!-- MIME to Format name -->
+  <xsl:template name="format-from-mime">
+    <xsl:param name="type"/>
+    <xsl:choose>
+      <xsl:when test="contains($type, 'epub')">EPUB</xsl:when>
+      <xsl:when test="contains($type, 'pdf')">PDF</xsl:when>
+      <xsl:when test="contains($type, 'fb2') or contains($type, 'fictionbook')">FB2</xsl:when>
+      <xsl:when test="contains($type, 'mobi')">MOBI</xsl:when>
+      <xsl:when test="contains($type, 'azw')">AZW3</xsl:when>
+      <xsl:when test="contains($type, 'djvu')">DJVU</xsl:when>
+      <xsl:when test="contains($type, 'comicbook') or contains($type, 'cbz') or contains($type, 'cbr') or contains($type, '7z') or contains($type, 'tar')">Comic</xsl:when>
+      <xsl:when test="contains($type, 'text/plain')">TXT</xsl:when>
+      <xsl:otherwise>Download</xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
 </xsl:stylesheet>

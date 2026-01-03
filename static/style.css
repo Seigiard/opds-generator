@@ -353,11 +353,10 @@ body {
 }
 
 /* --- Popup --- */
-body:has(.popup-trigger__wrapper input:checked) {
-  overflow: hidden;
-}
-.popup-trigger input,
-.popup-trigger span {
+
+/* Hide reset radio and sr-only elements */
+.popup-reset,
+.sr-only {
   height: 1px;
   margin: -1px;
   overflow: hidden;
@@ -368,6 +367,26 @@ body:has(.popup-trigger__wrapper input:checked) {
   border-width: 0;
   white-space: nowrap;
 }
+
+/* Lock body scroll when popup is open */
+body:has(.popup-trigger__wrapper input:checked) {
+  overflow: hidden;
+}
+
+/* Hide trigger input */
+.popup-trigger input {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  clip: rect(0, 0, 0, 0);
+  border-width: 0;
+  white-space: nowrap;
+}
+
+/* Trigger overlay when popup is closed */
 .popup-trigger__wrapper:not(:has(input:checked)) {
   position: relative;
 }
@@ -380,16 +399,18 @@ body:has(.popup-trigger__wrapper input:checked) {
   position: absolute;
   z-index: 10;
 }
-.popup-trigger__wrapper:has(input:checked) .popup-trigger {
+
+/* Close button (X) - appears when popup is open */
+.popup__close {
   background:
     linear-gradient(45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%),
     linear-gradient(-45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%);
   border-radius: 0.25rem;
   cursor: pointer;
+  display: none;
   height: 1.5rem;
   outline: 3px solid transparent;
   outline-offset: 4px;
-  /* X close button via crossed diagonal gradients */
   position: fixed;
   right: 1rem;
   top: 1rem;
@@ -399,18 +420,22 @@ body:has(.popup-trigger__wrapper input:checked) {
   width: 1.5rem;
   z-index: 101;
 }
-:is(.popup-trigger__wrapper:has(input:checked) .popup-trigger).\:hover,
-:is(.popup-trigger__wrapper:has(input:checked) .popup-trigger):hover {
+.popup-trigger__wrapper:has(input:checked) + .popup .popup__close {
+  display: block;
+}
+.popup__close:hover {
   transform: scale(1.1);
 }
-:is(.popup-trigger__wrapper:has(input:checked) .popup-trigger):has(:focus-visible) {
+.popup__close:has(:focus-visible) {
   outline-color: var(--card-focus-ring);
 }
+
+/* Popup container */
 .popup {
   background: var(--color-bg);
   display: none;
   inset: 0;
-  overflow: none;
+  overflow: auto;
   position: fixed;
   z-index: 100;
 }
