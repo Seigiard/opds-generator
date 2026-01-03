@@ -10,6 +10,7 @@ export interface FolderInfo {
   path: string;
   name: string;
   subfolders: string[];
+  bookCount: number;
 }
 
 export interface BookEntry {

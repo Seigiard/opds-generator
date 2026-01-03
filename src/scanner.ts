@@ -50,6 +50,15 @@ export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
     }
   }
 
+  // Count books per folder (direct children only)
+  const bookCounts = new Map<string, number>();
+  for (const file of files) {
+    const parts = file.relativePath.split("/");
+    parts.pop();
+    const folderPath = parts.join("/");
+    bookCounts.set(folderPath, (bookCounts.get(folderPath) ?? 0) + 1);
+  }
+
   const folders: FolderInfo[] = [];
 
   for (const path of folderSet) {
@@ -65,6 +74,7 @@ export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
       path,
       name: path.split("/").pop() || "Catalog",
       subfolders,
+      bookCount: bookCounts.get(path) ?? 0,
     });
   }
 
@@ -146,13 +156,10 @@ export async function createSyncPlan(
     }
   }
 
-  // Only process folders that don't have _entry.xml yet (new folders)
+  // Always regenerate folders to keep counts up to date
   for (const folder of folders) {
     if (folder.path === "") continue; // Root doesn't need _entry.xml
-    const entryFile = Bun.file(join(dataPath, folder.path, "_entry.xml"));
-    if (!(await entryFile.exists())) {
-      foldersToProcess.push(folder);
-    }
+    foldersToProcess.push(folder);
   }
 
   return { toProcess, toDelete, folders: foldersToProcess };

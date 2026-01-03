@@ -14,3 +14,10 @@ export function normalizeFilenameTitle(filename: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+export function formatFolderDescription(folderCount: number, bookCount: number): string | undefined {
+  if (folderCount === 0 && bookCount === 0) return undefined;
+  if (folderCount === 0) return `📚 ${bookCount}`;
+  if (bookCount === 0) return `🗂 ${folderCount}`;
+  return `🗂 ${folderCount} · 📚 ${bookCount}`;
+}

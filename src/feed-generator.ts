@@ -22,9 +22,9 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
     .addSelfLink(selfHref, "navigation")
     .addNavigationLink("start", "/feed.xml");
 
-  // Collect entries from subfolders
-  const entries: string[] = [];
-  let hasBooks = false;
+  // Collect entries from subfolders (folders first, then books)
+  const folderEntries: string[] = [];
+  const bookEntries: string[] = [];
 
   try {
     const items = await readdir(folderDataDir);
@@ -46,17 +46,19 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
 
         if (await folderEntryFile.exists()) {
           const entryXml = await folderEntryFile.text();
-          entries.push(stripXmlDeclaration(entryXml));
+          folderEntries.push(stripXmlDeclaration(entryXml));
         } else if (await bookEntryFile.exists()) {
           const entryXml = await bookEntryFile.text();
-          entries.push(stripXmlDeclaration(entryXml));
-          hasBooks = true;
+          bookEntries.push(stripXmlDeclaration(entryXml));
         }
       }
     }
   } catch {
     // Empty folder or error reading
   }
+
+  const entries = [...folderEntries, ...bookEntries];
+  const hasBooks = bookEntries.length > 0;
 
   // Set feed kind based on content
   feed.setKind(hasBooks ? "acquisition" : "navigation");

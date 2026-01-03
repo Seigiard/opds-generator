@@ -1,7 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
 import { createXmlParser, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
-import { logger } from "../utils/errors.ts";
+import { logger, logHandlerError } from "../utils/errors.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
@@ -200,32 +200,37 @@ function selectCoverImage(images: string[], pages?: ComicInfoPage[]): string | u
 }
 
 async function createComicHandler(filePath: string): Promise<FormatHandler | null> {
-  const entries = await listEntries(filePath);
-  if (entries.length === 0) return null;
+  try {
+    const entries = await listEntries(filePath);
+    if (entries.length === 0) return null;
 
-  const images = entries.filter((e) =>
-    IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
-  );
+    const images = entries.filter((e) =>
+      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
+    );
 
-  const [comicInfoResult, cometMetadata] = await Promise.all([
-    parseComicInfo(filePath, entries),
-    parseCoMet(filePath, entries),
-  ]);
+    const [comicInfoResult, cometMetadata] = await Promise.all([
+      parseComicInfo(filePath, entries),
+      parseCoMet(filePath, entries),
+    ]);
 
-  const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
-  const pages = comicInfoResult?.pages;
+    const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
+    const pages = comicInfoResult?.pages;
 
-  return {
-    getMetadata() {
-      return metadata;
-    },
+    return {
+      getMetadata() {
+        return metadata;
+      },
 
-    async getCover() {
-      const coverPath = selectCoverImage(images, pages);
-      if (!coverPath) return null;
-      return readEntry(filePath, coverPath);
-    },
-  };
+      async getCover() {
+        const coverPath = selectCoverImage(images, pages);
+        if (!coverPath) return null;
+        return readEntry(filePath, coverPath);
+      },
+    };
+  } catch (error) {
+    logHandlerError("Comic", filePath, error);
+    return null;
+  }
 }
 
 export const comicHandlerRegistration: FormatHandlerRegistration = {

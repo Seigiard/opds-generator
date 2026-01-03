@@ -43,7 +43,7 @@ async function sync(): Promise<void> {
       }
 
       for (const folder of plan.folders) {
-        await processFolder(folder.path, config.dataPath);
+        await processFolder(folder, config.dataPath);
       }
       logger.debug("Sync", `Processed ${plan.folders.length} folders`);
 

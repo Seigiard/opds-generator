@@ -1,13 +1,14 @@
 import { mkdir, rm, symlink, unlink } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { Entry } from "opds-ts/v1.2";
-import type { FileInfo, BookEntry } from "./types.ts";
+import type { FileInfo, BookEntry, FolderInfo } from "./types.ts";
 import { MIME_TYPES } from "./types.ts";
 import { getHandlerFactory } from "./formats/index.ts";
 import type { BookMetadata } from "./formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "./utils/image.ts";
-import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "./utils/processor.ts";
+import { encodeUrlPath, formatFileSize, normalizeFilenameTitle, formatFolderDescription } from "./utils/processor.ts";
 import { scheduleFeedRegeneration } from "./feed-watcher.ts";
+import { logger } from "./utils/errors.ts";
 
 export { encodeUrlPath, formatFileSize, normalizeFilenameTitle };
 
@@ -25,24 +26,28 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   let meta: BookMetadata = { title: "" };
 
   if (createHandler) {
-    const handler = await createHandler(file.path);
-    if (handler) {
-      meta = handler.getMetadata();
-      if (meta.title) title = meta.title;
-      author = meta.author;
-      description = meta.description;
+    try {
+      const handler = await createHandler(file.path);
+      if (handler) {
+        meta = handler.getMetadata();
+        if (meta.title) title = meta.title;
+        author = meta.author;
+        description = meta.description;
 
-      const coverBuffer = await handler.getCover();
-      if (coverBuffer) {
-        const coverPath = join(bookDataDir, "cover.jpg");
-        const thumbPath = join(bookDataDir, "thumb.jpg");
+        const coverBuffer = await handler.getCover();
+        if (coverBuffer) {
+          const coverPath = join(bookDataDir, "cover.jpg");
+          const thumbPath = join(bookDataDir, "thumb.jpg");
 
-        const coverOk = await saveBufferAsImage(coverBuffer, coverPath, COVER_MAX_SIZE);
-        if (coverOk) {
-          await saveBufferAsImage(coverBuffer, thumbPath, THUMBNAIL_MAX_SIZE);
-          hasCover = true;
+          const coverOk = await saveBufferAsImage(coverBuffer, coverPath, COVER_MAX_SIZE);
+          if (coverOk) {
+            await saveBufferAsImage(coverBuffer, thumbPath, THUMBNAIL_MAX_SIZE);
+            hasCover = true;
+          }
         }
       }
+    } catch (error) {
+      logger.warn("Processor", `Failed to extract metadata: ${file.relativePath}`, { error: String(error) });
     }
   }
 
@@ -99,24 +104,28 @@ export async function processBook(file: FileInfo, filesPath: string, dataPath: s
   return bookEntry;
 }
 
-export async function processFolder(folderPath: string, dataPath: string): Promise<void> {
-  const folderDataDir = join(dataPath, folderPath);
+export async function processFolder(folder: FolderInfo, dataPath: string): Promise<void> {
+  const folderDataDir = join(dataPath, folder.path);
   await mkdir(folderDataDir, { recursive: true });
 
   // Only create _entry.xml for non-root folders (for parent's feed)
-  if (folderPath !== "") {
-    const folderName = folderPath.split("/").pop() || "Catalog";
-    const entry = new Entry(`urn:opds:catalog:${folderPath}`, folderName).addSubsection(
-      `/${encodeUrlPath(folderPath)}/feed.xml`,
+  if (folder.path !== "") {
+    const entry = new Entry(`urn:opds:catalog:${folder.path}`, folder.name).addSubsection(
+      `/${encodeUrlPath(folder.path)}/feed.xml`,
       "navigation",
     );
+
+    const description = formatFolderDescription(folder.subfolders.length, folder.bookCount);
+    if (description) {
+      entry.setSummary(description);
+    }
 
     const entryXml = entry.toXml({ prettyPrint: true });
     await Bun.write(join(folderDataDir, "_entry.xml"), entryXml);
   }
 
   // Trigger feed regeneration for this folder
-  scheduleFeedRegeneration(folderPath);
+  scheduleFeedRegeneration(folder.path);
 }
 
 export async function cleanupOrphan(dataPath: string, relativePath: string): Promise<void> {
