@@ -10,115 +10,113 @@ import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../uti
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 
-export const bookSync = (
-	event: EventType,
-): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
-	Effect.gen(function* () {
-		if (event._tag !== "BookCreated") return [];
-		const { parent, name } = event;
-		const config = yield* ConfigService;
-		const logger = yield* LoggerService;
-		const fs = yield* FileSystemService;
+export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
+  Effect.gen(function* () {
+    if (event._tag !== "BookCreated") return [];
+    const { parent, name } = event;
+    const config = yield* ConfigService;
+    const logger = yield* LoggerService;
+    const fs = yield* FileSystemService;
 
-		const ext = name.split(".").pop()?.toLowerCase() ?? "";
-		const filePath = join(parent, name);
-		const relativePath = relative(config.filesPath, filePath);
-		const bookDataDir = join(config.dataPath, relativePath);
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    const filePath = join(parent, name);
+    const relativePath = relative(config.filesPath, filePath);
+    const bookDataDir = join(config.dataPath, relativePath);
 
-		yield* logger.info("BookSync", `Processing: ${relativePath}`);
+    yield* logger.info("BookSync", `Processing: ${relativePath}`);
 
-		// Get file stats
-		const fileStat = yield* Effect.tryPromise({
-			try: () => stat(filePath),
-			catch: (e) => e as Error,
-		});
+    // Get file stats
+    const fileStat = yield* Effect.tryPromise({
+      try: () => stat(filePath),
+      catch: (e) => e as Error,
+    });
 
-		// Create data directory
-		yield* fs.mkdir(bookDataDir, { recursive: true });
+    // Create data directory
+    yield* fs.mkdir(bookDataDir, { recursive: true });
 
-		// Extract metadata
-		const createHandler = getHandlerFactory(ext);
-		const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
-		let title = normalizeFilenameTitle(rawFilename);
-		let author: string | undefined;
-		let description: string | undefined;
-		let hasCover = false;
+    // Extract metadata
+    const createHandler = getHandlerFactory(ext);
+    const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
+    let title = normalizeFilenameTitle(rawFilename);
+    let author: string | undefined;
+    let description: string | undefined;
+    let hasCover = false;
 
-		let meta: BookMetadata = { title: "" };
+    let meta: BookMetadata = { title: "" };
 
-		if (createHandler) {
-			const result = yield* Effect.tryPromise({
-				try: async () => {
-					const handler = await createHandler(filePath);
-					if (handler) {
-						const m = handler.getMetadata();
-						const cover = await handler.getCover();
-						return { metadata: m, cover };
-					}
-					return null;
-				},
-				catch: (e) => e as Error,
-			}).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    if (createHandler) {
+      const result = yield* Effect.tryPromise({
+        try: async () => {
+          const handler = await createHandler(filePath);
+          if (handler) {
+            const m = handler.getMetadata();
+            const cover = await handler.getCover();
+            return { metadata: m, cover };
+          }
+          return null;
+        },
+        catch: (e) => e as Error,
+      }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
-			if (result) {
-				meta = result.metadata;
-				if (meta.title) title = meta.title;
-				author = meta.author;
-				description = meta.description;
+      if (result) {
+        meta = result.metadata;
+        if (meta.title) title = meta.title;
+        author = meta.author;
+        description = meta.description;
 
-				if (result.cover) {
-					const coverPath = join(bookDataDir, "cover.jpg");
-					const thumbPath = join(bookDataDir, "thumb.jpg");
+        if (result.cover) {
+          const coverPath = join(bookDataDir, "cover.jpg");
+          const thumbPath = join(bookDataDir, "thumb.jpg");
 
-					const coverOk = yield* Effect.tryPromise({
-						try: () => saveBufferAsImage(result.cover!, coverPath, COVER_MAX_SIZE),
-						catch: (e) => e as Error,
-					}).pipe(Effect.catchAll(() => Effect.succeed(false)));
+          const coverOk = yield* Effect.tryPromise({
+            try: () => saveBufferAsImage(result.cover!, coverPath, COVER_MAX_SIZE),
+            catch: (e) => e as Error,
+          }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-					if (coverOk) {
-						yield* Effect.tryPromise({
-							try: () => saveBufferAsImage(result.cover!, thumbPath, THUMBNAIL_MAX_SIZE),
-							catch: (e) => e as Error,
-						}).pipe(Effect.catchAll(() => Effect.succeed(false)));
-						hasCover = true;
-					}
-				}
-			}
-		}
+          if (coverOk) {
+            yield* Effect.tryPromise({
+              try: () => saveBufferAsImage(result.cover!, thumbPath, THUMBNAIL_MAX_SIZE),
+              catch: (e) => e as Error,
+            }).pipe(Effect.catchAll(() => Effect.succeed(false)));
+            hasCover = true;
+          }
+        }
+      }
+    }
 
-		// Build OPDS entry
-		const encodedPath = encodeUrlPath(relativePath);
-		const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
+    // Build OPDS entry
+    const encodedPath = encodeUrlPath(relativePath);
+    const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
 
-		const entry = new Entry(`urn:opds:book:${relativePath}`, title);
-		if (author) entry.setAuthor(author);
-		if (description) entry.setSummary(description);
-		entry.setDcMetadataField("format", ext.toUpperCase());
-		entry.setContent({ type: "text", value: formatFileSize(fileStat.size) });
+    const entry = new Entry(`urn:opds:book:${relativePath}`, title);
+    if (author) entry.setAuthor(author);
+    if (description) entry.setSummary(description);
+    entry.setDcMetadataField("format", ext.toUpperCase());
+    entry.setContent({ type: "text", value: formatFileSize(fileStat.size) });
 
-		if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
-		if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
-		if (meta.language) entry.setDcMetadataField("language", meta.language);
-		if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
-		if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
-		if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
-		if (meta.rights) entry.setRights(meta.rights);
+    if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
+    if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
+    if (meta.language) entry.setDcMetadataField("language", meta.language);
+    if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
+    if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
+    if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
+    if (meta.rights) entry.setRights(meta.rights);
 
-		if (hasCover) {
-			entry.addImage(`/${encodedPath}/cover.jpg`);
-			entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
-		}
+    if (hasCover) {
+      entry.addImage(`/${encodedPath}/cover.jpg`);
+      entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
+    }
 
-		entry.addAcquisition(`/${encodedPath}/file`, mimeType, "open-access");
+    entry.addAcquisition(`/${encodedPath}/file`, mimeType, "open-access");
 
-		// Write entry.xml (atomic)
-		const entryXml = entry.toXml({ prettyPrint: true });
-		yield* fs.atomicWrite(join(bookDataDir, "entry.xml"), entryXml);
+    // Write entry.xml (atomic)
+    const entryXml = entry.toXml({ prettyPrint: true });
+    yield* fs.atomicWrite(join(bookDataDir, "entry.xml"), entryXml);
 
-		// Create symlink to original file
-		yield* fs.symlink(filePath, join(bookDataDir, "file"));
+    // Create symlink to original file
+    yield* fs.symlink(filePath, join(bookDataDir, "file"));
 
-		yield* logger.info("BookSync", `Done: ${relativePath}`, { hasCover });
+    yield* logger.info("BookSync", `Done: ${relativePath}`, { hasCover });
 
-		return [];
-	});
+    return [];
+  });

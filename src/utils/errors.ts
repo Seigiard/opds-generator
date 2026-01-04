@@ -49,48 +49,13 @@ export const logger = {
   },
 };
 
-export class BookProcessingError extends Error {
-  public readonly filePath: string;
-  public readonly originalError?: unknown;
-
-  constructor(message: string, filePath: string, originalError?: unknown) {
-    super(message);
-    this.name = "BookProcessingError";
-    this.filePath = filePath;
-    this.originalError = originalError;
-  }
-}
-
-export class MetadataError extends BookProcessingError {
-  constructor(filePath: string, format: string, cause?: unknown) {
-    super(`Failed to extract ${format} metadata`, filePath, cause);
-    this.name = "MetadataError";
-  }
-}
-
-export class CoverError extends BookProcessingError {
-  constructor(filePath: string, reason: string, cause?: unknown) {
-    super(`Cover extraction failed: ${reason}`, filePath, cause);
-    this.name = "CoverError";
-  }
-}
-
-export class ArchiveError extends BookProcessingError {
-  constructor(filePath: string, operation: string, cause?: unknown) {
-    super(`Archive ${operation} failed`, filePath, cause);
-    this.name = "ArchiveError";
-  }
-}
-
 export function logHandlerError(tag: string, filePath: string, error: unknown): void {
   if (error instanceof Error && error.message.includes("Executable not found")) {
     logger.debug(tag, "External tool not available", { file: filePath, tool: error.message });
     return;
   }
 
-  if (error instanceof BookProcessingError) {
-    logger.error(tag, error.message, error.originalError, { file: filePath });
-  } else if (error instanceof Error) {
+  if (error instanceof Error) {
     logger.error(tag, "Unexpected error", error, { file: filePath });
   } else {
     logger.error(tag, "Unknown error", error, { file: filePath });

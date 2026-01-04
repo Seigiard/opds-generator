@@ -54,14 +54,14 @@ Events are sent via HTTP to the server's EffectTS queue for sequential processin
 
 ## DI Services
 
-| Service | Purpose |
-|---------|---------|
-| `ConfigService` | filesPath, dataPath, baseUrl, port |
-| `LoggerService` | info, warn, error, debug |
-| `FileSystemService` | mkdir, rm, readdir, stat, atomicWrite |
-| `DeduplicationService` | TTL-based (500ms window) event filtering |
-| `EventQueueService` | enqueue, enqueueMany, size, take |
-| `HandlerRegistry` | Map<tag, handler> — decouples consumer from handlers |
+| Service                | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `ConfigService`        | filesPath, dataPath, baseUrl, port                   |
+| `LoggerService`        | info, warn, error, debug                             |
+| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite                |
+| `DeduplicationService` | TTL-based (500ms window) event filtering             |
+| `EventQueueService`    | enqueue, enqueueMany, size, take                     |
+| `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
 
 ## Event Types
 
@@ -140,15 +140,15 @@ flowchart LR
 
 ## Handlers Reference
 
-| Handler | Trigger | Returns |
-|---------|---------|---------|
-| `book-sync.ts` | BookCreated | `[]` |
-| `book-cleanup.ts` | BookDeleted | `[]` |
-| `folder-sync.ts` | FolderCreated | `[]` |
-| `folder-cleanup.ts` | FolderDeleted | `[]` |
-| `folder-meta-sync.ts` | FolderMetaSyncRequested | `[]` |
-| `parent-meta-sync.ts` | EntryXmlChanged | `[FolderMetaSyncRequested]` |
-| `folder-entry-xml-changed.ts` | FolderEntryXmlChanged | `[FolderMetaSyncRequested x2]` |
+| Handler                       | Trigger                 | Returns                        |
+| ----------------------------- | ----------------------- | ------------------------------ |
+| `book-sync.ts`                | BookCreated             | `[]`                           |
+| `book-cleanup.ts`             | BookDeleted             | `[]`                           |
+| `folder-sync.ts`              | FolderCreated           | `[]`                           |
+| `folder-cleanup.ts`           | FolderDeleted           | `[]`                           |
+| `folder-meta-sync.ts`         | FolderMetaSyncRequested | `[]`                           |
+| `parent-meta-sync.ts`         | EntryXmlChanged         | `[FolderMetaSyncRequested]`    |
+| `folder-entry-xml-changed.ts` | FolderEntryXmlChanged   | `[FolderMetaSyncRequested x2]` |
 
 ## Startup Sequence
 
@@ -191,12 +191,12 @@ sequenceDiagram
 
 ## Loop Prevention
 
-| Event | Watched? | Reason |
-|-------|----------|--------|
-| `entry.xml` | Yes | Triggers parent feed regeneration |
-| `_entry.xml` | Yes | Triggers own + parent feed regeneration |
-| `feed.xml` | No | Would cause infinite loop |
-| `*.tmp` | No | Intermediate files |
+| Event        | Watched? | Reason                                  |
+| ------------ | -------- | --------------------------------------- |
+| `entry.xml`  | Yes      | Triggers parent feed regeneration       |
+| `_entry.xml` | Yes      | Triggers own + parent feed regeneration |
+| `feed.xml`   | No       | Would cause infinite loop               |
+| `*.tmp`      | No       | Intermediate files                      |
 
 ## Testing
 

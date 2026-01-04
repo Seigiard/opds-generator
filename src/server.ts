@@ -39,10 +39,7 @@ const initialSync = Effect.gen(function* () {
     try: () => createSyncPlan(files, config.dataPath),
     catch: (e) => e as Error,
   });
-  logger.info(
-    "InitialSync",
-    `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`,
-  );
+  logger.info("InitialSync", `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`);
 
   // Convert sync plan to events
   const events = adaptSyncPlan(plan, config.filesPath);
