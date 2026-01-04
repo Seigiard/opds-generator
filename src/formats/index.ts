@@ -29,8 +29,4 @@ export function getHandlerFactory(extension: string): FormatHandlerFactory | nul
   return factoryMap.get(extension.toLowerCase()) ?? null;
 }
 
-export function hasHandler(extension: string): boolean {
-  return factoryMap.has(extension.toLowerCase());
-}
-
 export type { FormatHandler, FormatHandlerFactory, BookMetadata } from "./types.ts";
