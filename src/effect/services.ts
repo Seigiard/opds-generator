@@ -95,21 +95,21 @@ export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
 
 // Live implementations
 
-export const LiveConfigService = Layer.succeed(ConfigService, {
+const LiveConfigService = Layer.succeed(ConfigService, {
   filesPath: config.filesPath,
   dataPath: config.dataPath,
   baseUrl: config.baseUrl,
   port: config.port,
 });
 
-export const LiveLoggerService = Layer.succeed(LoggerService, {
+const LiveLoggerService = Layer.succeed(LoggerService, {
   info: (tag, msg, meta) => Effect.sync(() => logger.info(tag, msg, meta)),
   warn: (tag, msg, meta) => Effect.sync(() => logger.warn(tag, msg, meta)),
   error: (tag, msg, error) => Effect.sync(() => logger.error(tag, msg, error)),
   debug: (tag, msg, meta) => Effect.sync(() => logger.debug(tag, msg, meta)),
 });
 
-export const LiveFileSystemService = Layer.succeed(FileSystemService, {
+const LiveFileSystemService = Layer.succeed(FileSystemService, {
   mkdir: (path, options) =>
     Effect.tryPromise({
       try: () => mkdir(path, options),
@@ -189,7 +189,7 @@ const deduplicationState = {
   seen: new Map<string, number>(),
 };
 
-export const LiveDeduplicationService = Layer.succeed(DeduplicationService, {
+const LiveDeduplicationService = Layer.succeed(DeduplicationService, {
   shouldProcess: (key: string) =>
     Effect.sync(() => {
       const now = Date.now();
@@ -207,7 +207,7 @@ export const LiveDeduplicationService = Layer.succeed(DeduplicationService, {
 });
 
 // Event Queue Service - created via Layer.effect
-export const LiveEventQueueService = Layer.effect(
+const LiveEventQueueService = Layer.effect(
   EventQueueService,
   Effect.gen(function* () {
     const queue = yield* Queue.unbounded<EventType>();
@@ -225,7 +225,7 @@ const handlerRegistryState = {
   handlers: new Map<string, EventHandler>(),
 };
 
-export const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
+const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
   get: (tag: string) => handlerRegistryState.handlers.get(tag),
   register: (tag: string, handler: EventHandler) => {
     handlerRegistryState.handlers.set(tag, handler);
@@ -235,7 +235,7 @@ export const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
 // Error Log Service - JSONL file in data directory
 const errorLogPath = `${config.dataPath}/errors.jsonl`;
 
-export const LiveErrorLogService = Layer.succeed(ErrorLogService, {
+const LiveErrorLogService = Layer.succeed(ErrorLogService, {
   log: (entry: ErrorLogEntry) =>
     Effect.promise(async () => {
       const line = JSON.stringify(entry) + "\n";

@@ -82,7 +82,7 @@ export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
   return folders;
 }
 
-export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
+async function scanDataMirror(dataPath: string): Promise<Set<string>> {
   const paths = new Set<string>();
 
   async function scan(dirPath: string, relativePath: string): Promise<void> {

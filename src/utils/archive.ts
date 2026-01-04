@@ -14,7 +14,7 @@ const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
 
 const USTAR_MAGIC = [0x75, 0x73, 0x74, 0x61, 0x72]; // "ustar"
 
-export async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
+async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
   try {
     const file = Bun.file(filePath);
     const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());

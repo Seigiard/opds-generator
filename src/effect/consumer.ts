@@ -10,7 +10,7 @@ function getEventPath(event: EventType): string | undefined {
 }
 
 // Process a single event using handler from registry
-export const processEvent = (event: EventType) =>
+const processEvent = (event: EventType) =>
   Effect.gen(function* () {
     const queue = yield* EventQueueService;
     const registry = yield* HandlerRegistry;
