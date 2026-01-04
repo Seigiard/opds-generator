@@ -8,7 +8,7 @@ import { RawWatcherEvent } from "./effect/types.ts";
 import { adaptWatcherEvent, adaptSyncPlan } from "./effect/adapters/event-adapter.ts";
 import { startConsumer } from "./effect/consumer.ts";
 import { registerHandlers } from "./effect/handlers/index.ts";
-import { EventQueueService, LiveLayer } from "./effect/services.ts";
+import { ErrorLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
 import { scanFiles, createSyncPlan } from "./scanner.ts";
 
 // Runtime state
@@ -16,9 +16,8 @@ let isReady = false;
 let isSyncing = false;
 let consumerFiber: Fiber.RuntimeFiber<never, Error> | null = null;
 
-// Initial sync: sends events to queue via EventQueueService
-const initialSync = Effect.gen(function* () {
-  isSyncing = true;
+// Internal sync logic (no flag management)
+const doSync = Effect.gen(function* () {
   const queue = yield* EventQueueService;
 
   logger.info("InitialSync", "Starting...");
@@ -49,12 +48,28 @@ const initialSync = Effect.gen(function* () {
 
   const duration = Date.now() - startTime;
   logger.info("InitialSync", `Queued ${events.length} events in ${duration}ms`);
-  isSyncing = false;
 });
 
-// Resync: clear data, run initialSync
+// Initial sync: manages isSyncing flag with guaranteed cleanup
+const initialSync = Effect.gen(function* () {
+  isSyncing = true;
+  yield* doSync;
+}).pipe(
+  Effect.ensuring(
+    Effect.sync(() => {
+      isSyncing = false;
+    }),
+  ),
+);
+
+// Resync: clear data and error log, run sync (manages own flag)
 const resync = Effect.gen(function* () {
+  isSyncing = true;
   logger.info("Resync", "Starting full resync...");
+
+  // Clear error log
+  const errorLog = yield* ErrorLogService;
+  yield* errorLog.clear();
 
   // Clear data directory
   yield* Effect.tryPromise({
@@ -67,9 +82,15 @@ const resync = Effect.gen(function* () {
   });
   logger.info("Resync", "Cleared data directory");
 
-  // Run initial sync
-  yield* initialSync;
-});
+  // Run sync logic (doSync, not initialSync to avoid double flag management)
+  yield* doSync;
+}).pipe(
+  Effect.ensuring(
+    Effect.sync(() => {
+      isSyncing = false;
+    }),
+  ),
+);
 
 // Handle incoming watcher event
 const handleWatcherEvent = (body: unknown) =>
@@ -163,7 +184,9 @@ async function main(): Promise<void> {
             return new Response("Sync already in progress", { status: 409 });
           }
 
-          void Effect.runPromise(Effect.provide(resync, LiveLayer));
+          Effect.runPromise(Effect.provide(resync, LiveLayer)).catch((error) => {
+            logger.error("Server", "Resync failed", error);
+          });
           return new Response("Resync started", { status: 202 });
         }
 
