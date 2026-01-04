@@ -38,6 +38,7 @@ src/
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z/TAR extraction
     ├── image.ts       # ImageMagick resize
+    ├── process.ts     # spawnWithTimeout for external commands
     └── processor.ts   # URL encoding, file size formatting
 
 test/

@@ -40,11 +40,6 @@
    файл fb2 — fb2
    и т.д.
 2. Тесты для комиксов. Подготовить тестовые данные
-3. Flaky DJVU cover test — EPIPE error при pipe ddjvu → ImageMagick.
-   Race condition или memory pressure в Docker. Нужно сделать тест стабильнее
-   (временный файл вместо pipe, или retry logic).
-4. Flaky CBZ cover test — timeout 5000ms при getCover(). Возможно resource
-   contention в Docker или cold start.
 
 ### Поддержка форматов
 
@@ -147,6 +142,7 @@ src/
     ├── errors.ts      # Logger + error classes
     ├── image.ts       # ImageMagick resize
     ├── opds.ts        # XML/feed helpers
+    ├── process.ts     # spawnWithTimeout for external commands
     └── processor.ts   # URL encoding, file size formatting
 ```
 
