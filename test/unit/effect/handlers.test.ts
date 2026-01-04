@@ -222,5 +222,39 @@ describe("Effect Handlers", () => {
 
       expect(mockLogger.infoCalls.some((c) => c.tag === "BookCleanup" && c.msg.includes("Removing"))).toBe(true);
     });
+
+    test("returns cascade event to regenerate parent feed", async () => {
+      const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
+
+      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
+
+      expect(cascades).toHaveLength(1);
+      expect(cascades[0]).toEqual({
+        _tag: "FolderMetaSyncRequested",
+        path: "/test/data/Fiction",
+      });
+    });
+  });
+
+  describe("folderCleanup cascade", () => {
+    test("returns cascade event to regenerate parent feed for nested folders", async () => {
+      const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"));
+
+      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
+
+      expect(cascades).toHaveLength(1);
+      expect(cascades[0]).toEqual({
+        _tag: "FolderMetaSyncRequested",
+        path: "/test/data/Fiction",
+      });
+    });
+
+    test("returns empty cascades for top-level folder deletion", async () => {
+      const effect = folderCleanup(folderDeletedEvent("/test/books/", "Fiction"));
+
+      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
+
+      expect(cascades).toHaveLength(0);
+    });
   });
 });

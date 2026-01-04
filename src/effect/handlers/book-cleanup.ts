@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 
@@ -30,5 +30,7 @@ export const bookCleanup = (
 
     yield* logger.info("BookCleanup", `Done: ${relativePath}`);
 
-    return [];
+    // Cascade: regenerate parent folder's feed.xml
+    const parentDataDir = dirname(bookDataDir);
+    return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const;
   });
