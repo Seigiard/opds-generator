@@ -1,4 +1,4 @@
-# Event-Driven Architecture Schema
+# Event-Driven Architecture
 
 ## Overview
 
@@ -7,7 +7,7 @@ The system uses native Linux `inotifywait` to watch two directories:
 - `/books` — source files (books and folders)
 - `/data` — generated metadata (entry.xml, feed.xml, covers)
 
-Events flow through a TypeScript debouncer that batches and routes them to appropriate handlers.
+Events are sent via HTTP to the server's EffectTS queue for sequential processing.
 
 ## System Architecture
 
@@ -25,29 +25,64 @@ flowchart TB
         COV[cover.jpg / thumb.jpg]
     end
 
-    subgraph Watchers["inotifywait Watchers"]
+    subgraph Watchers["watcher.sh (inotifywait)"]
         BW["/books watcher<br/>CREATE, CLOSE_WRITE, DELETE,<br/>MOVED_FROM, MOVED_TO"]
         DW["/data watcher<br/>CLOSE_WRITE, MOVED_TO"]
     end
 
-    subgraph Debouncer["debouncer.ts"]
-        BD[Books Debouncer<br/>500ms idle / 5s max]
-        DD[Data Debouncer<br/>500ms idle / 5s max]
+    subgraph Server["server.ts"]
+        EP["POST /events"]
+        Q["EffectTS Queue<br/>(bounded 100)"]
+        R["Event Router"]
     end
 
     Sources --> BW
     Data --> DW
-    BW --> BD
-    DW --> DD
+    BW -->|curl POST| EP
+    DW -->|curl POST| EP
+    EP --> Q
+    Q --> R
+```
+
+## Components
+
+### watcher.sh
+
+- Runs `inotifywait` for `/books` and `/data` directories
+- Sends JSON events via `curl` to `POST /events`
+- Knows only about `$SERVER_URL` — no coupling to server internals
+
+### server.ts
+
+- HTTP server with EffectTS Queue
+- Runs initial sync on startup
+- `POST /events` — receives events from watchers
+- `GET /health` — queue stats + server state
+- Sequential event processing via Queue consumer
+
+### EffectTS Queue
+
+- `Queue.bounded<FileEvent>(100)` — backpressure at 100 events
+- FIFO processing — events handled sequentially
+- Replaces debouncer — queue serializes naturally
+
+### Effect Handlers (DI-based)
+
+All handlers use Effect with dependency injection for testability:
+
+```typescript
+export const bookSync = (parent: string, name: string) =>
+  Effect.gen(function* () {
+    const config = yield* ConfigService;
+    const logger = yield* LoggerService;
+    const fs = yield* FileSystemService;
+    // ... handler logic
+  });
 ```
 
 ## Event Flow
 
 ```mermaid
----
-config:
-  layout: elk
----
 flowchart LR
     subgraph Events
       subgraph BookEvents["Book Events"]
@@ -66,7 +101,7 @@ flowchart LR
       end
     end
 
-    subgraph Handlers["Event Handlers"]
+    subgraph Handlers["Effect Handlers"]
         BS[book-sync.ts]
         BC[book-cleanup.ts]
         FS[folder-sync.ts]
@@ -110,86 +145,6 @@ flowchart LR
     PMS --> FMS
 ```
 
-## Event Cascade Examples
-
-### Adding a Book
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant BA as Book Created
-    participant BS as book-sync.ts
-    participant E as entry.xml
-    participant BX as entry.xml Changed
-    participant PMS as parent-meta-sync.ts
-    participant FMS as folder-meta-sync.ts
-    participant F as feed.xml
-
-    U->>BA: Copy book.epub to /books/Fiction/
-    BA->>BS: trigger
-    BS->>BS: Extract metadata
-    BS->>BS: Generate cover.jpg, thumb.jpg
-    BS->>E: Create (atomic write)
-    E->>BX: /data watcher detects
-    BX->>PMS: trigger
-    PMS->>FMS: delegate to parent folder
-    FMS->>F: Regenerate (atomic write)
-    Note over F: feed.xml changes are ignored
-```
-
-### Deleting a Book
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant BD as Book Deleted
-    participant BC as book-cleanup.ts
-    participant FA as Folder Changed
-    participant FS as folder-sync.ts
-    participant UE as _entry.xml
-    participant FX as _entry.xml Changed
-    participant FMS as folder-meta-sync.ts
-    participant PMS as parent-meta-sync.ts
-    participant F as feed.xml
-
-    U->>BD: Delete book.epub from /books/Fiction/
-    BD->>BC: trigger
-    BC->>BC: rm -rf /data/Fiction/book.epub/
-    BD->>FA: parent folder changed
-    FA->>FS: trigger
-    FS->>UE: Update bookCount (atomic write)
-    UE->>FX: /data watcher detects
-    FX->>FMS: trigger
-    FMS->>F: Regenerate (atomic write)
-    FX->>PMS: trigger
-    PMS->>FMS: delegate to parent folder
-    FMS->>F: Regenerate parent (atomic write)
-```
-
-### Creating a Folder
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant FA as Folder Created
-    participant FS as folder-sync.ts
-    participant UE as _entry.xml
-    participant FX as _entry.xml Changed
-    participant FMS as folder-meta-sync.ts
-    participant PMS as parent-meta-sync.ts
-    participant F as feed.xml
-
-    U->>FA: Create /books/Fiction/SciFi/
-    FA->>FS: trigger
-    FS->>UE: Create (atomic write)
-    UE->>FX: /data watcher detects
-    FX->>FMS: trigger
-    FMS->>F: Regenerate (atomic write)
-    FX->>PMS: trigger
-    PMS->>FMS: delegate to parent folder
-    FMS->>F: Regenerate parent (atomic write)
-```
-
 ## Handlers Reference
 
 | Handler               | Trigger                           | Input                  | Output                                         | Notes                                  |
@@ -220,22 +175,6 @@ sequenceDiagram
     └── ...
 ```
 
-## Debouncing Strategy
-
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Accumulating: Event received
-    Accumulating --> Accumulating: More events (reset 500ms timer)
-    Accumulating --> Flushing: 500ms idle timeout
-    Accumulating --> Flushing: 5s max wait timeout
-    Flushing --> Idle: All handlers complete
-```
-
-- **Idle timeout**: 500ms without new events triggers flush
-- **Max wait**: 5 seconds maximum accumulation time
-- **Batching**: Multiple events for same path are deduplicated (last event wins)
-
 ## Event Routing Logic
 
 ```typescript
@@ -259,6 +198,51 @@ if (name === "_entry.xml") {
 // feed.xml events are ignored (loop prevention)
 ```
 
+## Startup Sequence
+
+```mermaid
+sequenceDiagram
+    participant D as Dockerfile CMD
+    participant S as server.ts
+    participant W as watcher.sh
+    participant BW as /books watcher
+    participant DW as /data watcher
+
+    D->>S: Start server (background)
+    S->>S: Initialize EffectTS Queue
+    S->>S: Run initial sync
+    S->>S: Scan /books, create sync plan
+    S->>S: Process books/folders via Effect handlers
+    S->>S: Generate all feed.xml files
+    S->>S: HTTP server ready
+
+    D->>W: Start watcher.sh
+    W->>W: Wait for server /health
+    W->>BW: Start /books watcher (background)
+    W->>DW: Start /data watcher (background)
+
+    Note over W: Wait for all watchers
+```
+
+## Docker Entry Points
+
+| Mode            | Command                                             | Description             |
+| --------------- | --------------------------------------------------- | ----------------------- |
+| **Production**  | `sh -c "bun run src/server.ts & sh src/watcher.sh"` | Server + watchers       |
+| **Development** | `bun run --watch src/server.ts`                     | Server only, hot reload |
+| **Test**        | `bun test`                                          | Unit/integration tests  |
+
+## Loop Prevention
+
+| Event        | Watched? | Reason                                  |
+| ------------ | -------- | --------------------------------------- |
+| `entry.xml`  | Yes      | Triggers parent feed regeneration       |
+| `_entry.xml` | Yes      | Triggers own + parent feed regeneration |
+| `feed.xml`   | No       | Would cause infinite loop               |
+| `*.tmp`      | No       | Intermediate files                      |
+| `cover.jpg`  | No       | No cascade needed                       |
+| `thumb.jpg`  | No       | No cascade needed                       |
+
 ## Atomic Writes
 
 All XML files use atomic write pattern to prevent partial reads:
@@ -273,37 +257,19 @@ async function atomicWrite(path: string, content: string): Promise<void> {
 
 This triggers `MOVED_TO` instead of `CLOSE_WRITE` in inotify.
 
-## Loop Prevention
+## Testing
 
-| Event        | Watched? | Reason                                  |
-| ------------ | -------- | --------------------------------------- |
-| `entry.xml`  | Yes      | Triggers parent feed regeneration       |
-| `_entry.xml` | Yes      | Triggers own + parent feed regeneration |
-| `feed.xml`   | No       | Would cause infinite loop               |
-| `*.tmp`      | No       | Intermediate files                      |
-| `cover.jpg`  | No       | No cascade needed                       |
-| `thumb.jpg`  | No       | No cascade needed                       |
+EffectTS DI enables easy unit testing with mock services:
 
-## Startup Sequence
+```typescript
+const TestLayer = Layer.mergeAll(
+  TestConfigService, // fake paths
+  TestLoggerService, // silent or capture
+  TestFileSystemService, // mock fs operations
+);
 
-```mermaid
-sequenceDiagram
-    participant I as init.sh
-    participant IS as initial-sync.ts
-    participant S as server.ts
-    participant BW as /books watcher
-    participant DW as /data watcher
+const effect = bookCleanup("/test/books/Fiction", "book.epub");
+await Effect.runPromise(Effect.provide(effect, TestLayer));
 
-    I->>IS: Run initial sync
-    IS->>IS: Scan /books for all books
-    IS->>IS: Create sync plan (add/delete/keep)
-    IS->>IS: Process new books (via book-sync.ts)
-    IS->>IS: Delete orphaned data
-    IS->>IS: Generate all feed.xml files
-
-    I->>S: Start HTTP server (background)
-    I->>BW: Start /books watcher (background)
-    I->>DW: Start /data watcher (background)
-
-    Note over I: Wait for all processes
+expect(mockFs.rmCalls).toHaveLength(1);
 ```
