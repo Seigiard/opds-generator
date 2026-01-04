@@ -18,21 +18,22 @@ Default to using Bun instead of Node.js.
 
 ```
 src/
-├── index.ts           # HTTP server + fs.watch
+├── server.ts          # HTTP server + EffectTS Queue + initial sync
+├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # File scanning, sync planning
 ├── processor.ts       # Book/folder processing, XML generation
-├── opds.ts            # Feed assembly from XML files
+├── feed-generator.ts  # generateAllFeeds, buildFeed
 ├── types.ts           # Shared types
+├── effect/            # EffectTS-based event handling
+│   ├── services.ts    # DI services (Config, Logger, FileSystem)
+│   ├── queue.ts       # Queue.bounded<FileEvent>(100)
+│   ├── events.ts      # FileEvent types + classification
+│   ├── router.ts      # Event → handler routing
+│   └── handlers/      # Effect handlers (book-sync, folder-sync, etc.)
 ├── formats/           # Format handlers (FormatHandler interface)
 │   ├── types.ts       # FormatHandler, BookMetadata
 │   ├── index.ts       # Handler registry
-│   ├── utils.ts       # Shared XML parsing utilities
-│   ├── epub.ts        # EPUB handler
-│   ├── fb2.ts         # FB2/FBZ handler
-│   ├── mobi.ts        # MOBI/AZW handler
-│   ├── pdf.ts         # PDF handler (pdfinfo, pdftoppm)
-│   ├── comic.ts       # CBZ/CBR/CB7/CBT handler (ComicInfo.xml, CoMet)
-│   └── txt.ts         # TXT handler
+│   └── *.ts           # epub, fb2, mobi, pdf, comic, txt, djvu
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z/TAR extraction
     └── image.ts       # ImageMagick resize
@@ -40,10 +41,25 @@ src/
 test/
 ├── helpers/
 │   └── image-compare.ts  # Cover comparison using ImageMagick RMSE
-├── unit/                 # Unit tests
+├── unit/                 # Unit tests (including effect/ tests)
 └── integration/
     └── formats/          # Format handler integration tests
 ```
+
+## Architecture: Event-Driven with EffectTS
+
+**Startup**: `server.ts` runs initial sync, then starts HTTP server. `watcher.sh` waits for `/health`, then starts inotifywait watchers.
+
+**Event flow**: inotifywait → curl POST /events → EffectTS Queue → router → Effect handlers
+
+**Key handlers**:
+- `book-sync.ts` — book created/changed → extract metadata, generate entry.xml + covers
+- `book-cleanup.ts` — book deleted → rm -rf /data/{path}/
+- `folder-sync.ts` — folder created → generate _entry.xml
+- `folder-meta-sync.ts` — _entry.xml changed → regenerate feed.xml
+- `parent-meta-sync.ts` — entry.xml changed → trigger parent's folder-meta-sync
+
+**Loop prevention**: feed.xml changes are NOT watched (would cause infinite loop).
 
 ## Architecture: Mirror Structure
 
