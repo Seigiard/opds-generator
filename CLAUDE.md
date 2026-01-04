@@ -21,8 +21,6 @@ src/
 ├── server.ts          # HTTP server + initial sync + DI setup
 ├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # File scanning, sync planning
-├── processor.ts       # Book/folder processing, XML generation
-├── feed-generator.ts  # generateAllFeeds, buildFeed
 ├── types.ts           # Shared types
 ├── effect/            # EffectTS-based event handling (layered architecture)
 │   ├── types.ts       # RawWatcherEvent schema + EventType union
@@ -39,7 +37,8 @@ src/
 │   └── *.ts           # epub, fb2, mobi, pdf, comic, txt, djvu
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z/TAR extraction
-    └── image.ts       # ImageMagick resize
+    ├── image.ts       # ImageMagick resize
+    └── processor.ts   # URL encoding, file size formatting
 
 test/
 ├── helpers/
@@ -71,16 +70,17 @@ test/
 
 **DI Services** (in `services.ts`):
 
-| Service | Purpose |
-|---------|---------|
-| `ConfigService` | filesPath, dataPath, baseUrl, port |
-| `LoggerService` | info, warn, error, debug |
-| `FileSystemService` | mkdir, rm, readdir, stat, atomicWrite |
-| `DeduplicationService` | TTL-based (500ms) event filtering |
-| `EventQueueService` | Queue operations via Layer.effect |
-| `HandlerRegistry` | Map<tag, handler> — decouples consumer from handlers |
+| Service                | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `ConfigService`        | filesPath, dataPath, baseUrl, port                   |
+| `LoggerService`        | info, warn, error, debug                             |
+| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite                |
+| `DeduplicationService` | TTL-based (500ms) event filtering                    |
+| `EventQueueService`    | Queue operations via Layer.effect                    |
+| `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
 
 **Startup sequence**:
+
 1. `registerHandlers()` → populate HandlerRegistry
 2. `startConsumer` forked in background
 3. HTTP server starts
@@ -88,6 +88,7 @@ test/
 5. `initialSync()` → `adaptSyncPlan()` → `enqueueMany()`
 
 **Key principle**: Handlers return `EventType[]` for cascades instead of calling each other:
+
 ```typescript
 // parent-meta-sync.ts returns cascade event
 return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
@@ -194,7 +195,7 @@ bun run lint:fix
 bun --bun tsc --noEmit
 ```
 
-**IMPORTANT**: Always run `bun run lint:fix` before committing changes.
+**IMPORTANT**: Always run `bun run lint:fix && bun run format` before committing changes.
 **NOTE**: Tests always run in Docker to ensure all tools (pdfinfo, 7zz, imagemagick) are available.
 
 ## Documentation

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../src/processor.ts";
+import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../src/utils/processor.ts";
 
 describe("processor", () => {
   describe("encodeUrlPath", () => {

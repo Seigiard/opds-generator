@@ -109,8 +109,6 @@ src/
 ├── server.ts          # HTTP server + initial sync + DI setup
 ├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # scanFiles, createSyncPlan, computeHash
-├── processor.ts       # processBook, processFolder, XML builders
-├── feed-generator.ts  # generateAllFeeds, buildFeed
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
 ├── constants.ts       # Magic numbers (sizes, timeouts)
 ├── config.ts          # Typed config with env validation
