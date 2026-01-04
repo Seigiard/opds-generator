@@ -1,12 +1,14 @@
 import { Effect } from "effect";
 import { join, relative } from "node:path";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { EventType } from "../types.ts";
 
 export const bookCleanup = (
-	parent: string,
-	name: string,
-): Effect.Effect<void, Error, ConfigService | LoggerService | FileSystemService> =>
+	event: EventType,
+): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
 	Effect.gen(function* () {
+		if (event._tag !== "BookDeleted") return [];
+		const { parent, name } = event;
 		const config = yield* ConfigService;
 		const logger = yield* LoggerService;
 		const fs = yield* FileSystemService;
@@ -27,4 +29,6 @@ export const bookCleanup = (
 		);
 
 		yield* logger.info("BookCleanup", `Done: ${relativePath}`);
+
+		return [];
 	});

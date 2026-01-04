@@ -5,11 +5,14 @@ import { Feed } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort } from "../../utils/opds.ts";
 import { encodeUrlPath } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { EventType } from "../types.ts";
 
 export const folderMetaSync = (
-	folderDataDir: string,
-): Effect.Effect<void, Error, ConfigService | LoggerService | FileSystemService> =>
+	event: EventType,
+): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
 	Effect.gen(function* () {
+		if (event._tag !== "FolderMetaSyncRequested") return [];
+		const folderDataDir = event.path;
 		const config = yield* ConfigService;
 		const logger = yield* LoggerService;
 		const fs = yield* FileSystemService;
@@ -93,4 +96,6 @@ export const folderMetaSync = (
 			folders: readResult.folderEntries.length,
 			books: readResult.bookEntries.length,
 		});
+
+		return [];
 	});

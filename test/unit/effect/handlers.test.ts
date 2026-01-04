@@ -4,6 +4,7 @@ import { ConfigService, LoggerService, FileSystemService } from "../../../src/ef
 import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
+import type { EventType } from "../../../src/effect/types.ts";
 
 // Mock tracking
 interface MockFs {
@@ -112,6 +113,25 @@ const TestFileSystemService = Layer.succeed(FileSystemService, {
 
 const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, TestFileSystemService);
 
+// Helper to create events
+const folderDeletedEvent = (parent: string, name: string): EventType => ({
+	_tag: "FolderDeleted",
+	parent,
+	name,
+});
+
+const folderCreatedEvent = (parent: string, name: string): EventType => ({
+	_tag: "FolderCreated",
+	parent,
+	name,
+});
+
+const bookDeletedEvent = (parent: string, name: string): EventType => ({
+	_tag: "BookDeleted",
+	parent,
+	name,
+});
+
 describe("Effect Handlers", () => {
 	beforeEach(() => {
 		mockFs.reset();
@@ -120,7 +140,7 @@ describe("Effect Handlers", () => {
 
 	describe("folderCleanup", () => {
 		test("removes data directory for deleted folder", async () => {
-			const effect = folderCleanup("/test/books/Fiction", "Author");
+			const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -130,7 +150,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("logs the folder being removed", async () => {
-			const effect = folderCleanup("/test/books/Fiction", "Author");
+			const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -138,7 +158,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("handles nested folder paths correctly", async () => {
-			const effect = folderCleanup("/test/books/Fiction/SciFi", "Isaac Asimov");
+			const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -148,7 +168,7 @@ describe("Effect Handlers", () => {
 
 	describe("folderSync", () => {
 		test("creates data directory for new folder", async () => {
-			const effect = folderSync("/test/books", "Fiction");
+			const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -156,7 +176,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("creates _entry.xml for non-root folders", async () => {
-			const effect = folderSync("/test/books", "Fiction");
+			const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -166,7 +186,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("does not create _entry.xml for root folder", async () => {
-			const effect = folderSync("/test/books", "");
+			const effect = folderSync(folderCreatedEvent("/test/books/", ""));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -175,7 +195,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("includes subsection link in _entry.xml", async () => {
-			const effect = folderSync("/test/books", "Fiction");
+			const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -186,7 +206,7 @@ describe("Effect Handlers", () => {
 
 	describe("bookCleanup", () => {
 		test("removes data directory for deleted book", async () => {
-			const effect = bookCleanup("/test/books/Fiction", "book.epub");
+			const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 
@@ -196,7 +216,7 @@ describe("Effect Handlers", () => {
 		});
 
 		test("logs the book being removed", async () => {
-			const effect = bookCleanup("/test/books/Fiction", "book.epub");
+			const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
 
 			await Effect.runPromise(Effect.provide(effect, TestLayer));
 

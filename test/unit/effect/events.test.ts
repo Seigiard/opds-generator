@@ -1,227 +1,240 @@
 import { describe, test, expect } from "bun:test";
-import { classifyEvent, type FileEvent } from "../../../src/effect/events.ts";
+import { Effect, Layer } from "effect";
+import { adaptWatcherEvent } from "../../../src/effect/adapters/event-adapter.ts";
+import type { RawWatcherEvent } from "../../../src/effect/types.ts";
+import { DeduplicationService } from "../../../src/effect/services.ts";
 
-describe("classifyEvent", () => {
+// Mock deduplication service that always allows processing
+const TestDeduplicationService = Layer.succeed(DeduplicationService, {
+	shouldProcess: () => Effect.succeed(true),
+});
+
+// Helper to run adaptWatcherEvent with mock services
+const classifyEvent = async (event: RawWatcherEvent) => {
+	return Effect.runPromise(Effect.provide(adaptWatcherEvent(event), TestDeduplicationService));
+};
+
+describe("adaptWatcherEvent (event classification)", () => {
 	describe("books watcher - file events", () => {
-		test("CLOSE_WRITE on epub creates BookCreated", () => {
-			const event: FileEvent = {
+		test("CLOSE_WRITE on epub creates BookCreated", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "book.epub",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("BookCreated");
-			if (result._tag === "BookCreated") {
+			expect(result?._tag).toBe("BookCreated");
+			if (result?._tag === "BookCreated") {
 				expect(result.parent).toBe("/books/Fiction");
 				expect(result.name).toBe("book.epub");
 			}
 		});
 
-		test("MOVED_TO on fb2 creates BookCreated", () => {
-			const event: FileEvent = {
+		test("MOVED_TO on fb2 creates BookCreated", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "book.fb2",
 				events: "MOVED_TO",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("BookCreated");
+			expect(result?._tag).toBe("BookCreated");
 		});
 
-		test("DELETE on pdf creates BookDeleted", () => {
-			const event: FileEvent = {
+		test("DELETE on pdf creates BookDeleted", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "book.pdf",
 				events: "DELETE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("BookDeleted");
-			if (result._tag === "BookDeleted") {
+			expect(result?._tag).toBe("BookDeleted");
+			if (result?._tag === "BookDeleted") {
 				expect(result.parent).toBe("/books/Fiction");
 				expect(result.name).toBe("book.pdf");
 			}
 		});
 
-		test("MOVED_FROM on mobi creates BookDeleted", () => {
-			const event: FileEvent = {
+		test("MOVED_FROM on mobi creates BookDeleted", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "book.mobi",
 				events: "MOVED_FROM",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("BookDeleted");
+			expect(result?._tag).toBe("BookDeleted");
 		});
 
-		test("ignores non-book extensions like .md", () => {
-			const event: FileEvent = {
+		test("ignores non-book extensions like .md", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "README.md",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("Ignored");
+			expect(result).toBeNull();
 		});
 
-		test("ignores image files like .jpg", () => {
-			const event: FileEvent = {
+		test("ignores image files like .jpg", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "cover.jpg",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("Ignored");
+			expect(result).toBeNull();
 		});
 
-		test("recognizes .txt as valid book format", () => {
-			const event: FileEvent = {
+		test("recognizes .txt as valid book format", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books/Fiction",
 				name: "story.txt",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("BookCreated");
+			expect(result?._tag).toBe("BookCreated");
 		});
 	});
 
 	describe("books watcher - directory events", () => {
-		test("CREATE,ISDIR creates FolderCreated", () => {
-			const event: FileEvent = {
+		test("CREATE,ISDIR creates FolderCreated", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books",
 				name: "Fiction",
 				events: "CREATE,ISDIR",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("FolderCreated");
-			if (result._tag === "FolderCreated") {
+			expect(result?._tag).toBe("FolderCreated");
+			if (result?._tag === "FolderCreated") {
 				expect(result.parent).toBe("/books");
 				expect(result.name).toBe("Fiction");
 			}
 		});
 
-		test("MOVED_TO,ISDIR creates FolderCreated", () => {
-			const event: FileEvent = {
+		test("MOVED_TO,ISDIR creates FolderCreated", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books",
 				name: "SciFi",
 				events: "MOVED_TO,ISDIR",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("FolderCreated");
+			expect(result?._tag).toBe("FolderCreated");
 		});
 
-		test("DELETE,ISDIR creates FolderDeleted", () => {
-			const event: FileEvent = {
+		test("DELETE,ISDIR creates FolderDeleted", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books",
 				name: "OldFolder",
 				events: "DELETE,ISDIR",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("FolderDeleted");
-			if (result._tag === "FolderDeleted") {
+			expect(result?._tag).toBe("FolderDeleted");
+			if (result?._tag === "FolderDeleted") {
 				expect(result.parent).toBe("/books");
 				expect(result.name).toBe("OldFolder");
 			}
 		});
 
-		test("MOVED_FROM,ISDIR creates FolderDeleted", () => {
-			const event: FileEvent = {
+		test("MOVED_FROM,ISDIR creates FolderDeleted", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "books",
 				parent: "/books",
 				name: "MovedAway",
 				events: "MOVED_FROM,ISDIR",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("FolderDeleted");
+			expect(result?._tag).toBe("FolderDeleted");
 		});
 	});
 
 	describe("data watcher - XML events", () => {
-		test("entry.xml change creates EntryXmlChanged", () => {
-			const event: FileEvent = {
+		test("entry.xml change creates EntryXmlChanged", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "data",
 				parent: "/data/Fiction/book.epub",
 				name: "entry.xml",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("EntryXmlChanged");
-			if (result._tag === "EntryXmlChanged") {
+			expect(result?._tag).toBe("EntryXmlChanged");
+			if (result?._tag === "EntryXmlChanged") {
 				expect(result.parent).toBe("/data/Fiction/book.epub");
 			}
 		});
 
-		test("_entry.xml change creates FolderEntryXmlChanged", () => {
-			const event: FileEvent = {
+		test("_entry.xml change creates FolderEntryXmlChanged", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "data",
 				parent: "/data/Fiction",
 				name: "_entry.xml",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("FolderEntryXmlChanged");
-			if (result._tag === "FolderEntryXmlChanged") {
+			expect(result?._tag).toBe("FolderEntryXmlChanged");
+			if (result?._tag === "FolderEntryXmlChanged") {
 				expect(result.parent).toBe("/data/Fiction");
 			}
 		});
 
-		test("ignores other data files", () => {
-			const event: FileEvent = {
+		test("ignores other data files", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "data",
 				parent: "/data/Fiction/book.epub",
 				name: "cover.jpg",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("Ignored");
+			expect(result).toBeNull();
 		});
 
-		test("ignores feed.xml", () => {
-			const event: FileEvent = {
+		test("ignores feed.xml", async () => {
+			const event: RawWatcherEvent = {
 				watcher: "data",
 				parent: "/data/Fiction",
 				name: "feed.xml",
 				events: "CLOSE_WRITE",
 			};
 
-			const result = classifyEvent(event);
+			const result = await classifyEvent(event);
 
-			expect(result._tag).toBe("Ignored");
+			expect(result).toBeNull();
 		});
 	});
 
@@ -229,18 +242,44 @@ describe("classifyEvent", () => {
 		const formats = ["epub", "fb2", "fbz", "mobi", "azw", "azw3", "pdf", "djvu", "cbz", "cbr", "cb7", "cbt"];
 
 		for (const format of formats) {
-			test(`recognizes .${format} as book format`, () => {
-				const event: FileEvent = {
+			test(`recognizes .${format} as book format`, async () => {
+				const event: RawWatcherEvent = {
 					watcher: "books",
 					parent: "/books/Fiction",
 					name: `book.${format}`,
 					events: "CLOSE_WRITE",
 				};
 
-				const result = classifyEvent(event);
+				const result = await classifyEvent(event);
 
-				expect(result._tag).toBe("BookCreated");
+				expect(result?._tag).toBe("BookCreated");
 			});
 		}
+	});
+
+	describe("deduplication", () => {
+		test("filters duplicate events", async () => {
+			let callCount = 0;
+			const TestDedupService = Layer.succeed(DeduplicationService, {
+				shouldProcess: () =>
+					Effect.sync(() => {
+						callCount++;
+						return callCount === 1;
+					}),
+			});
+
+			const event: RawWatcherEvent = {
+				watcher: "books",
+				parent: "/books/Fiction",
+				name: "book.epub",
+				events: "CLOSE_WRITE",
+			};
+
+			const result1 = await Effect.runPromise(Effect.provide(adaptWatcherEvent(event), TestDedupService));
+			const result2 = await Effect.runPromise(Effect.provide(adaptWatcherEvent(event), TestDedupService));
+
+			expect(result1?._tag).toBe("BookCreated");
+			expect(result2).toBeNull();
+		});
 	});
 });

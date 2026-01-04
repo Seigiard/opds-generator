@@ -1,7 +1,8 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Queue } from "effect";
 import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
 import { config } from "../config.ts";
 import { logger } from "../utils/errors.ts";
+import type { EventType } from "./types.ts";
 
 // Config Service
 export class ConfigService extends Context.Tag("ConfigService")<
@@ -38,6 +39,39 @@ export class FileSystemService extends Context.Tag("FileSystemService")<
 		readonly atomicWrite: (path: string, content: string) => Effect.Effect<void, Error>;
 		readonly symlink: (target: string, path: string) => Effect.Effect<void, Error>;
 		readonly unlink: (path: string) => Effect.Effect<void, Error>;
+	}
+>() {}
+
+// Deduplication Service (TTL-based)
+export class DeduplicationService extends Context.Tag("DeduplicationService")<
+	DeduplicationService,
+	{
+		readonly shouldProcess: (key: string) => Effect.Effect<boolean>;
+	}
+>() {}
+
+// Event Queue Service
+export class EventQueueService extends Context.Tag("EventQueueService")<
+	EventQueueService,
+	{
+		readonly enqueue: (event: EventType) => Effect.Effect<void>;
+		readonly enqueueMany: (events: readonly EventType[]) => Effect.Effect<void>;
+		readonly size: () => Effect.Effect<number>;
+		readonly take: () => Effect.Effect<EventType>;
+	}
+>() {}
+
+// Handler type for registry
+export type EventHandler = (
+	event: EventType,
+) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService>;
+
+// Handler Registry Service
+export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
+	HandlerRegistry,
+	{
+		readonly get: (tag: string) => EventHandler | undefined;
+		readonly register: (tag: string, handler: EventHandler) => void;
 	}
 >() {}
 
@@ -132,5 +166,61 @@ export const LiveFileSystemService = Layer.succeed(FileSystemService, {
 		}).pipe(Effect.asVoid),
 });
 
+// Deduplication Service - TTL-based (500ms window)
+const deduplicationState = {
+	seen: new Map<string, number>(),
+};
+
+export const LiveDeduplicationService = Layer.succeed(DeduplicationService, {
+	shouldProcess: (key: string) =>
+		Effect.sync(() => {
+			const now = Date.now();
+			const lastSeen = deduplicationState.seen.get(key);
+			if (lastSeen && now - lastSeen < 500) return false;
+			deduplicationState.seen.set(key, now);
+			// Cleanup old entries periodically
+			if (deduplicationState.seen.size > 1000) {
+				for (const [k, t] of deduplicationState.seen) {
+					if (now - t > 5000) deduplicationState.seen.delete(k);
+				}
+			}
+			return true;
+		}),
+});
+
+// Event Queue Service - created via Layer.effect
+export const LiveEventQueueService = Layer.effect(
+	EventQueueService,
+	Effect.gen(function* () {
+		const queue = yield* Queue.unbounded<EventType>();
+		return {
+			enqueue: (event: EventType) => Queue.offer(queue, event).pipe(Effect.asVoid),
+			enqueueMany: (events: readonly EventType[]) =>
+				Effect.forEach(events, (e) => Queue.offer(queue, e), { discard: true }),
+			size: () => Queue.size(queue),
+			take: () => Queue.take(queue),
+		};
+	}),
+);
+
+// Handler Registry - mutable map for handler registration
+const handlerRegistryState = {
+	handlers: new Map<string, EventHandler>(),
+};
+
+export const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
+	get: (tag: string) => handlerRegistryState.handlers.get(tag),
+	register: (tag: string, handler: EventHandler) => {
+		handlerRegistryState.handlers.set(tag, handler);
+	},
+});
+
 // Combined live layer
-export const LiveLayer = Layer.mergeAll(LiveConfigService, LiveLoggerService, LiveFileSystemService);
+export const LiveLayer = Layer.mergeAll(
+	LiveConfigService,
+	LiveLoggerService,
+	LiveFileSystemService,
+	LiveDeduplicationService,
+	LiveEventQueueService,
+	LiveHandlerRegistry,
+);

@@ -8,12 +8,14 @@ import type { BookMetadata } from "../../formats/types.ts";
 import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
 import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { EventType } from "../types.ts";
 
 export const bookSync = (
-	parent: string,
-	name: string,
-): Effect.Effect<void, Error, ConfigService | LoggerService | FileSystemService> =>
+	event: EventType,
+): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
 	Effect.gen(function* () {
+		if (event._tag !== "BookCreated") return [];
+		const { parent, name } = event;
 		const config = yield* ConfigService;
 		const logger = yield* LoggerService;
 		const fs = yield* FileSystemService;
@@ -117,4 +119,6 @@ export const bookSync = (
 		yield* fs.symlink(filePath, join(bookDataDir, "file"));
 
 		yield* logger.info("BookSync", `Done: ${relativePath}`, { hasCover });
+
+		return [];
 	});

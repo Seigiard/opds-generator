@@ -21,7 +21,7 @@ export async function compareImages(imageA: Buffer, imageB: Buffer, threshold = 
   await proc.exited;
 
   const match = stderr.match(/\(([\d.]+)\)/);
-  const rmse = match ? parseFloat(match[1]) : 1;
+  const rmse = match?.[1] ? parseFloat(match[1]) : 1;
 
   await Bun.$`rm -f ${tmpA} ${tmpB}`.quiet();
 

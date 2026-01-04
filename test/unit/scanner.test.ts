@@ -17,9 +17,9 @@ describe("scanner", () => {
     test("handles empty file list", () => {
       const result = buildFolderStructure([]);
       expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("");
-      expect(result[0].name).toBe("Catalog");
-      expect(result[0].subfolders).toEqual([]);
+      expect(result[0]!.path).toBe("");
+      expect(result[0]!.name).toBe("Catalog");
+      expect(result[0]!.subfolders).toEqual([]);
     });
 
     test("handles flat structure (files in root)", () => {
@@ -27,8 +27,8 @@ describe("scanner", () => {
 
       const result = buildFolderStructure(files);
       expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("");
-      expect(result[0].name).toBe("Catalog");
+      expect(result[0]!.path).toBe("");
+      expect(result[0]!.name).toBe("Catalog");
     });
 
     test("creates folder entries for nested files", () => {

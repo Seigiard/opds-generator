@@ -5,12 +5,14 @@ import { Entry } from "opds-ts/v1.2";
 import { BOOK_EXTENSIONS } from "../../types.ts";
 import { encodeUrlPath, formatFolderDescription } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { EventType } from "../types.ts";
 
 export const folderSync = (
-	parent: string,
-	name: string,
-): Effect.Effect<void, Error, ConfigService | LoggerService | FileSystemService> =>
+	event: EventType,
+): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
 	Effect.gen(function* () {
+		if (event._tag !== "FolderCreated") return [];
+		const { parent, name } = event;
 		const config = yield* ConfigService;
 		const logger = yield* LoggerService;
 		const fs = yield* FileSystemService;
@@ -71,4 +73,6 @@ export const folderSync = (
 		} else {
 			yield* logger.info("FolderSync", "Root folder - no _entry.xml needed");
 		}
+
+		return [];
 	});
