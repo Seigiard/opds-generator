@@ -4,14 +4,15 @@ import { BOOK_EXTENSIONS } from "../../types.ts";
 import type { RawWatcherEvent, EventType } from "../types.ts";
 import { DeduplicationService } from "../services.ts";
 import type { SyncPlan } from "../../scanner.ts";
+import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
 // Classify raw inotifywait event into typed EventType
 function classifyRawEvent(event: RawWatcherEvent): EventType {
   if (event.watcher === "data") {
-    if (event.name === "entry.xml") {
+    if (event.name === ENTRY_FILE) {
       return { _tag: "EntryXmlChanged", parent: event.parent };
     }
-    if (event.name === "_entry.xml") {
+    if (event.name === FOLDER_ENTRY_FILE) {
       return { _tag: "FolderEntryXmlChanged", parent: event.parent };
     }
     return { _tag: "Ignored" };

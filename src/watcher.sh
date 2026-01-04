@@ -3,13 +3,14 @@ set -e
 
 BOOKS_DIR="${FILES:-/books}"
 DATA_DIR="${DATA:-/data}"
-SERVER_URL="${SERVER_URL:-http://localhost:${PORT:-8080}}"
+BUN_PORT="${PORT:-3000}"
+SERVER_URL="http://localhost:$BUN_PORT"
 
-echo "[watcher] Waiting for server to start..."
-until curl -s "$SERVER_URL/health" > /dev/null 2>&1; do
+echo "[watcher] Waiting for Bun server on port $BUN_PORT..."
+until nc -z localhost "$BUN_PORT" 2>/dev/null; do
   sleep 0.5
 done
-echo "[watcher] Server is up"
+echo "[watcher] Bun server is up"
 
 echo "[watcher] Starting /books watcher..."
 inotifywait -m -r \

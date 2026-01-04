@@ -28,12 +28,14 @@ function parsePort(value: string): number {
 }
 
 function loadConfig(): Config {
-  const port = parsePort(process.env.PORT || "8080");
+  // Internal Bun server port (nginx proxies to this)
+  const port = parsePort(process.env.PORT || "3000");
 
   return {
     filesPath: requireEnv("FILES", "./files"),
     dataPath: requireEnv("DATA", "./data"),
-    baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
+    // BASE_URL is for external access (nginx port, not internal Bun port)
+    baseUrl: process.env.BASE_URL || "http://localhost:8080",
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",

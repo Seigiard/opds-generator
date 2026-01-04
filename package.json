@@ -16,7 +16,8 @@
     "test": "docker compose -f docker-compose.test.yml run --rm test",
     "test:unit": "docker compose -f docker-compose.test.yml run --rm test bun test test/unit",
     "test:integration": "docker compose -f docker-compose.test.yml run --rm test bun test test/integration",
-    "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage"
+    "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage",
+    "test:e2e": "docker compose up -d --build --wait && bun test test/e2e; docker compose down"
   },
   "dependencies": {
     "@effect/schema": "^0.75.5",

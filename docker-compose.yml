@@ -4,15 +4,25 @@ services:
       context: .
       target: production
     ports:
-      - "8080:8080"
+      - "8080:80"
     volumes:
       - ./files:/books:ro
       - opds-data:/data
     environment:
       - FILES=/books
       - DATA=/data
-      - PORT=8080
+      - PORT=3000
       - BASE_URL=http://localhost:8080
+      # Uncomment to enable /resync endpoint with Basic Auth:
+      # - ADMIN_USER=admin
+      # - ADMIN_TOKEN=secret
+      # - RATE_LIMIT_MB=5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/feed.xml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
 volumes:

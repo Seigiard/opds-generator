@@ -6,6 +6,7 @@ import { BOOK_EXTENSIONS } from "../../types.ts";
 import { encodeUrlPath, formatFolderDescription } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
+import { FEED_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
 export const folderSync = (
   event: EventType,
@@ -57,7 +58,7 @@ export const folderSync = (
 
       // Build entry
       const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(
-        `/${encodeUrlPath(relativePath)}/feed.xml`,
+        `/${encodeUrlPath(relativePath)}/${FEED_FILE}`,
         "navigation",
       );
 
@@ -67,7 +68,7 @@ export const folderSync = (
       }
 
       const entryXml = entry.toXml({ prettyPrint: true });
-      yield* fs.atomicWrite(join(folderDataDir, "_entry.xml"), entryXml);
+      yield* fs.atomicWrite(join(folderDataDir, FOLDER_ENTRY_FILE), entryXml);
 
       yield* logger.info("FolderSync", `Done: ${relativePath}`, counts);
     } else {

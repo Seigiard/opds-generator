@@ -18,8 +18,9 @@ Default to using Bun instead of Node.js.
 
 ```
 src/
-├── server.ts          # HTTP server + initial sync + DI setup
-├── watcher.sh         # inotifywait → curl POST /events
+├── server.ts          # Internal HTTP server (localhost:3000) + initial sync + DI setup
+├── watcher.sh         # inotifywait → POST /events to internal server
+├── constants.ts       # File constants (contract between Bun and nginx)
 ├── scanner.ts         # File scanning, sync planning
 ├── types.ts           # Shared types
 ├── effect/            # EffectTS-based event handling (layered architecture)
@@ -41,13 +42,46 @@ src/
     ├── process.ts     # spawnWithTimeout for external commands
     └── processor.ts   # URL encoding, file size formatting
 
+nginx.conf.template    # nginx config template (envsubst)
+entrypoint.sh          # Process manager (nginx + bun + watcher)
+
 test/
 ├── helpers/
 │   └── image-compare.ts  # Cover comparison using ImageMagick RMSE
 ├── unit/                 # Unit tests (including effect/ tests)
-└── integration/
-    └── formats/          # Format handler integration tests
+├── integration/
+│   └── formats/          # Format handler integration tests
+└── e2e/
+    └── nginx.test.ts     # nginx e2e tests (run via bun run test:e2e)
 ```
+
+## Architecture: Dual Server
+
+Container runs two servers managed by `entrypoint.sh`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Docker Container                      │
+│                                                          │
+│  ┌──────────────────┐      ┌──────────────────────────┐ │
+│  │     nginx:80     │      │      Bun:3000            │ │
+│  │   (external)     │      │   (localhost only)       │ │
+│  │                  │      │                          │ │
+│  │  /        → /feed.xml   │  POST /events ← watcher  │ │
+│  │  /opds    → /feed.xml   │  POST /resync ← nginx    │ │
+│  │  /path/   → /path/feed.xml                         │ │
+│  │  /static/* → /app/static                           │ │
+│  │  /resync  → Basic Auth → proxy Bun                 │ │
+│  │  /*       → /data/*     │                          │ │
+│  └──────────────────┘      └──────────────────────────┘ │
+│          ↑                            ↑                 │
+│     EXPOSE 80                    watcher.sh             │
+└─────────────────────────────────────────────────────────┘
+```
+
+**nginx (port 80)**: Serves static files from /data, handles redirects, Basic Auth for /resync.
+
+**Bun (port 3000, localhost only)**: Internal API for watcher events and resync trigger.
 
 ## Architecture: Layered Event-Driven with EffectTS
 
@@ -81,13 +115,16 @@ test/
 | `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
 | `ErrorLogService`      | JSONL error logging (log, clear)                     |
 
-**Startup sequence**:
+**Startup sequence** (via `entrypoint.sh`):
 
-1. `registerHandlers()` → populate HandlerRegistry
-2. `startConsumer` forked in background
-3. HTTP server starts
-4. `watcher.sh` waits for `/health`, starts inotifywait
-5. `initialSync()` → `adaptSyncPlan()` → `enqueueMany()`
+1. Generate htpasswd if ADMIN_USER/ADMIN_TOKEN set
+2. Generate nginx.conf from template via envsubst
+3. Start nginx (port 80)
+4. Start Bun server (port 3000, localhost only)
+5. Start watcher.sh (waits for Bun port via `nc`)
+6. Bun: `registerHandlers()` → populate HandlerRegistry
+7. Bun: `startConsumer` forked in background
+8. Bun: `initialSync()` → `adaptSyncPlan()` → `enqueueMany()`
 
 **Key principle**: Handlers return `EventType[]` for cascades instead of calling each other:
 
@@ -173,14 +210,17 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 docker compose -f docker-compose.dev.yml up
 
 # Test changes - just curl the running container
-curl http://localhost:8080/health
-curl http://localhost:8080/opds
+curl http://localhost:8080/feed.xml
+curl http://localhost:8080/opds  # redirects to /feed.xml
 
 # Check logs
 docker compose -f docker-compose.dev.yml logs -f
 
 # Clear data cache (forces full rescan)
 docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
+
+# Trigger resync (requires ADMIN_USER/ADMIN_TOKEN in docker-compose)
+curl -u admin:secret http://localhost:8080/resync
 ```
 
 ## Testing & Linting
@@ -197,6 +237,9 @@ bun run test:integration
 
 # Run tests with coverage
 bun run test:coverage
+
+# Run e2e tests (starts container, runs tests, stops container)
+bun run test:e2e
 
 # Lint (type-aware, run before commits)
 bun run lint

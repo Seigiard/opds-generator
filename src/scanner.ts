@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
+import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "./constants.ts";
 
 export async function scanFiles(rootPath: string): Promise<FileInfo[]> {
   const files: FileInfo[] = [];
@@ -95,8 +96,8 @@ export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
         const entryPath = join(dirPath, entry.name);
         const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
-        const hasBookEntry = await Bun.file(join(entryPath, "entry.xml")).exists();
-        const hasFolderEntry = await Bun.file(join(entryPath, "_entry.xml")).exists();
+        const hasBookEntry = await Bun.file(join(entryPath, ENTRY_FILE)).exists();
+        const hasFolderEntry = await Bun.file(join(entryPath, FOLDER_ENTRY_FILE)).exists();
 
         if (hasBookEntry) {
           paths.add(entryRelPath);
@@ -135,12 +136,12 @@ export async function createSyncPlan(files: FileInfo[], dataPath: string): Promi
 
   for (const file of files) {
     const dataDir = join(dataPath, file.relativePath);
-    const entryFile = Bun.file(join(dataDir, "entry.xml"));
+    const entryFile = Bun.file(join(dataDir, ENTRY_FILE));
 
     if (!(await entryFile.exists())) {
       toProcess.push(file);
     } else {
-      const entryStat = await stat(join(dataDir, "entry.xml"));
+      const entryStat = await stat(join(dataDir, ENTRY_FILE));
       if (file.mtime > entryStat.mtimeMs) {
         toProcess.push(file);
       }

@@ -45,12 +45,16 @@ services:
   opds:
     image: ghcr.io/seigiard/opds-generator:latest
     ports:
-      - "8080:8080"
+      - "8080:80"
     volumes:
       - /path/to/your/books:/books:ro
       - opds-data:/data
     environment:
       - BASE_URL=http://localhost:8080
+      # Optional: enable /resync endpoint with Basic Auth
+      # - ADMIN_USER=admin
+      # - ADMIN_TOKEN=your-secret-token
+      # - RATE_LIMIT_MB=5
     restart: unless-stopped
 
 volumes:
@@ -70,7 +74,7 @@ docker-compose up -d
 ```bash
 docker run -d \
   --name opds \
-  -p 8080:8080 \
+  -p 8080:80 \
   -v /path/to/your/books:/books:ro \
   -v opds-data:/data \
   -e BASE_URL=http://your-server:8080 \
@@ -87,25 +91,30 @@ docker-compose up -d --build
 
 ## Environment Variables
 
-| Variable   | Default                 | Description                  |
-| ---------- | ----------------------- | ---------------------------- |
-| `FILES`    | `/books`                | Path to your books directory |
-| `DATA`     | `/data`                 | Path for cache and metadata  |
-| `PORT`     | `8080`                  | HTTP port                    |
-| `BASE_URL` | `http://localhost:8080` | Base URL for OPDS links      |
-| `DEV_MODE` | `false`                 | Disable caching              |
+| Variable        | Default                 | Description                           |
+| --------------- | ----------------------- | ------------------------------------- |
+| `FILES`         | `/books`                | Path to your books directory          |
+| `DATA`          | `/data`                 | Path for cache and metadata           |
+| `PORT`          | `3000`                  | Internal Bun server port              |
+| `BASE_URL`      | `http://localhost:8080` | Base URL for OPDS links               |
+| `DEV_MODE`      | `false`                 | Enable hot reload for Bun             |
+| `ADMIN_USER`    | -                       | Username for /resync Basic Auth       |
+| `ADMIN_TOKEN`   | -                       | Password for /resync Basic Auth       |
+| `RATE_LIMIT_MB` | `0`                     | Download rate limit in MB/s (0 = off) |
 
 ## API
 
-| Endpoint                | Description                            |
-| ----------------------- | -------------------------------------- |
-| `GET /opds`             | Root catalog                           |
-| `GET /opds/{path}`      | Subcatalog or book list                |
-| `GET /download/{path}`  | Download file                          |
-| `GET /cover/{path}`     | Book cover (1400px max)                |
-| `GET /thumbnail/{path}` | Book thumbnail (512px max)             |
-| `GET /health`           | Server status (JSON)                   |
-| `GET /reset`            | Clear cache and resync (DEV_MODE only) |
+| Endpoint           | Description                                     |
+| ------------------ | ----------------------------------------------- |
+| `GET /`            | Redirect to /feed.xml                           |
+| `GET /opds`        | Redirect to /feed.xml                           |
+| `GET /feed.xml`    | Root catalog (OPDS feed)                        |
+| `GET /{path}/`     | Subcatalog (serves feed.xml as directory index) |
+| `GET /{book}/file` | Download book file (symlink)                    |
+| `GET /static/*`    | Static files                                    |
+| `GET /resync`      | Trigger full resync (requires Basic Auth)       |
+
+Note: nginx serves static files from `/data`. Returns 503 with `Retry-After: 5` if feed.xml doesn't exist yet (initial sync in progress).
 
 ## Directory Structure
 
@@ -117,21 +126,23 @@ docker-compose up -d --build
     └── Batman.cbz
 
 /data/                     # Mirror cache (auto-generated)
-├── _feed.xml              # Root feed header
+├── feed.xml               # Root feed
 ├── fiction/
-│   ├── _feed.xml
-│   ├── _entry.xml
+│   ├── feed.xml           # Subcatalog feed
+│   ├── _entry.xml         # Entry for parent feed
 │   └── Foundation.epub/
 │       ├── entry.xml
 │       ├── cover.jpg
-│       └── thumb.jpg
+│       ├── thumb.jpg
+│       └── file           # Symlink to /books/fiction/Foundation.epub
 └── comics/
-    ├── _feed.xml
+    ├── feed.xml
     ├── _entry.xml
     └── Batman.cbz/
         ├── entry.xml
         ├── cover.jpg
-        └── thumb.jpg
+        ├── thumb.jpg
+        └── file           # Symlink to /books/comics/Batman.cbz
 ```
 
 ## Development

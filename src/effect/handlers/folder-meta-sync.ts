@@ -6,6 +6,7 @@ import { stripXmlDeclaration, naturalSort } from "../../utils/opds.ts";
 import { encodeUrlPath } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
+import { FEED_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
 export const folderMetaSync = (
   event: EventType,
@@ -22,12 +23,12 @@ export const folderMetaSync = (
 
     yield* logger.info("FolderMetaSync", `Processing: ${relativePath || "(root)"}`);
 
-    const feedOutputPath = join(normalizedDir, "feed.xml");
+    const feedOutputPath = join(normalizedDir, FEED_FILE);
     const folderName = relativePath.split("/").pop() || "Catalog";
     const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
-    const selfHref = relativePath === "" ? "/feed.xml" : `/${encodeUrlPath(relativePath)}/feed.xml`;
+    const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-    const feed = new Feed(feedId, folderName).addSelfLink(selfHref, "navigation").addNavigationLink("start", "/feed.xml");
+    const feed = new Feed(feedId, folderName).addSelfLink(selfHref, "navigation").addNavigationLink("start", `/${FEED_FILE}`);
 
     const folderEntries: string[] = [];
     const bookEntries: string[] = [];
@@ -40,14 +41,14 @@ export const folderMetaSync = (
 
         for (const item of items) {
           if (item.startsWith("_")) continue;
-          if (item === "feed.xml" || item.endsWith(".tmp")) continue;
+          if (item === FEED_FILE || item.endsWith(".tmp")) continue;
 
           const itemPath = join(normalizedDir, item);
           const itemStat = await stat(itemPath);
 
           if (itemStat.isDirectory()) {
-            const folderEntryPath = join(itemPath, "_entry.xml");
-            const bookEntryPath = join(itemPath, "entry.xml");
+            const folderEntryPath = join(itemPath, FOLDER_ENTRY_FILE);
+            const bookEntryPath = join(itemPath, ENTRY_FILE);
 
             const folderEntryFile = Bun.file(folderEntryPath);
             const bookEntryFile = Bun.file(bookEntryPath);

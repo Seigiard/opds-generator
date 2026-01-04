@@ -146,12 +146,12 @@ flowchart LR
 | `book-sync.ts`                | BookCreated             | `[]`                           |
 | `book-cleanup.ts`             | BookDeleted             | `[FolderMetaSyncRequested]`    |
 | `folder-sync.ts`              | FolderCreated           | `[]`                           |
-| `folder-cleanup.ts`           | FolderDeleted           | `[FolderMetaSyncRequested]`*   |
+| `folder-cleanup.ts`           | FolderDeleted           | `[FolderMetaSyncRequested]`\*  |
 | `folder-meta-sync.ts`         | FolderMetaSyncRequested | `[]`                           |
 | `parent-meta-sync.ts`         | EntryXmlChanged         | `[FolderMetaSyncRequested]`    |
 | `folder-entry-xml-changed.ts` | FolderEntryXmlChanged   | `[FolderMetaSyncRequested x2]` |
 
-*folder-cleanup returns `[]` for root-level folders (no parent to update)
+\*folder-cleanup returns `[]` for root-level folders (no parent to update)
 
 ## Startup Sequence
 

@@ -2,7 +2,6 @@ import { Effect, Fiber } from "effect";
 import { Schema } from "@effect/schema";
 import { mkdir, rm } from "node:fs/promises";
 import { config } from "./config.ts";
-import { createRouter } from "./routes/index.ts";
 import { logger } from "./utils/errors.ts";
 import { RawWatcherEvent } from "./effect/types.ts";
 import { adaptWatcherEvent, adaptSyncPlan } from "./effect/adapters/event-adapter.ts";
@@ -117,18 +116,6 @@ const handleWatcherEvent = (body: unknown) =>
     return { status: 202, message: "OK" };
   });
 
-// Get health status
-const getHealthStatus = Effect.gen(function* () {
-  const queue = yield* EventQueueService;
-  const queueSize = yield* queue.size();
-
-  return {
-    status: isReady ? "ready" : "initializing",
-    queueSize,
-    syncing: isSyncing,
-  };
-});
-
 // Initialize and start server
 const initServer = Effect.gen(function* () {
   // 1. Register all handlers in registry
@@ -143,18 +130,16 @@ const initServer = Effect.gen(function* () {
   isReady = true;
 });
 
-// Create router
-const router = createRouter();
-
 // Main entry point
 async function main(): Promise<void> {
   try {
     // 1. Initialize server (handlers + consumer)
     await Effect.runPromise(Effect.provide(initServer, LiveLayer));
 
-    // 2. Start HTTP server
+    // 2. Start HTTP server (internal only - nginx handles external traffic)
     const server = Bun.serve({
       port: config.port,
+      hostname: "127.0.0.1",
       async fetch(req) {
         const url = new URL(req.url);
 
@@ -190,14 +175,8 @@ async function main(): Promise<void> {
           return new Response("Resync started", { status: 202 });
         }
 
-        // GET /health — queue stats
-        if (url.pathname === "/health") {
-          const health = await Effect.runPromise(Effect.provide(getHealthStatus, LiveLayer));
-          return Response.json(health);
-        }
-
-        // All other routes go to the main router
-        return router(req);
+        // All other routes are handled by nginx
+        return new Response("Not found", { status: 404 });
       },
     });
 
