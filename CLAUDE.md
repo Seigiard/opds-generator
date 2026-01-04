@@ -1,259 +1,145 @@
-Default to using Bun instead of Node.js.
+## Quick Reference
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun install` instead of `npm install`
-- Use `bun run <script>` instead of `npm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+| Instead of              | Use                         |
+| ----------------------- | --------------------------- |
+| `node`, `ts-node`       | `bun <file>`                |
+| `npm install/run`       | `bun install/run`           |
+| `jest`, `vitest`        | `bun test`                  |
+| `express`               | `Bun.serve()`               |
+| `fs.readFile/writeFile` | `Bun.file()`, `Bun.write()` |
+| `execa`                 | ``Bun.$`cmd` ``             |
+| `crypto`                | `Bun.hash()`                |
+| `dotenv`                | ❌ Bun auto-loads .env      |
 
-## Bun APIs
+## Task Completion Checklist
 
-- `Bun.serve()` for HTTP server. Don't use `express`.
-- `Bun.file()` for file operations. Prefer over `node:fs` readFile/writeFile.
-- `Bun.$\`cmd\``for shell commands. Don't use`execa`.
-- `Bun.hash()` for hashing. Don't use `crypto`.
-- `Bun.write()` for writing files.
+After completing any task:
+
+```bash
+bun run lint:fix && bun run format
+bun run test
+npx knip  # check unused exports/deps
+```
+
+Update `PLAN.md`, `CLAUDE.md`, or `@ARCHITECTURE.md` if architecture changed.
+
+## Development Workflow
+
+Docker dev runs at http://localhost:8080 — do NOT run bun locally.
+Gracefully shutdown after tests.
+
+```bash
+docker compose -f docker-compose.dev.yml up          # start
+docker compose -f docker-compose.dev.yml logs -f     # logs
+curl http://localhost:8080/feed.xml                  # test
+curl -u admin:secret http://localhost:8080/resync    # force resync
+```
+
+## Testing
+
+```bash
+bun run test              # all tests (in Docker)
+bun run test:unit         # unit only
+bun run test:integration  # integration only
+bun run test:e2e          # e2e (starts/stops container)
+bun run test:coverage     # with coverage
+bun --bun tsc --noEmit    # type check
+```
 
 ## Project Structure
 
 ```
 src/
-├── server.ts          # Internal HTTP server (localhost:3000) + initial sync + DI setup
-├── watcher.sh         # inotifywait → POST /events to internal server
-├── constants.ts       # File constants (contract between Bun and nginx)
-├── scanner.ts         # File scanning, sync planning
-├── types.ts           # Shared types
-├── effect/            # EffectTS-based event handling (layered architecture)
-│   ├── types.ts       # RawWatcherEvent schema + EventType union
-│   ├── services.ts    # DI services (Config, Logger, FileSystem, Queue, Registry)
-│   ├── consumer.ts    # Event loop (processEvent, startConsumer)
-│   ├── adapters/
-│   │   └── event-adapter.ts  # adaptWatcherEvent (raw→typed), adaptSyncPlan
-│   └── handlers/
-│       ├── index.ts            # registerHandlers() for HandlerRegistry
-│       └── *.ts                # book-sync, folder-sync, etc.
-├── formats/           # Format handlers (FormatHandler interface)
-│   ├── types.ts       # FormatHandler, BookMetadata
-│   ├── index.ts       # Handler registry
-│   └── *.ts           # epub, fb2, mobi, pdf, comic, txt, djvu
-└── utils/
-    ├── archive.ts     # ZIP/RAR/7z/TAR extraction
-    ├── image.ts       # ImageMagick resize
-    ├── process.ts     # spawnWithTimeout for external commands
-    └── processor.ts   # URL encoding, file size formatting
-
-nginx.conf.template    # nginx config template (envsubst)
-entrypoint.sh          # Process manager (nginx + bun + watcher)
-
-test/
-├── helpers/
-│   └── image-compare.ts  # Cover comparison using ImageMagick RMSE
-├── unit/                 # Unit tests (including effect/ tests)
-├── integration/
-│   └── formats/          # Format handler integration tests
-└── e2e/
-    └── nginx.test.ts     # nginx e2e tests (run via bun run test:e2e)
+├── server.ts        # HTTP server + initial sync + DI setup
+├── watcher.sh       # inotifywait → POST /events
+├── constants.ts     # File constants
+├── scanner.ts       # File scanning, sync planning
+├── types.ts         # Shared types
+├── effect/          # EffectTS event handling
+│   ├── types.ts     # RawWatcherEvent schema + EventType
+│   ├── services.ts  # DI services
+│   ├── consumer.ts  # Event loop
+│   ├── adapters/    # event-adapter.ts
+│   └── handlers/    # book-sync, folder-sync, etc.
+├── formats/         # FormatHandler implementations
+│   ├── types.ts     # FormatHandler, BookMetadata
+│   ├── index.ts     # Handler registry
+│   └── *.ts         # epub, fb2, mobi, pdf, comic, txt, djvu
+└── utils/           # archive, image, process, processor
 ```
 
 ## Architecture: Dual Server
 
-Container runs two servers managed by `entrypoint.sh`:
-
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Docker Container                      │
-│                                                          │
-│  ┌──────────────────┐      ┌──────────────────────────┐ │
-│  │     nginx:80     │      │      Bun:3000            │ │
-│  │   (external)     │      │   (localhost only)       │ │
-│  │                  │      │                          │ │
-│  │  /        → /feed.xml   │  POST /events ← watcher  │ │
-│  │  /opds    → /feed.xml   │  POST /resync ← nginx    │ │
-│  │  /path/   → /path/feed.xml                         │ │
-│  │  /static/* → /app/static                           │ │
-│  │  /resync  → Basic Auth → proxy Bun                 │ │
-│  │  /*       → /data/*     │                          │ │
-│  └──────────────────┘      └──────────────────────────┘ │
-│          ↑                            ↑                 │
-│     EXPOSE 80                    watcher.sh             │
-└─────────────────────────────────────────────────────────┘
+nginx:80 (external)          Bun:3000 (localhost only)
+├── /opds → /feed.xml        ├── POST /events ← watcher
+├── /static/* → /app/static  └── POST /resync ← nginx
+├── /resync → auth → proxy
+└── /* → /data/*
 ```
 
-**nginx (port 80)**: Serves static files from /data, handles redirects, Basic Auth for /resync.
+## Architecture: EffectTS Layers
 
-**Bun (port 3000, localhost only)**: Internal API for watcher events and resync trigger.
+1. **Adapters** (`event-adapter.ts`) — raw inotify → typed EventType
+2. **Queue** (`EventQueueService`) — typed events only
+3. **Consumer** (`consumer.ts`) — gets handler via `HandlerRegistry.get()`
+4. **Handlers** (`handlers/*.ts`) — return `EventType[]` for cascades
 
-## Architecture: Layered Event-Driven with EffectTS
+### DI Services
 
-**Layers** (from top to bottom):
+| Service                | Purpose                               |
+| ---------------------- | ------------------------------------- |
+| `ConfigService`        | filesPath, dataPath, baseUrl, port    |
+| `LoggerService`        | info, warn, error, debug              |
+| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite |
+| `DeduplicationService` | TTL-based (500ms) event filtering     |
+| `EventQueueService`    | Queue operations                      |
+| `HandlerRegistry`      | Map<tag, handler>                     |
+| `ErrorLogService`      | JSONL error logging                   |
 
-1. **Adapters Layer** — `event-adapter.ts`
-   - `adaptWatcherEvent`: raw inotify JSON → typed EventType (with deduplication)
-   - `adaptSyncPlan`: sync plan → EventType[] (no deduplication)
+### Key Patterns
 
-2. **Queue Layer** — `EventQueueService` (DI)
-   - Works only with typed `EventType`, not raw events
-   - `enqueue`, `enqueueMany`, `size`, `take`
-
-3. **Consumer Layer** — `consumer.ts`
-   - `processEvent`: gets handler via `HandlerRegistry.get(event._tag)` (DI, NOT imports)
-   - Cascading events from handlers → `queue.enqueueMany()`
-
-4. **Handlers Layer** — `handlers/*.ts`
-   - Signature: `(event: EventType) => Effect<EventType[]>`
-   - Return cascading events, don't call other handlers directly
-
-**DI Services** (in `services.ts`):
-
-| Service                | Purpose                                              |
-| ---------------------- | ---------------------------------------------------- |
-| `ConfigService`        | filesPath, dataPath, baseUrl, port                   |
-| `LoggerService`        | info, warn, error, debug                             |
-| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite                |
-| `DeduplicationService` | TTL-based (500ms) event filtering                    |
-| `EventQueueService`    | Queue operations via Layer.effect                    |
-| `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
-| `ErrorLogService`      | JSONL error logging (log, clear)                     |
-
-**Startup sequence** (via `entrypoint.sh`):
-
-1. Generate htpasswd if ADMIN_USER/ADMIN_TOKEN set
-2. Generate nginx.conf from template via envsubst
-3. Start nginx (port 80)
-4. Start Bun server (port 3000, localhost only)
-5. Start watcher.sh (waits for Bun port via `nc`)
-6. Bun: `registerHandlers()` → populate HandlerRegistry
-7. Bun: `startConsumer` forked in background
-8. Bun: `initialSync()` → `adaptSyncPlan()` → `enqueueMany()`
-
-**Key principle**: Handlers return `EventType[]` for cascades instead of calling each other:
+**Cascade events** — handlers return events, don't call each other:
 
 ```typescript
-// parent-meta-sync.ts returns cascade event
 return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
 ```
 
-**Loop prevention**: feed.xml changes are NOT watched (would cause infinite loop).
-
-**Flag management**: Use `Effect.ensuring` for guaranteed cleanup:
+**Flag cleanup** — use `Effect.ensuring`:
 
 ```typescript
-const operation = Effect.gen(function* () {
+Effect.gen(function* () {
   isSyncing = true;
   yield* doWork;
-}).pipe(Effect.ensuring(Effect.sync(() => { isSyncing = false; })));
+}).pipe(
+  Effect.ensuring(
+    Effect.sync(() => {
+      isSyncing = false;
+    }),
+  ),
+);
 ```
 
-**Error logging**: Failed events are logged to `/data/errors.jsonl` (JSONL format), cleared on `/resync`.
+**Mirror structure** — /data mirrors /files:
 
-## Architecture: Mirror Structure
+- Book → folder with `entry.xml`, `cover.jpg`, `thumb.jpg`
+- Folder → `feed.xml` + `_entry.xml` (for parent)
 
-/data mirrors /files structure:
+## Adding New Format Handler
 
-- Each book → folder with entry.xml, cover.jpg, thumb.jpg
-- Each folder → feed.xml + \_entry.xml (for parent)
-- Feed assembly: read all nested entry.xml/\_entry.xml
+1. Create `src/formats/{format}.ts` with factory pattern
+2. Export `registration: FormatHandlerRegistration`
+3. Register in `src/formats/index.ts`
 
-## opds-ts Library
-
-Use opds-ts for OPDS XML generation:
+## opds-ts Usage
 
 ```typescript
 import { Entry, Feed } from "opds-ts/v1.2";
 
-// Create book entry
 const entry = new Entry(id, title)
   .setAuthor(author)
-  .setSummary(description)
   .addImage(coverUrl)
-  .addThumbnail(thumbUrl)
   .addAcquisition(downloadUrl, mimeType, "open-access");
 
-const xml = entry.toXml({ prettyPrint: true });
-
-// Create feed
 const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "navigation");
 ```
-
-## Adding New Format Handler
-
-1. Create `src/formats/{format}.ts`
-2. Implement factory pattern:
-
-   ```typescript
-   async function createHandler(filePath: string): Promise<FormatHandler | null> {
-     const data = await readFileOnce(filePath);
-     return {
-       getMetadata() {
-         return data.metadata;
-       },
-       async getCover() {
-         return data.cover;
-       },
-     };
-   }
-
-   export const registration: FormatHandlerRegistration = {
-     extensions: ["ext1", "ext2"],
-     create: createHandler,
-   };
-   ```
-
-3. Register in `src/formats/index.ts`
-
-## Development Workflow
-
-**IMPORTANT**: Docker dev environment is running at http://localhost:8080 and watches for file changes automatically. Do NOT run `bun` locally to test - use curl against the running container.
-
-```bash
-# Start dev environment (runs once, then watches for changes)
-docker compose -f docker-compose.dev.yml up
-
-# Test changes - just curl the running container
-curl http://localhost:8080/feed.xml
-curl http://localhost:8080/opds  # redirects to /feed.xml
-
-# Check logs
-docker compose -f docker-compose.dev.yml logs -f
-
-# Clear data cache (forces full rescan)
-docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
-
-# Trigger resync (requires ADMIN_USER/ADMIN_TOKEN in docker-compose)
-curl -u admin:secret http://localhost:8080/resync
-```
-
-## Testing & Linting
-
-```bash
-# Run tests (always in Docker - all tools available)
-bun run test
-
-# Run unit tests only
-bun run test:unit
-
-# Run integration tests only
-bun run test:integration
-
-# Run tests with coverage
-bun run test:coverage
-
-# Run e2e tests (starts container, runs tests, stops container)
-bun run test:e2e
-
-# Lint (type-aware, run before commits)
-bun run lint
-
-# Lint with auto-fix
-bun run lint:fix
-
-# Type check
-bun --bun tsc --noEmit
-```
-
-**IMPORTANT**: Always run `bun run lint:fix && bun run format` before committing changes.
-**NOTE**: Tests always run in Docker to ensure all tools (pdfinfo, 7zz, imagemagick) are available.
-
-## Documentation
-
-After completing tasks, update PLAN.md and CLAUDE.md if architecture or workflow changed. Keep updates concise — no redundant info.
