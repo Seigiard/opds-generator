@@ -18,18 +18,21 @@ Default to using Bun instead of Node.js.
 
 ```
 src/
-├── server.ts          # HTTP server + EffectTS Queue + initial sync
+├── server.ts          # HTTP server + initial sync + DI setup
 ├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # File scanning, sync planning
 ├── processor.ts       # Book/folder processing, XML generation
 ├── feed-generator.ts  # generateAllFeeds, buildFeed
 ├── types.ts           # Shared types
-├── effect/            # EffectTS-based event handling
-│   ├── services.ts    # DI services (Config, Logger, FileSystem)
-│   ├── queue.ts       # Queue.unbounded<FileEvent>(), clearQueue
-│   ├── events.ts      # FileEvent types + classification + factory functions
-│   ├── router.ts      # Event → handler routing
-│   └── handlers/      # Effect handlers (book-sync, folder-sync, etc.)
+├── effect/            # EffectTS-based event handling (layered architecture)
+│   ├── types.ts       # RawWatcherEvent schema + EventType union
+│   ├── services.ts    # DI services (Config, Logger, FileSystem, Queue, Registry)
+│   ├── consumer.ts    # Event loop (processEvent, startConsumer)
+│   ├── adapters/
+│   │   └── event-adapter.ts  # adaptWatcherEvent (raw→typed), adaptSyncPlan
+│   └── handlers/
+│       ├── index.ts            # registerHandlers() for HandlerRegistry
+│       └── *.ts                # book-sync, folder-sync, etc.
 ├── formats/           # Format handlers (FormatHandler interface)
 │   ├── types.ts       # FormatHandler, BookMetadata
 │   ├── index.ts       # Handler registry
@@ -46,25 +49,49 @@ test/
     └── formats/          # Format handler integration tests
 ```
 
-## Architecture: Event-Driven with EffectTS
+## Architecture: Layered Event-Driven with EffectTS
 
-**Startup**:
-1. `server.ts` initializes queue + consumer
-2. HTTP server starts (watcher can now connect)
-3. `watcher.sh` waits for `/health` (HTTP response), then starts inotifywait
-4. `initialSync()` scans files and enqueues BookCreated/FolderCreated events
-5. Queue consumer processes events → handlers write entry.xml → watcher catches → cascading feed generation
+**Layers** (from top to bottom):
 
-**Event flow**: inotifywait → curl POST /events → EffectTS Queue → router → Effect handlers
+1. **Adapters Layer** — `event-adapter.ts`
+   - `adaptWatcherEvent`: raw inotify JSON → typed EventType (with deduplication)
+   - `adaptSyncPlan`: sync plan → EventType[] (no deduplication)
 
-**initialSync flow**: scanFiles → createSyncPlan → enqueue events (same path as watcher)
+2. **Queue Layer** — `EventQueueService` (DI)
+   - Works only with typed `EventType`, not raw events
+   - `enqueue`, `enqueueMany`, `size`, `take`
 
-**Key handlers**:
-- `book-sync.ts` — book created/changed → extract metadata, generate entry.xml + covers
-- `book-cleanup.ts` — book deleted → rm -rf /data/{path}/
-- `folder-sync.ts` — folder created → generate _entry.xml
-- `folder-meta-sync.ts` — _entry.xml changed → regenerate feed.xml
-- `parent-meta-sync.ts` — entry.xml changed → trigger parent's folder-meta-sync
+3. **Consumer Layer** — `consumer.ts`
+   - `processEvent`: gets handler via `HandlerRegistry.get(event._tag)` (DI, NOT imports)
+   - Cascading events from handlers → `queue.enqueueMany()`
+
+4. **Handlers Layer** — `handlers/*.ts`
+   - Signature: `(event: EventType) => Effect<EventType[]>`
+   - Return cascading events, don't call other handlers directly
+
+**DI Services** (in `services.ts`):
+
+| Service | Purpose |
+|---------|---------|
+| `ConfigService` | filesPath, dataPath, baseUrl, port |
+| `LoggerService` | info, warn, error, debug |
+| `FileSystemService` | mkdir, rm, readdir, stat, atomicWrite |
+| `DeduplicationService` | TTL-based (500ms) event filtering |
+| `EventQueueService` | Queue operations via Layer.effect |
+| `HandlerRegistry` | Map<tag, handler> — decouples consumer from handlers |
+
+**Startup sequence**:
+1. `registerHandlers()` → populate HandlerRegistry
+2. `startConsumer` forked in background
+3. HTTP server starts
+4. `watcher.sh` waits for `/health`, starts inotifywait
+5. `initialSync()` → `adaptSyncPlan()` → `enqueueMany()`
+
+**Key principle**: Handlers return `EventType[]` for cascades instead of calling each other:
+```typescript
+// parent-meta-sync.ts returns cascade event
+return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
+```
 
 **Loop prevention**: feed.xml changes are NOT watched (would cause infinite loop).
 
@@ -73,8 +100,8 @@ test/
 /data mirrors /files structure:
 
 - Each book → folder with entry.xml, cover.jpg, thumb.jpg
-- Each folder → \_feed.xml (header) + \_entry.xml (for parent)
-- Feed assembly: read \_feed.xml + all nested entry.xml/\_entry.xml
+- Each folder → feed.xml + \_entry.xml (for parent)
+- Feed assembly: read all nested entry.xml/\_entry.xml
 
 ## opds-ts Library
 

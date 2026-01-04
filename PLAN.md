@@ -106,7 +106,7 @@ LOG_LEVEL=info          # debug | info | warn | error
 
 ```
 src/
-├── server.ts          # HTTP server + EffectTS Queue + initial sync
+├── server.ts          # HTTP server + initial sync + DI setup
 ├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # scanFiles, createSyncPlan, computeHash
 ├── processor.ts       # processBook, processFolder, XML builders
@@ -115,16 +115,19 @@ src/
 ├── constants.ts       # Magic numbers (sizes, timeouts)
 ├── config.ts          # Typed config with env validation
 ├── effect/
-│   ├── services.ts    # DI services (Config, Logger, FileSystem)
-│   ├── queue.ts       # EffectTS Queue setup
-│   ├── events.ts      # FileEvent types + classification
-│   ├── router.ts      # Event → handler routing
-│   └── handlers/      # Effect-based handlers
+│   ├── types.ts       # RawWatcherEvent schema + EventType union
+│   ├── services.ts    # DI services (Config, Logger, FileSystem, Queue, Registry)
+│   ├── consumer.ts    # Event loop (processEvent, startConsumer)
+│   ├── adapters/
+│   │   └── event-adapter.ts  # adaptWatcherEvent (raw→typed), adaptSyncPlan
+│   └── handlers/
+│       ├── index.ts            # registerHandlers() for HandlerRegistry
 │       ├── book-sync.ts
 │       ├── book-cleanup.ts
 │       ├── folder-sync.ts
 │       ├── folder-cleanup.ts
 │       ├── folder-meta-sync.ts
+│       ├── folder-entry-xml-changed.ts
 │       └── parent-meta-sync.ts
 ├── routes/
 │   ├── index.ts       # createRouter, resolveSafePath
