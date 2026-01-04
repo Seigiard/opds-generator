@@ -3,6 +3,7 @@ import { logger } from "./utils/errors.ts";
 export interface Config {
   filesPath: string;
   dataPath: string;
+  baseUrl: string;
   port: number;
   devMode: boolean;
   logLevel: string;
@@ -32,6 +33,7 @@ function loadConfig(): Config {
   return {
     filesPath: requireEnv("FILES", "./files"),
     dataPath: requireEnv("DATA", "./data"),
+    baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",

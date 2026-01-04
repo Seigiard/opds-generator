@@ -3,43 +3,25 @@ set -e
 
 BOOKS_DIR="${FILES:-/books}"
 DATA_DIR="${DATA:-/data}"
+SERVER_URL="http://localhost:${PORT:-8080}"
 
 : <<'LOGIC_EXPLANATION'
 
-# Event Driver System watches files and trigger related events
+# Event-Driven System with EffectTS Queue
 
-### Watchers:
-- ${BOOKS_DIR}/${FOLDER} renamed → FolderSync script
-- ${BOOKS_DIR}/${FOLDER} changed (means something changed directly inside this folder, 1 level deep) → folder sync script
-- ${BOOKS_DIR}/${FOLDER} removed → FolderCleanup script
+### Architecture:
+inotifywait → curl POST /events → EffectTS Queue → Handlers
 
-- ${BOOKS_DIR}/${BOOK} added/renamed/changed → BookSync script
-- ${BOOKS_DIR}/${BOOK} removed → BookCleanup script
+### Events flow:
+1. inotifywait outputs JSON events
+2. curl sends each event to POST /events
+3. Server adds events to bounded Queue (100 capacity)
+4. Queue consumer processes events sequentially
+5. Handlers are Effect-based with DI for testing
 
-- ${DATA_DIR}/**/*/_entry.xml changed → FolderMetadataSync and ParentFolderMetadataSync script
-- ${DATA_DIR}/**/*/entry.xml changed → ParentFolderMetadataSync script
-
-Note: Rename in inotify = MOVED_FROM (old path) + MOVED_TO (new path)
-
-### Scripts
-
-#### FolderSync script
-Generate new folder's `_entry.xml` in data/$FOLDER_PATH/
-
-#### FolderCleanup script
-Remove data/$FOLDER_PATH
-
-#### BookSync script
-Generate new book's data (`entry.xml`, `cover.jpg`, `thumb.jpg`) in data/$BOOK_PATH/
-
-#### BookCleanup script
-Remove data/$BOOK_PATH/
-
-#### FolderMetadataSync
-Regenerate `feed.xml` in this directory, update _entry.xml with bookCount
-
-#### ParentFolderMetadataSync
-Regenerate `feed.xml` in parent's directory
+### Event types:
+- Books: CREATE, CLOSE_WRITE, DELETE, MOVED_FROM, MOVED_TO
+- Data: CLOSE_WRITE, MOVED_TO (entry.xml, _entry.xml only)
 
 LOGIC_EXPLANATION
 
@@ -47,22 +29,38 @@ LOGIC_EXPLANATION
 echo "[init] Running initial sync..."
 bun run src/initial-sync.ts
 
-echo "[init] Starting HTTP server..."
+echo "[init] Starting HTTP server with EffectTS queue..."
 bun run src/server.ts &
 SERVER_PID=$!
+
+# Wait for server to start
+echo "[init] Waiting for server to be ready..."
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -s "$SERVER_URL/health" > /dev/null 2>&1; then
+    echo "[init] Server is ready"
+    break
+  fi
+  sleep 1
+done
 
 echo "[init] Starting /books watcher..."
 inotifywait -m -r \
   -e close_write -e delete -e moved_from -e moved_to -e create \
-  --format '%w|%f|%e' "$BOOKS_DIR" 2>/dev/null | \
-  bun run src/event/debouncer.ts books &
+  --format '{"watcher":"books","parent":"%w","name":"%f","events":"%e"}' \
+  "$BOOKS_DIR" 2>/dev/null | \
+  while read -r line; do
+    curl -s -X POST -H "Content-Type: application/json" -d "$line" "$SERVER_URL/events" > /dev/null || true
+  done &
 BOOKS_WATCHER_PID=$!
 
 echo "[init] Starting /data watcher..."
 inotifywait -m -r \
   -e close_write -e moved_to \
-  --format '%w|%f|%e' "$DATA_DIR" 2>/dev/null | \
-  bun run src/event/debouncer.ts data &
+  --format '{"watcher":"data","parent":"%w","name":"%f","events":"%e"}' \
+  "$DATA_DIR" 2>/dev/null | \
+  while read -r line; do
+    curl -s -X POST -H "Content-Type: application/json" -d "$line" "$SERVER_URL/events" > /dev/null || true
+  done &
 DATA_WATCHER_PID=$!
 
 cleanup() {

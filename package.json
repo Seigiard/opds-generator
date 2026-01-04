@@ -20,7 +20,9 @@
     "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage"
   },
   "dependencies": {
+    "@effect/schema": "^0.75.5",
     "chokidar": "^5.0.0",
+    "effect": "^3.19.14",
     "fast-xml-parser": "^5.3.3",
     "node-unrar-js": "^2.0.2",
     "opds-ts": "^2.1.0"
