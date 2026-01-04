@@ -13,7 +13,7 @@
 - [x] Генерация OPDS Navigation + Acquisition feeds
 - [x] Имя файла (без расширения) → title
 - [x] HTTP сервер (Bun.serve + Bun.file)
-- [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
+- [x] inotifywait + EffectTS Queue — событийная обработка файлов
 - [x] Dockerfile + docker-compose (dev/prod multi-stage)
 - [x] Автоопределение типа ZIP (комикс/fb2)
 - [x] Endpoint /cover/{path} (1400px max)
@@ -40,7 +40,6 @@
    файл fb2 — fb2
    и т.д.
 2. Тесты для комиксов. Подготовить тестовые данные
-3. упростить генерацию xml файлов: отслеживать изменения в папках/(feed|entry).xml и только на эти изменения генерировать фид
 
 ### Поддержка форматов
 
@@ -104,13 +103,26 @@ LOG_LEVEL=info          # debug | info | warn | error
 
 ```
 src/
-├── index.ts           # Entry point: Bun.serve() + fs.watch + sync
+├── server.ts          # HTTP server + EffectTS Queue + initial sync
+├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # scanFiles, createSyncPlan, computeHash
 ├── processor.ts       # processBook, processFolder, XML builders
-├── opds.ts            # buildFeed (сборка из файлов)
+├── feed-generator.ts  # generateAllFeeds, buildFeed
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
-├── constants.ts       # Magic numbers (sizes, timeouts, cache TTL)
+├── constants.ts       # Magic numbers (sizes, timeouts)
 ├── config.ts          # Typed config with env validation
+├── effect/
+│   ├── services.ts    # DI services (Config, Logger, FileSystem)
+│   ├── queue.ts       # EffectTS Queue setup
+│   ├── events.ts      # FileEvent types + classification
+│   ├── router.ts      # Event → handler routing
+│   └── handlers/      # Effect-based handlers
+│       ├── book-sync.ts
+│       ├── book-cleanup.ts
+│       ├── folder-sync.ts
+│       ├── folder-cleanup.ts
+│       ├── folder-meta-sync.ts
+│       └── parent-meta-sync.ts
 ├── routes/
 │   ├── index.ts       # createRouter, resolveSafePath
 │   ├── opds.ts        # handleOpds (feed serving)
@@ -126,8 +138,6 @@ src/
 │   └── pdf.ts         # PDF handler (poppler-utils)
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
-    ├── array.ts       # Type-safe array access helpers
-    ├── concurrency.ts # Batch processing with concurrency limit
     ├── errors.ts      # Logger + error classes
     ├── image.ts       # ImageMagick resize
     ├── opds.ts        # XML/feed helpers
