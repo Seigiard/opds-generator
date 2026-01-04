@@ -20,4 +20,4 @@ EXPOSE 8080
 
 VOLUME ["/books", "/data"]
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["sh", "-c", "bun run src/server.ts & sh src/watcher.sh"]

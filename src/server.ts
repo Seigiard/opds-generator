@@ -1,11 +1,18 @@
 import { Effect, Queue, Fiber } from "effect";
 import { Schema } from "@effect/schema";
+import { mkdir } from "node:fs/promises";
+import { join, dirname } from "node:path";
 import { config } from "./config.ts";
 import { createRouter } from "./routes/index.ts";
 import { logger } from "./utils/errors.ts";
 import { FileEvent } from "./effect/events.ts";
 import { makeEventQueue, addEvent, getQueueSize, processEvents } from "./effect/queue.ts";
 import { LiveLayer } from "./effect/services.ts";
+import { scanFiles, createSyncPlan, computeHash } from "./scanner.ts";
+import { generateAllFeeds } from "./feed-generator.ts";
+import { bookSync } from "./effect/handlers/book-sync.ts";
+import { bookCleanup } from "./effect/handlers/book-cleanup.ts";
+import { folderSync } from "./effect/handlers/folder-sync.ts";
 
 let currentHash = "";
 let isRebuilding = false;
@@ -28,6 +35,55 @@ export function setServerState(state: {
 	if (state.folderCount !== undefined) folderCount = state.folderCount;
 }
 
+// Initial sync using Effect handlers
+async function initialSync(): Promise<void> {
+	logger.info("InitialSync", "Starting...");
+	const startTime = Date.now();
+
+	await mkdir(config.dataPath, { recursive: true });
+
+	const files = await scanFiles(config.filesPath);
+	logger.info("InitialSync", `Found ${files.length} books`);
+
+	const plan = await createSyncPlan(files, config.dataPath);
+	logger.info("InitialSync", `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`);
+
+	// Delete orphans
+	for (const path of plan.toDelete) {
+		const parent = dirname(join(config.filesPath, path)) + "/";
+		const name = path.split("/").pop() ?? "";
+		await Effect.runPromise(Effect.provide(bookCleanup(parent, name), LiveLayer)).catch(() => {});
+	}
+
+	// Process folders
+	for (const folder of plan.folders) {
+		const parent = dirname(join(config.filesPath, folder.path)) + "/";
+		const name = folder.path.split("/").pop() ?? "";
+		await Effect.runPromise(Effect.provide(folderSync(parent, name), LiveLayer)).catch((e) => {
+			logger.warn("InitialSync", `Failed folder: ${folder.path}`, { error: String(e) });
+		});
+	}
+
+	// Process books
+	for (const file of plan.toProcess) {
+		const parent = dirname(join(config.filesPath, file.relativePath)) + "/";
+		const name = file.relativePath.split("/").pop() ?? "";
+		await Effect.runPromise(Effect.provide(bookSync(parent, name), LiveLayer)).catch((e) => {
+			logger.warn("InitialSync", `Failed book: ${file.relativePath}`, { error: String(e) });
+		});
+	}
+
+	// Generate feeds
+	await generateAllFeeds(config.dataPath);
+
+	currentHash = computeHash(files);
+	bookCount = files.length;
+	folderCount = plan.folders.length;
+
+	const duration = Date.now() - startTime;
+	logger.info("InitialSync", `Completed in ${duration}ms`, { books: bookCount, folders: folderCount });
+}
+
 // Initialize queue and consumer
 const initQueue = Effect.gen(function* () {
 	const queue = yield* makeEventQueue;
@@ -41,11 +97,18 @@ const initQueue = Effect.gen(function* () {
 	return queue;
 });
 
-// Run initialization
-Effect.runPromise(Effect.provide(initQueue, LiveLayer)).catch((error) => {
-	logger.error("Server", "Failed to initialize queue", error);
-	process.exit(1);
-});
+// Run initialization and initial sync
+async function startup(): Promise<void> {
+	try {
+		await Effect.runPromise(Effect.provide(initQueue, LiveLayer));
+		await initialSync();
+	} catch (error) {
+		logger.error("Server", "Startup failed", error);
+		process.exit(1);
+	}
+}
+
+void startup();
 
 const router = createRouter({
 	getCurrentHash: () => currentHash,

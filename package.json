@@ -2,7 +2,7 @@
   "name": "opds-generator",
   "private": true,
   "type": "module",
-  "module": "src/index.ts",
+  "module": "src/server.ts",
   "scripts": {
     "start": "docker compose up -d",
     "dev": "docker compose -f docker-compose.dev.yml up",
@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@effect/schema": "^0.75.5",
-    "chokidar": "^5.0.0",
     "effect": "^3.19.14",
     "fast-xml-parser": "^5.3.3",
     "node-unrar-js": "^2.0.2",

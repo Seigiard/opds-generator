@@ -16,4 +16,4 @@ services:
       - PORT=8080
       - BASE_URL=http://localhost:8080
       - DEV_MODE=true
-    command: ["bun", "run", "--watch", "src/index.ts"]
+    command: ["bun", "run", "--watch", "src/server.ts"]
