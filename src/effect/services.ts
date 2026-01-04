@@ -61,10 +61,28 @@ export class EventQueueService extends Context.Tag("EventQueueService")<
   }
 >() {}
 
+// Error Log Entry type
+export interface ErrorLogEntry {
+  timestamp: string;
+  event_tag: string;
+  path?: string;
+  error: string;
+  stack?: string;
+}
+
+// Error Log Service
+export class ErrorLogService extends Context.Tag("ErrorLogService")<
+  ErrorLogService,
+  {
+    readonly log: (entry: ErrorLogEntry) => Effect.Effect<void>;
+    readonly clear: () => Effect.Effect<void>;
+  }
+>() {}
+
 // Handler type for registry
 export type EventHandler = (
   event: EventType,
-) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService>;
+) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService | ErrorLogService>;
 
 // Handler Registry Service
 export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
@@ -214,6 +232,34 @@ export const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
   },
 });
 
+// Error Log Service - JSONL file in data directory
+const errorLogPath = `${config.dataPath}/errors.jsonl`;
+
+export const LiveErrorLogService = Layer.succeed(ErrorLogService, {
+  log: (entry: ErrorLogEntry) =>
+    Effect.promise(async () => {
+      const line = JSON.stringify(entry) + "\n";
+      const file = Bun.file(errorLogPath);
+      const existing = (await file.exists()) ? await file.text() : "";
+      await Bun.write(errorLogPath, existing + line);
+    }).pipe(
+      Effect.catchAll((e) => {
+        logger.error("ErrorLogService", "Failed to write error log", e);
+        return Effect.void;
+      }),
+    ),
+
+  clear: () =>
+    Effect.promise(async () => {
+      await Bun.write(errorLogPath, "");
+    }).pipe(
+      Effect.catchAll((e) => {
+        logger.error("ErrorLogService", "Failed to clear error log", e);
+        return Effect.void;
+      }),
+    ),
+});
+
 // Combined live layer
 export const LiveLayer = Layer.mergeAll(
   LiveConfigService,
@@ -222,4 +268,5 @@ export const LiveLayer = Layer.mergeAll(
   LiveDeduplicationService,
   LiveEventQueueService,
   LiveHandlerRegistry,
+  LiveErrorLogService,
 );
