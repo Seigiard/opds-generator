@@ -1,13 +1,11 @@
-import { Effect, Queue } from "effect";
+import { Effect, Queue, Option } from "effect";
 import type { FileEvent } from "./events.ts";
 import { classifyEvent } from "./events.ts";
 import { handleEvent } from "./router.ts";
 import { LoggerService } from "./services.ts";
 
-const QUEUE_CAPACITY = 100;
-
 export const makeEventQueue = Effect.gen(function* () {
-	return yield* Queue.bounded<FileEvent>(QUEUE_CAPACITY);
+	return yield* Queue.unbounded<FileEvent>();
 });
 
 export const addEvent =
@@ -17,6 +15,17 @@ export const addEvent =
 
 export const getQueueSize = (queue: Queue.Queue<FileEvent>): Effect.Effect<number> =>
 	Queue.size(queue);
+
+export const clearQueue = (queue: Queue.Queue<FileEvent>) =>
+	Effect.gen(function* () {
+		let cleared = 0;
+		while (true) {
+			const item = yield* Queue.poll(queue);
+			if (Option.isNone(item)) break;
+			cleared++;
+		}
+		return cleared;
+	});
 
 export const processEvents = (queue: Queue.Queue<FileEvent>) =>
 	Effect.gen(function* () {

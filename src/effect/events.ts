@@ -21,6 +21,23 @@ export type EventType =
 	| { _tag: "FolderEntryXmlChanged"; parent: string }
 	| { _tag: "Ignored" };
 
+// Event factory functions for programmatic event creation
+export function createBookCreatedEvent(parent: string, name: string): FileEvent {
+	return { watcher: "books", parent, name, events: "CLOSE_WRITE,CLOSE" };
+}
+
+export function createBookDeletedEvent(parent: string, name: string): FileEvent {
+	return { watcher: "books", parent, name, events: "DELETE" };
+}
+
+export function createFolderCreatedEvent(parent: string, name: string): FileEvent {
+	return { watcher: "books", parent, name, events: "CREATE,ISDIR" };
+}
+
+export function createFolderDeletedEvent(parent: string, name: string): FileEvent {
+	return { watcher: "books", parent, name, events: "DELETE,ISDIR" };
+}
+
 export function classifyEvent(event: FileEvent): EventType {
 	if (event.watcher === "data") {
 		// Data watcher: entry.xml or _entry.xml changes

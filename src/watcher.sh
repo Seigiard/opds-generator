@@ -5,14 +5,11 @@ BOOKS_DIR="${FILES:-/books}"
 DATA_DIR="${DATA:-/data}"
 SERVER_URL="${SERVER_URL:-http://localhost:${PORT:-8080}}"
 
-echo "[watcher] Waiting for server..."
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -s "$SERVER_URL/health" > /dev/null 2>&1; then
-    echo "[watcher] Server is ready"
-    break
-  fi
-  sleep 1
+echo "[watcher] Waiting for server to start..."
+until curl -s "$SERVER_URL/health" > /dev/null 2>&1; do
+  sleep 0.5
 done
+echo "[watcher] Server is up"
 
 echo "[watcher] Starting /books watcher..."
 inotifywait -m -r \
