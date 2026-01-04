@@ -1,6 +1,6 @@
 import { logger } from "./utils/errors.ts";
 
-export interface Config {
+interface Config {
   filesPath: string;
   dataPath: string;
   baseUrl: string;

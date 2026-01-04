@@ -3,7 +3,7 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export type ArchiveType = "zip" | "rar" | "7z" | "tar";
+type ArchiveType = "zip" | "rar" | "7z" | "tar";
 
 const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
   zip: [0x50, 0x4b, 0x03, 0x04],
