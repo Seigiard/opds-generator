@@ -40,6 +40,9 @@
    файл fb2 — fb2
    и т.д.
 2. Тесты для комиксов. Подготовить тестовые данные
+3. Flaky DJVU cover test — EPIPE error при pipe ddjvu → ImageMagick.
+   Race condition или memory pressure в Docker. Нужно сделать тест стабильнее
+   (временный файл вместо pipe, или retry logic).
 
 ### Поддержка форматов
 

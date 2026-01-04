@@ -32,7 +32,8 @@ flowchart TB
 
     subgraph Server["server.ts"]
         EP["POST /events"]
-        Q["EffectTS Queue<br/>(bounded 100)"]
+        RS["POST /resync"]
+        Q["EffectTS Queue<br/>(unbounded)"]
         R["Event Router"]
     end
 
@@ -62,9 +63,10 @@ flowchart TB
 
 ### EffectTS Queue
 
-- `Queue.bounded<FileEvent>(100)` — backpressure at 100 events
+- `Queue.unbounded<FileEvent>()` — no capacity limit
 - FIFO processing — events handled sequentially
 - Replaces debouncer — queue serializes naturally
+- `clearQueue()` helper for /resync endpoint
 
 ### Effect Handlers (DI-based)
 
@@ -205,23 +207,28 @@ sequenceDiagram
     participant D as Dockerfile CMD
     participant S as server.ts
     participant W as watcher.sh
+    participant Q as Queue Consumer
     participant BW as /books watcher
     participant DW as /data watcher
 
     D->>S: Start server (background)
     S->>S: Initialize EffectTS Queue
-    S->>S: Run initial sync
-    S->>S: Scan /books, create sync plan
-    S->>S: Process books/folders via Effect handlers
-    S->>S: Generate all feed.xml files
-    S->>S: HTTP server ready
+    S->>Q: Fork queue consumer (background)
+    S->>S: Start HTTP server
 
     D->>W: Start watcher.sh
-    W->>W: Wait for server /health
+    W->>W: Wait for server /health (HTTP response)
     W->>BW: Start /books watcher (background)
     W->>DW: Start /data watcher (background)
 
-    Note over W: Wait for all watchers
+    S->>S: Run initialSync
+    S->>S: Scan /books, create sync plan
+    S->>Q: Enqueue BookCreated/FolderCreated events
+    Q->>Q: Process events → handlers → entry.xml
+    DW->>S: POST /events (EntryXmlChanged)
+    Q->>Q: parentMetaSync → folderMetaSync → feed.xml
+
+    Note over S,Q: Cascading feed generation via watcher
 ```
 
 ## Docker Entry Points

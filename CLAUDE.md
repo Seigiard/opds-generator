@@ -26,8 +26,8 @@ src/
 ├── types.ts           # Shared types
 ├── effect/            # EffectTS-based event handling
 │   ├── services.ts    # DI services (Config, Logger, FileSystem)
-│   ├── queue.ts       # Queue.bounded<FileEvent>(100)
-│   ├── events.ts      # FileEvent types + classification
+│   ├── queue.ts       # Queue.unbounded<FileEvent>(), clearQueue
+│   ├── events.ts      # FileEvent types + classification + factory functions
 │   ├── router.ts      # Event → handler routing
 │   └── handlers/      # Effect handlers (book-sync, folder-sync, etc.)
 ├── formats/           # Format handlers (FormatHandler interface)
@@ -48,9 +48,16 @@ test/
 
 ## Architecture: Event-Driven with EffectTS
 
-**Startup**: `server.ts` runs initial sync, then starts HTTP server. `watcher.sh` waits for `/health`, then starts inotifywait watchers.
+**Startup**:
+1. `server.ts` initializes queue + consumer
+2. HTTP server starts (watcher can now connect)
+3. `watcher.sh` waits for `/health` (HTTP response), then starts inotifywait
+4. `initialSync()` scans files and enqueues BookCreated/FolderCreated events
+5. Queue consumer processes events → handlers write entry.xml → watcher catches → cascading feed generation
 
 **Event flow**: inotifywait → curl POST /events → EffectTS Queue → router → Effect handlers
+
+**initialSync flow**: scanFiles → createSyncPlan → enqueue events (same path as watcher)
 
 **Key handlers**:
 - `book-sync.ts` — book created/changed → extract metadata, generate entry.xml + covers
