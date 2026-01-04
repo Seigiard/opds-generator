@@ -122,10 +122,7 @@ export interface SyncPlan {
   folders: FolderInfo[];
 }
 
-export async function createSyncPlan(
-  files: FileInfo[],
-  dataPath: string
-): Promise<SyncPlan> {
+export async function createSyncPlan(files: FileInfo[], dataPath: string): Promise<SyncPlan> {
   const folders = buildFolderStructure(files);
   const existingPaths = await scanDataMirror(dataPath);
 
@@ -166,13 +163,9 @@ export async function createSyncPlan(
 }
 
 export function computeHash(files: FileInfo[]): string {
-  const sorted = [...files].sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath)
-  );
+  const sorted = [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
-  const data = sorted
-    .map((f) => `${f.relativePath}|${f.size}|${Math.floor(f.mtime)}`)
-    .join("\n");
+  const data = sorted.map((f) => `${f.relativePath}|${f.size}|${Math.floor(f.mtime)}`).join("\n");
 
   return Bun.hash(data).toString(16);
 }

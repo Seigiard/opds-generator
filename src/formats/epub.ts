@@ -96,11 +96,7 @@ function findCoverPath(opfData: OPFPackage, opfDir: string): string | undefined 
   return undefined;
 }
 
-async function findCoverWithFallback(
-  opfData: OPFPackage,
-  opfDir: string,
-  filePath: string
-): Promise<string | undefined> {
+async function findCoverWithFallback(opfData: OPFPackage, opfDir: string, filePath: string): Promise<string | undefined> {
   // 1. Try metadata (EPUB 2.0 + 3.0)
   const metaCover = findCoverPath(opfData, opfDir);
   if (metaCover) return metaCover;

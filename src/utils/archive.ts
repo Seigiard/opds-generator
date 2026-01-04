@@ -54,10 +54,7 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): P
 
   try {
     const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const [output, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      proc.exited,
-    ]);
+    const [output, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     if (exitCode !== 0) return [];
 
     if (type === "7z") {
@@ -68,7 +65,10 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): P
         .slice(1);
     }
 
-    return output.trim().split("\n").filter((line) => line.length > 0 && !line.endsWith("/"));
+    return output
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0 && !line.endsWith("/"));
   } catch {
     return [];
   }
@@ -124,10 +124,7 @@ async function readEntryShell(filePath: string, entryPath: string, type: "zip" |
 
   try {
     const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const [data, exitCode] = await Promise.all([
-      new Response(proc.stdout).arrayBuffer(),
-      proc.exited,
-    ]);
+    const [data, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
     if (exitCode !== 0 || data.byteLength === 0) return null;
     return Buffer.from(data);
   } catch {

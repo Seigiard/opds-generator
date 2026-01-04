@@ -3,11 +3,7 @@ import { dirname } from "node:path";
 import { logger } from "./errors.ts";
 export { COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../constants.ts";
 
-export async function resizeImage(
-  srcPath: string,
-  destPath: string,
-  maxSize: number
-): Promise<boolean> {
+export async function resizeImage(srcPath: string, destPath: string, maxSize: number): Promise<boolean> {
   try {
     await mkdir(dirname(destPath), { recursive: true });
     const resize = `${maxSize}x${maxSize}>`;
@@ -19,22 +15,15 @@ export async function resizeImage(
   }
 }
 
-export async function saveBufferAsImage(
-  buffer: Buffer,
-  destPath: string,
-  maxSize: number
-): Promise<boolean> {
+export async function saveBufferAsImage(buffer: Buffer, destPath: string, maxSize: number): Promise<boolean> {
   try {
     await mkdir(dirname(destPath), { recursive: true });
     const resize = `${maxSize}x${maxSize}>`;
-    const proc = Bun.spawn(
-      ["magick", "-", "-resize", resize, "-colorspace", "sRGB", "-quality", "90", destPath],
-      {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-      }
-    );
+    const proc = Bun.spawn(["magick", "-", "-resize", resize, "-colorspace", "sRGB", "-quality", "90", destPath], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     proc.stdin.write(buffer);
     const [, , , exitCode] = await Promise.all([
       proc.stdin.end(),

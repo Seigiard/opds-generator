@@ -18,9 +18,7 @@ export async function generateFeedFile(folderPath: string, dataPath: string): Pr
   const feedId = folderPath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${folderPath}`;
   const selfHref = folderPath === "" ? "/feed.xml" : `/${encodeUrlPath(folderPath)}/feed.xml`;
 
-  const feed = new Feed(feedId, folderName)
-    .addSelfLink(selfHref, "navigation")
-    .addNavigationLink("start", "/feed.xml");
+  const feed = new Feed(feedId, folderName).addSelfLink(selfHref, "navigation").addNavigationLink("start", "/feed.xml");
 
   // Collect entries from subfolders (folders first, then books)
   const folderEntries: string[] = [];

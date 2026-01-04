@@ -93,19 +93,13 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
     stderr: "pipe",
   });
 
-  const convert = Bun.spawn(
-    ["convert", "ppm:-", "-resize", `${COVER_MAX_SIZE}x${COVER_MAX_SIZE}>`, "jpeg:-"],
-    {
-      stdin: ddjvu.stdout,
-      stdout: "pipe",
-      stderr: "pipe",
-    }
-  );
+  const convert = Bun.spawn(["convert", "ppm:-", "-resize", `${COVER_MAX_SIZE}x${COVER_MAX_SIZE}>`, "jpeg:-"], {
+    stdin: ddjvu.stdout,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
-  const [data, exitCode] = await Promise.all([
-    new Response(convert.stdout).arrayBuffer(),
-    convert.exited,
-  ]);
+  const [data, exitCode] = await Promise.all([new Response(convert.stdout).arrayBuffer(), convert.exited]);
 
   await ddjvu.exited;
 

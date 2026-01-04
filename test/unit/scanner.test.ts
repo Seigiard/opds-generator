@@ -68,11 +68,7 @@ describe("scanner", () => {
     });
 
     test("handles multiple subfolders", () => {
-      const files = [
-        createFileInfo("Fiction/Book1.epub"),
-        createFileInfo("NonFiction/Book2.pdf"),
-        createFileInfo("Comics/Issue1.cbz"),
-      ];
+      const files = [createFileInfo("Fiction/Book1.epub"), createFileInfo("NonFiction/Book2.pdf"), createFileInfo("Comics/Issue1.cbz")];
 
       const result = buildFolderStructure(files);
       const root = result.find((f) => f.path === "");

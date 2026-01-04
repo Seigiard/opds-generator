@@ -17,10 +17,7 @@ async function parsePdfInfo(filePath: string): Promise<PdfInfo | null> {
     stderr: "pipe",
   });
 
-  const [output, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    proc.exited,
-  ]);
+  const [output, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
   if (exitCode !== 0) return null;
 
@@ -80,18 +77,12 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
 }
 
 async function extractCover(filePath: string): Promise<Buffer | null> {
-  const proc = Bun.spawn(
-    ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    }
-  );
+  const proc = Bun.spawn(["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
-  const [data, exitCode] = await Promise.all([
-    new Response(proc.stdout).arrayBuffer(),
-    proc.exited,
-  ]);
+  const [data, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
 
   if (exitCode !== 0 || data.byteLength === 0) return null;
 

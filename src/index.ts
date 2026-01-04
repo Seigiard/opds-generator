@@ -53,7 +53,7 @@ async function sync(): Promise<void> {
           logger.debug("Sync", `Processing: ${file.relativePath}`);
           return processBook(file, config.filesPath, config.dataPath);
         },
-        PROCESSING_CONCURRENCY
+        PROCESSING_CONCURRENCY,
       );
 
       currentHash = computeHash(files);

@@ -58,7 +58,10 @@ function formatDateFromNumbers(year?: number, month?: number): string | undefine
 
 function parseGenresString(genre?: string): string[] | undefined {
   if (!genre) return undefined;
-  const genres = genre.split(",").map((s) => s.trim()).filter(Boolean);
+  const genres = genre
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return genres.length > 0 ? genres : undefined;
 }
 
@@ -204,14 +207,9 @@ async function createComicHandler(filePath: string): Promise<FormatHandler | nul
     const entries = await listEntries(filePath);
     if (entries.length === 0) return null;
 
-    const images = entries.filter((e) =>
-      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
-    );
+    const images = entries.filter((e) => IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)));
 
-    const [comicInfoResult, cometMetadata] = await Promise.all([
-      parseComicInfo(filePath, entries),
-      parseCoMet(filePath, entries),
-    ]);
+    const [comicInfoResult, cometMetadata] = await Promise.all([parseComicInfo(filePath, entries), parseCoMet(filePath, entries)]);
 
     const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
     const pages = comicInfoResult?.pages;

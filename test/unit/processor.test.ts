@@ -17,9 +17,7 @@ describe("processor", () => {
     });
 
     test("encodes unicode characters", () => {
-      expect(encodeUrlPath("авторы/книга.epub")).toBe(
-        "%D0%B0%D0%B2%D1%82%D0%BE%D1%80%D1%8B/%D0%BA%D0%BD%D0%B8%D0%B3%D0%B0.epub"
-      );
+      expect(encodeUrlPath("авторы/книга.epub")).toBe("%D0%B0%D0%B2%D1%82%D0%BE%D1%80%D1%8B/%D0%BA%D0%BD%D0%B8%D0%B3%D0%B0.epub");
     });
 
     test("handles empty string", () => {

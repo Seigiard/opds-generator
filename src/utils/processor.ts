@@ -9,10 +9,7 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function normalizeFilenameTitle(filename: string): string {
-  return filename
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return filename.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export function formatFolderDescription(folderCount: number, bookCount: number): string | undefined {
