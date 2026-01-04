@@ -24,6 +24,8 @@
 - [x] Reset endpoint (/reset in DEV_MODE)
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes
+- [x] ErrorLogService: JSONL error logging to /data/errors.jsonl
+- [x] Cascade events: cleanup handlers trigger parent feed regeneration
 - [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction

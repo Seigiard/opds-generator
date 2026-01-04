@@ -79,6 +79,7 @@ test/
 | `DeduplicationService` | TTL-based (500ms) event filtering                    |
 | `EventQueueService`    | Queue operations via Layer.effect                    |
 | `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
+| `ErrorLogService`      | JSONL error logging (log, clear)                     |
 
 **Startup sequence**:
 
@@ -96,6 +97,17 @@ return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
 ```
 
 **Loop prevention**: feed.xml changes are NOT watched (would cause infinite loop).
+
+**Flag management**: Use `Effect.ensuring` for guaranteed cleanup:
+
+```typescript
+const operation = Effect.gen(function* () {
+  isSyncing = true;
+  yield* doWork;
+}).pipe(Effect.ensuring(Effect.sync(() => { isSyncing = false; })));
+```
+
+**Error logging**: Failed events are logged to `/data/errors.jsonl` (JSONL format), cleared on `/resync`.
 
 ## Architecture: Mirror Structure
 

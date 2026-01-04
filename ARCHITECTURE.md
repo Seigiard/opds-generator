@@ -62,6 +62,7 @@ Events are sent via HTTP to the server's EffectTS queue for sequential processin
 | `DeduplicationService` | TTL-based (500ms window) event filtering             |
 | `EventQueueService`    | enqueue, enqueueMany, size, take                     |
 | `HandlerRegistry`      | Map<tag, handler> — decouples consumer from handlers |
+| `ErrorLogService`      | JSONL error logging to /data/errors.jsonl            |
 
 ## Event Types
 
@@ -143,12 +144,14 @@ flowchart LR
 | Handler                       | Trigger                 | Returns                        |
 | ----------------------------- | ----------------------- | ------------------------------ |
 | `book-sync.ts`                | BookCreated             | `[]`                           |
-| `book-cleanup.ts`             | BookDeleted             | `[]`                           |
+| `book-cleanup.ts`             | BookDeleted             | `[FolderMetaSyncRequested]`    |
 | `folder-sync.ts`              | FolderCreated           | `[]`                           |
-| `folder-cleanup.ts`           | FolderDeleted           | `[]`                           |
+| `folder-cleanup.ts`           | FolderDeleted           | `[FolderMetaSyncRequested]`*   |
 | `folder-meta-sync.ts`         | FolderMetaSyncRequested | `[]`                           |
 | `parent-meta-sync.ts`         | EntryXmlChanged         | `[FolderMetaSyncRequested]`    |
 | `folder-entry-xml-changed.ts` | FolderEntryXmlChanged   | `[FolderMetaSyncRequested x2]` |
+
+*folder-cleanup returns `[]` for root-level folders (no parent to update)
 
 ## Startup Sequence
 
