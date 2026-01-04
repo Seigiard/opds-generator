@@ -1,6 +1,9 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { logHandlerError } from "../utils/errors.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 interface DjvuMeta {
   title?: string;
@@ -88,24 +91,37 @@ function parseCreationDate(dateStr: string | undefined): string | undefined {
 }
 
 async function extractCover(filePath: string): Promise<Buffer | null> {
-  const ddjvu = Bun.spawn(["ddjvu", "-format=ppm", "-page=1", filePath, "-"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  let tempDir: string | null = null;
 
-  const convert = Bun.spawn(["convert", "ppm:-", "-resize", `${COVER_MAX_SIZE}x${COVER_MAX_SIZE}>`, "jpeg:-"], {
-    stdin: ddjvu.stdout,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  try {
+    tempDir = await mkdtemp(join(tmpdir(), "djvu-"));
+    const ppmPath = join(tempDir, "page.ppm");
 
-  const [data, exitCode] = await Promise.all([new Response(convert.stdout).arrayBuffer(), convert.exited]);
+    const ddjvu = Bun.spawn(["ddjvu", "-format=ppm", "-page=1", filePath, ppmPath], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
-  await ddjvu.exited;
+    const ddjvuExitCode = await ddjvu.exited;
+    if (ddjvuExitCode !== 0) return null;
 
-  if (exitCode !== 0 || data.byteLength === 0) return null;
+    const convert = Bun.spawn(["convert", ppmPath, "-resize", `${COVER_MAX_SIZE}x${COVER_MAX_SIZE}>`, "jpeg:-"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
-  return Buffer.from(data);
+    const [data, convertExitCode] = await Promise.all([new Response(convert.stdout).arrayBuffer(), convert.exited]);
+
+    if (convertExitCode !== 0 || data.byteLength === 0) return null;
+
+    return Buffer.from(data);
+  } catch {
+    return null;
+  } finally {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
 }
 
 async function createDjvuHandler(filePath: string): Promise<FormatHandler | null> {
