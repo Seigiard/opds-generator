@@ -18,111 +18,111 @@ let consumerFiber: Fiber.RuntimeFiber<never, Error> | null = null;
 
 // Initial sync: sends events to queue via EventQueueService
 const initialSync = Effect.gen(function* () {
-	isSyncing = true;
-	const queue = yield* EventQueueService;
+  isSyncing = true;
+  const queue = yield* EventQueueService;
 
-	logger.info("InitialSync", "Starting...");
-	const startTime = Date.now();
+  logger.info("InitialSync", "Starting...");
+  const startTime = Date.now();
 
-	yield* Effect.tryPromise({
-		try: () => mkdir(config.dataPath, { recursive: true }),
-		catch: (e) => e as Error,
-	});
+  yield* Effect.tryPromise({
+    try: () => mkdir(config.dataPath, { recursive: true }),
+    catch: (e) => e as Error,
+  });
 
-	const files = yield* Effect.tryPromise({
-		try: () => scanFiles(config.filesPath),
-		catch: (e) => e as Error,
-	});
-	logger.info("InitialSync", `Found ${files.length} books`);
+  const files = yield* Effect.tryPromise({
+    try: () => scanFiles(config.filesPath),
+    catch: (e) => e as Error,
+  });
+  logger.info("InitialSync", `Found ${files.length} books`);
 
-	const plan = yield* Effect.tryPromise({
-		try: () => createSyncPlan(files, config.dataPath),
-		catch: (e) => e as Error,
-	});
-	logger.info(
-		"InitialSync",
-		`Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`,
-	);
+  const plan = yield* Effect.tryPromise({
+    try: () => createSyncPlan(files, config.dataPath),
+    catch: (e) => e as Error,
+  });
+  logger.info(
+    "InitialSync",
+    `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`,
+  );
 
-	// Convert sync plan to events
-	const events = adaptSyncPlan(plan, config.filesPath);
+  // Convert sync plan to events
+  const events = adaptSyncPlan(plan, config.filesPath);
 
-	// Enqueue all events
-	yield* queue.enqueueMany(events);
+  // Enqueue all events
+  yield* queue.enqueueMany(events);
 
-	const duration = Date.now() - startTime;
-	logger.info("InitialSync", `Queued ${events.length} events in ${duration}ms`);
-	isSyncing = false;
+  const duration = Date.now() - startTime;
+  logger.info("InitialSync", `Queued ${events.length} events in ${duration}ms`);
+  isSyncing = false;
 });
 
 // Resync: clear data, run initialSync
 const resync = Effect.gen(function* () {
-	logger.info("Resync", "Starting full resync...");
+  logger.info("Resync", "Starting full resync...");
 
-	// Clear data directory
-	yield* Effect.tryPromise({
-		try: () => rm(config.dataPath, { recursive: true, force: true }),
-		catch: (e) => e as Error,
-	});
-	yield* Effect.tryPromise({
-		try: () => mkdir(config.dataPath, { recursive: true }),
-		catch: (e) => e as Error,
-	});
-	logger.info("Resync", "Cleared data directory");
+  // Clear data directory
+  yield* Effect.tryPromise({
+    try: () => rm(config.dataPath, { recursive: true, force: true }),
+    catch: (e) => e as Error,
+  });
+  yield* Effect.tryPromise({
+    try: () => mkdir(config.dataPath, { recursive: true }),
+    catch: (e) => e as Error,
+  });
+  logger.info("Resync", "Cleared data directory");
 
-	// Run initial sync
-	yield* initialSync;
+  // Run initial sync
+  yield* initialSync;
 });
 
 // Handle incoming watcher event
 const handleWatcherEvent = (body: unknown) =>
-	Effect.gen(function* () {
-		const queue = yield* EventQueueService;
+  Effect.gen(function* () {
+    const queue = yield* EventQueueService;
 
-		// Validate event schema
-		const parseResult = Schema.decodeUnknownEither(RawWatcherEvent)(body);
-		if (parseResult._tag === "Left") {
-			logger.warn("Server", "Invalid event schema", { body });
-			return { status: 400, message: "Invalid event" };
-		}
+    // Validate event schema
+    const parseResult = Schema.decodeUnknownEither(RawWatcherEvent)(body);
+    if (parseResult._tag === "Left") {
+      logger.warn("Server", "Invalid event schema", { body });
+      return { status: 400, message: "Invalid event" };
+    }
 
-		const raw = parseResult.right;
+    const raw = parseResult.right;
 
-		// Adapt to typed event (with deduplication)
-		const event = yield* adaptWatcherEvent(raw);
-		if (event === null) {
-			return { status: 202, message: "Deduplicated" };
-		}
+    // Adapt to typed event (with deduplication)
+    const event = yield* adaptWatcherEvent(raw);
+    if (event === null) {
+      return { status: 202, message: "Deduplicated" };
+    }
 
-		// Enqueue
-		yield* queue.enqueue(event);
-		return { status: 202, message: "OK" };
-	});
+    // Enqueue
+    yield* queue.enqueue(event);
+    return { status: 202, message: "OK" };
+  });
 
 // Get health status
 const getHealthStatus = Effect.gen(function* () {
-	const queue = yield* EventQueueService;
-	const queueSize = yield* queue.size();
+  const queue = yield* EventQueueService;
+  const queueSize = yield* queue.size();
 
-	return {
-		status: isReady ? "ready" : "initializing",
-		queueSize,
-		syncing: isSyncing,
-	};
+  return {
+    status: isReady ? "ready" : "initializing",
+    queueSize,
+    syncing: isSyncing,
+  };
 });
 
 // Initialize and start server
 const initServer = Effect.gen(function* () {
-	// 1. Register all handlers in registry
-	yield* registerHandlers;
-	logger.info("Server", "Handlers registered");
+  // 1. Register all handlers in registry
+  yield* registerHandlers;
+  logger.info("Server", "Handlers registered");
 
-	// 2. Start consumer in background
-	const fiber = yield* Effect.fork(startConsumer);
-	consumerFiber = fiber;
-	logger.info("Server", "Consumer started");
+  // 2. Start consumer in background
+  const fiber = yield* Effect.fork(startConsumer);
+  consumerFiber = fiber;
+  logger.info("Server", "Consumer started");
 
-	isReady = true;
+  isReady = true;
 });
 
 // Create router
@@ -130,74 +130,74 @@ const router = createRouter();
 
 // Main entry point
 async function main(): Promise<void> {
-	try {
-		// 1. Initialize server (handlers + consumer)
-		await Effect.runPromise(Effect.provide(initServer, LiveLayer));
+  try {
+    // 1. Initialize server (handlers + consumer)
+    await Effect.runPromise(Effect.provide(initServer, LiveLayer));
 
-		// 2. Start HTTP server
-		const server = Bun.serve({
-			port: config.port,
-			async fetch(req) {
-				const url = new URL(req.url);
+    // 2. Start HTTP server
+    const server = Bun.serve({
+      port: config.port,
+      async fetch(req) {
+        const url = new URL(req.url);
 
-				// POST /events — receive events from inotifywait
-				if (req.method === "POST" && url.pathname === "/events") {
-					if (!isReady) {
-						return new Response("Queue not ready", { status: 503 });
-					}
+        // POST /events — receive events from inotifywait
+        if (req.method === "POST" && url.pathname === "/events") {
+          if (!isReady) {
+            return new Response("Queue not ready", { status: 503 });
+          }
 
-					try {
-						const body = await req.json();
-						const result = await Effect.runPromise(Effect.provide(handleWatcherEvent(body), LiveLayer));
-						return new Response(result.message, { status: result.status });
-					} catch (error) {
-						logger.error("Server", "Failed to process event", error);
-						return new Response("Error", { status: 500 });
-					}
-				}
+          try {
+            const body = await req.json();
+            const result = await Effect.runPromise(Effect.provide(handleWatcherEvent(body), LiveLayer));
+            return new Response(result.message, { status: result.status });
+          } catch (error) {
+            logger.error("Server", "Failed to process event", error);
+            return new Response("Error", { status: 500 });
+          }
+        }
 
-				// POST /resync — full resync
-				if (req.method === "POST" && url.pathname === "/resync") {
-					if (!isReady) {
-						return new Response("Queue not ready", { status: 503 });
-					}
+        // POST /resync — full resync
+        if (req.method === "POST" && url.pathname === "/resync") {
+          if (!isReady) {
+            return new Response("Queue not ready", { status: 503 });
+          }
 
-					if (isSyncing) {
-						return new Response("Sync already in progress", { status: 409 });
-					}
+          if (isSyncing) {
+            return new Response("Sync already in progress", { status: 409 });
+          }
 
-					void Effect.runPromise(Effect.provide(resync, LiveLayer));
-					return new Response("Resync started", { status: 202 });
-				}
+          void Effect.runPromise(Effect.provide(resync, LiveLayer));
+          return new Response("Resync started", { status: 202 });
+        }
 
-				// GET /health — queue stats
-				if (url.pathname === "/health") {
-					const health = await Effect.runPromise(Effect.provide(getHealthStatus, LiveLayer));
-					return Response.json(health);
-				}
+        // GET /health — queue stats
+        if (url.pathname === "/health") {
+          const health = await Effect.runPromise(Effect.provide(getHealthStatus, LiveLayer));
+          return Response.json(health);
+        }
 
-				// All other routes go to the main router
-				return router(req);
-			},
-		});
+        // All other routes go to the main router
+        return router(req);
+      },
+    });
 
-		logger.info("Server", `Listening on http://localhost:${server.port}`);
+    logger.info("Server", `Listening on http://localhost:${server.port}`);
 
-		// 3. Run initial sync
-		await Effect.runPromise(Effect.provide(initialSync, LiveLayer));
-	} catch (error) {
-		logger.error("Server", "Startup failed", error);
-		process.exit(1);
-	}
+    // 3. Run initial sync
+    await Effect.runPromise(Effect.provide(initialSync, LiveLayer));
+  } catch (error) {
+    logger.error("Server", "Startup failed", error);
+    process.exit(1);
+  }
 }
 
 void main();
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-	logger.info("Server", "Shutting down...");
-	if (consumerFiber) {
-		await Effect.runPromise(Fiber.interrupt(consumerFiber));
-	}
-	process.exit(0);
+  logger.info("Server", "Shutting down...");
+  if (consumerFiber) {
+    await Effect.runPromise(Fiber.interrupt(consumerFiber));
+  }
+  process.exit(0);
 });
