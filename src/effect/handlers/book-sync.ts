@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import { join, basename, relative } from "node:path";
-import { stat } from "node:fs/promises";
 import { Entry } from "opds-ts/v1.2";
 import { MIME_TYPES } from "../../types.ts";
 import { getHandlerFactory } from "../../formats/index.ts";
@@ -25,11 +24,8 @@ export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], 
 
     yield* logger.info("BookSync", `Processing: ${relativePath}`);
 
-    // Get file stats
-    const fileStat = yield* Effect.tryPromise({
-      try: () => stat(filePath),
-      catch: (e) => e as Error,
-    });
+    // Get file stats via DI
+    const fileStat = yield* fs.stat(filePath);
 
     // Create data directory
     yield* fs.mkdir(bookDataDir, { recursive: true });
