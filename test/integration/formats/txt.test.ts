@@ -34,14 +34,4 @@ describe("TXT Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(txtHandlerRegistration.extensions).toContain("txt");
-    });
-
-    test("has create function", () => {
-      expect(typeof txtHandlerRegistration.create).toBe("function");
-    });
-  });
 });

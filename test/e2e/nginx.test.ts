@@ -18,37 +18,32 @@ describe("nginx integration", () => {
   });
 
   describe("feed.xml", () => {
-    test("GET /feed.xml returns 200 or 503", async () => {
+    test("GET /feed.xml returns 200 with XML content", async () => {
       const response = await fetch(`${BASE_URL}/feed.xml`);
-      expect([200, 503]).toContain(response.status);
-
-      if (response.status === 200) {
-        const contentType = response.headers.get("content-type");
-        expect(contentType).toContain("xml");
-      } else {
-        expect(response.headers.get("retry-after")).toBe("5");
-      }
+      expect(response.status).toBe(200);
+      const contentType = response.headers.get("content-type");
+      expect(contentType).toContain("xml");
     });
   });
 
   describe("static files", () => {
-    test("GET /static/ returns files from static directory", async () => {
+    test("GET /static/stanza.xml returns 200", async () => {
       const response = await fetch(`${BASE_URL}/static/stanza.xml`);
-      expect([200, 404]).toContain(response.status);
+      expect(response.status).toBe(200);
     });
   });
 
   describe("directory index", () => {
-    test("GET /nonexistent/ returns 404 or 503", async () => {
+    test("GET /nonexistent/ returns 404", async () => {
       const response = await fetch(`${BASE_URL}/nonexistent/`, { redirect: "manual" });
-      expect([404, 503]).toContain(response.status);
+      expect(response.status).toBe(404);
     });
   });
 
   describe("/resync endpoint", () => {
-    test("GET /resync without auth returns 401 or 404", async () => {
+    test("GET /resync without auth returns 401", async () => {
       const response = await fetch(`${BASE_URL}/resync`);
-      expect([401, 404]).toContain(response.status);
+      expect(response.status).toBe(401);
     });
 
     test("GET /resync with correct auth returns 202", async () => {
@@ -56,7 +51,7 @@ describe("nginx integration", () => {
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: { Authorization: `Basic ${credentials}` },
       });
-      expect([202, 404]).toContain(response.status);
+      expect(response.status).toBe(202);
     });
 
     test("GET /resync with wrong auth returns 401", async () => {
@@ -64,7 +59,7 @@ describe("nginx integration", () => {
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: { Authorization: `Basic ${credentials}` },
       });
-      expect([401, 404]).toContain(response.status);
+      expect(response.status).toBe(401);
     });
   });
 
@@ -82,10 +77,9 @@ describe("nginx integration", () => {
   describe("content headers", () => {
     test("responses include charset utf-8", async () => {
       const response = await fetch(`${BASE_URL}/feed.xml`);
-      if (response.status === 200) {
-        const contentType = response.headers.get("content-type") || "";
-        expect(contentType.toLowerCase()).toContain("utf-8");
-      }
+      expect(response.status).toBe(200);
+      const contentType = response.headers.get("content-type") || "";
+      expect(contentType.toLowerCase()).toContain("utf-8");
     });
   });
 });

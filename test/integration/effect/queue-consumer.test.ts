@@ -1,3 +1,11 @@
+/**
+ * Queue and Consumer integration tests.
+ *
+ * Historical context (see git history for full documentation tests):
+ * - ManagedRuntime vs Effect.provide bug: each provide() creates new queue
+ * - Effect.ensuring guarantees cleanup even on error
+ * - EBUSY race conditions on directory deletion when nginx holds it open
+ */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Fiber, ManagedRuntime } from "effect";
 import { LiveLayer, EventQueueService, HandlerRegistry } from "../../../src/effect/services.ts";
@@ -91,40 +99,5 @@ describe("Queue and Consumer Integration", () => {
     expect(queueSize2).toBe(1); // Same queue = same size
 
     await isolatedRuntime.dispose();
-  });
-
-  test("demonstrates the old bug pattern (for documentation)", async () => {
-    // This test shows what happens with separate Layer.provide calls
-    // Each call creates a NEW queue instance - events are lost!
-
-    const separateRuntime1 = ManagedRuntime.make(LiveLayer);
-    const separateRuntime2 = ManagedRuntime.make(LiveLayer);
-
-    let queue1Size = -1;
-    let queue2Size = -1;
-
-    // Enqueue in first runtime
-    await separateRuntime1.runPromise(
-      Effect.gen(function* () {
-        const queue = yield* EventQueueService;
-        yield* queue.enqueue({ _tag: "TestEvent", path: "/lost/event.epub" } as EventType);
-        queue1Size = yield* queue.size();
-      }),
-    );
-
-    // Check in second runtime - should NOT see the event
-    await separateRuntime2.runPromise(
-      Effect.gen(function* () {
-        const queue = yield* EventQueueService;
-        queue2Size = yield* queue.size();
-      }),
-    );
-
-    // Different runtimes = different queues = event not visible
-    expect(queue1Size).toBe(1);
-    expect(queue2Size).toBe(0); // Event is in a different queue!
-
-    await separateRuntime1.dispose();
-    await separateRuntime2.dispose();
   });
 });

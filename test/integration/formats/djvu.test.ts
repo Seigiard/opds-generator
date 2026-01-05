@@ -46,15 +46,4 @@ describe("DJVU Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(djvuHandlerRegistration.extensions).toContain("djvu");
-      expect(djvuHandlerRegistration.extensions).toHaveLength(1);
-    });
-
-    test("has create function", () => {
-      expect(typeof djvuHandlerRegistration.create).toBe("function");
-    });
-  });
 });

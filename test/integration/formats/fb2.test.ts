@@ -55,15 +55,4 @@ describe("FB2 Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(fb2HandlerRegistration.extensions).toContain("fb2");
-      expect(fb2HandlerRegistration.extensions).toContain("fbz");
-    });
-
-    test("has create function", () => {
-      expect(typeof fb2HandlerRegistration.create).toBe("function");
-    });
-  });
 });

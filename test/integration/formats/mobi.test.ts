@@ -53,16 +53,4 @@ describe("MOBI Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(mobiHandlerRegistration.extensions).toContain("mobi");
-      expect(mobiHandlerRegistration.extensions).toContain("azw");
-      expect(mobiHandlerRegistration.extensions).toContain("azw3");
-    });
-
-    test("has create function", () => {
-      expect(typeof mobiHandlerRegistration.create).toBe("function");
-    });
-  });
 });

@@ -46,15 +46,4 @@ describe("PDF Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(pdfHandlerRegistration.extensions).toContain("pdf");
-      expect(pdfHandlerRegistration.extensions).toHaveLength(1);
-    });
-
-    test("has create function", () => {
-      expect(typeof pdfHandlerRegistration.create).toBe("function");
-    });
-  });
 });

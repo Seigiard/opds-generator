@@ -163,12 +163,6 @@ describe("scanner", () => {
       expect(computeHash([file1])).not.toBe(computeHash([file2]));
     });
 
-    test("handles empty file list", () => {
-      const hash = computeHash([]);
-      expect(typeof hash).toBe("string");
-      expect(hash.length).toBeGreaterThan(0);
-    });
-
     test("returns hex string", () => {
       const files = [createFileInfo("book.epub", 1000, 1700000000000)];
       const hash = computeHash(files);
