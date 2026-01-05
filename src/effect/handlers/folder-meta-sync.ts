@@ -2,8 +2,8 @@ import { Effect } from "effect";
 import { join, relative } from "node:path";
 import { readdir, stat } from "node:fs/promises";
 import { Feed } from "opds-ts/v1.2";
-import { stripXmlDeclaration, naturalSort } from "../../utils/opds.ts";
-import { encodeUrlPath } from "../../utils/processor.ts";
+import { stripXmlDeclaration, naturalSort, extractTitle } from "../../utils/opds.ts";
+import { encodeUrlPath, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
@@ -24,18 +24,24 @@ export const folderMetaSync = (
     yield* logger.info("FolderMetaSync", `Processing: ${relativePath || "(root)"}`);
 
     const feedOutputPath = join(normalizedDir, FEED_FILE);
-    const folderName = relativePath.split("/").pop() || "Catalog";
+    const rawFolderName = relativePath.split("/").pop() || "Catalog";
+    const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
     const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
     const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-    const folderEntries: string[] = [];
-    const bookEntries: string[] = [];
+    interface EntryWithTitle {
+      xml: string;
+      title: string;
+      dirName: string;
+    }
+
+    const folderEntries: EntryWithTitle[] = [];
+    const bookEntries: EntryWithTitle[] = [];
 
     // Read directory contents
     const readResult = yield* Effect.tryPromise({
       try: async () => {
         const items = await readdir(normalizedDir);
-        items.sort(naturalSort);
 
         for (const item of items) {
           if (item.startsWith("_")) continue;
@@ -53,10 +59,14 @@ export const folderMetaSync = (
 
             if (await folderEntryFile.exists()) {
               const entryXml = await folderEntryFile.text();
-              folderEntries.push(stripXmlDeclaration(entryXml));
+              const xml = stripXmlDeclaration(entryXml);
+              const title = extractTitle(xml) || item;
+              folderEntries.push({ xml, title, dirName: item });
             } else if (await bookEntryFile.exists()) {
               const entryXml = await bookEntryFile.text();
-              bookEntries.push(stripXmlDeclaration(entryXml));
+              const xml = stripXmlDeclaration(entryXml);
+              const title = extractTitle(xml) || item;
+              bookEntries.push({ xml, title, dirName: item });
             }
           }
         }
@@ -69,11 +79,19 @@ export const folderMetaSync = (
         logger.warn("FolderMetaSync", `Error reading folder: ${relativePath}`, {
           error: String(error),
         });
-        return Effect.succeed({ folderEntries: [] as string[], bookEntries: [] as string[] });
+        return Effect.succeed({ folderEntries: [] as EntryWithTitle[], bookEntries: [] as EntryWithTitle[] });
       }),
     );
 
-    const entries = [...readResult.folderEntries, ...readResult.bookEntries];
+    // Sort by title, fallback to dirName for deterministic order
+    const sortByTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
+      const cmp = naturalSort(a.title, b.title);
+      return cmp !== 0 ? cmp : naturalSort(a.dirName, b.dirName);
+    };
+    readResult.folderEntries.sort(sortByTitle);
+    readResult.bookEntries.sort(sortByTitle);
+
+    const entries = [...readResult.folderEntries.map((e) => e.xml), ...readResult.bookEntries.map((e) => e.xml)];
     const hasBooks = readResult.bookEntries.length > 0;
     const feedKind = hasBooks ? "acquisition" : "navigation";
 

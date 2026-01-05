@@ -3,7 +3,7 @@ import { join, relative, basename } from "node:path";
 import { readdir } from "node:fs/promises";
 import { Entry } from "opds-ts/v1.2";
 import { BOOK_EXTENSIONS } from "../../types.ts";
-import { encodeUrlPath, formatFolderDescription } from "../../utils/processor.ts";
+import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
@@ -29,7 +29,7 @@ export const folderSync = (
 
     // Only create _entry.xml for non-root folders
     if (relativePath !== "") {
-      const folderName = basename(relativePath);
+      const folderName = normalizeFilenameTitle(basename(relativePath));
 
       // Count contents
       const counts = yield* Effect.tryPromise({
