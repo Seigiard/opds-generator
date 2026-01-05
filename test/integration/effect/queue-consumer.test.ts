@@ -37,7 +37,7 @@ describe("Queue and Consumer Integration", () => {
     await runtime.runPromise(
       Effect.gen(function* () {
         const registry = yield* HandlerRegistry;
-        registry.register("TestEvent", (event: EventType) =>
+        registry.register("FolderMetaSyncRequested", (event: EventType) =>
           Effect.sync(() => {
             processedEvents.push((event as { path: string }).path);
             return [] as readonly EventType[];
@@ -56,7 +56,7 @@ describe("Queue and Consumer Integration", () => {
     await runtime.runPromise(
       Effect.gen(function* () {
         const queue = yield* EventQueueService;
-        yield* queue.enqueue({ _tag: "TestEvent", path: "/test/book.epub" } as EventType);
+        yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test/book.epub" });
       }),
     );
 
@@ -81,7 +81,7 @@ describe("Queue and Consumer Integration", () => {
     await isolatedRuntime.runPromise(
       Effect.gen(function* () {
         const queue = yield* EventQueueService;
-        yield* queue.enqueue({ _tag: "TestEvent", path: "/shared/test1.epub" } as EventType);
+        yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test1.epub" });
         queueSize1 = yield* queue.size();
       }),
     );

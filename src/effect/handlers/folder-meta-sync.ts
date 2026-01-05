@@ -28,8 +28,6 @@ export const folderMetaSync = (
     const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
     const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-    const feed = new Feed(feedId, folderName).addSelfLink(selfHref, "navigation").addNavigationLink("start", `/${FEED_FILE}`);
-
     const folderEntries: string[] = [];
     const bookEntries: string[] = [];
 
@@ -77,8 +75,9 @@ export const folderMetaSync = (
 
     const entries = [...readResult.folderEntries, ...readResult.bookEntries];
     const hasBooks = readResult.bookEntries.length > 0;
+    const feedKind = hasBooks ? "acquisition" : "navigation";
 
-    feed.setKind(hasBooks ? "acquisition" : "navigation");
+    const feed = new Feed(feedId, folderName).addSelfLink(selfHref, feedKind).addNavigationLink("start", `/${FEED_FILE}`).setKind(feedKind);
 
     const feedXml = feed.toXml({ prettyPrint: true });
     const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';
