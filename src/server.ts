@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Effect, Fiber, ManagedRuntime } from "effect";
 import { Schema } from "@effect/schema";
 import { mkdir, rm } from "node:fs/promises";
 import { config } from "./config.ts";
@@ -9,6 +9,9 @@ import { startConsumer } from "./effect/consumer.ts";
 import { registerHandlers } from "./effect/handlers/index.ts";
 import { ErrorLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
 import { scanFiles, createSyncPlan } from "./scanner.ts";
+
+// Shared runtime - single instance of all services
+const runtime = ManagedRuntime.make(LiveLayer);
 
 // Runtime state
 let isReady = false;
@@ -116,27 +119,24 @@ const handleWatcherEvent = (body: unknown) =>
     return { status: 202, message: "OK" };
   });
 
-// Initialize and start server
-const initServer = Effect.gen(function* () {
-  // 1. Register all handlers in registry
+// Initialize handlers only
+const initHandlers = Effect.gen(function* () {
   yield* registerHandlers;
   logger.info("Server", "Handlers registered");
-
-  // 2. Start consumer in background
-  const fiber = yield* Effect.fork(startConsumer);
-  consumerFiber = fiber;
-  logger.info("Server", "Consumer started");
-
-  isReady = true;
 });
 
 // Main entry point
 async function main(): Promise<void> {
   try {
-    // 1. Initialize server (handlers + consumer)
-    await Effect.runPromise(Effect.provide(initServer, LiveLayer));
+    // 1. Register handlers
+    await runtime.runPromise(initHandlers);
 
-    // 2. Start HTTP server (internal only - nginx handles external traffic)
+    // 2. Start consumer in background (using runFork for proper fiber execution)
+    consumerFiber = runtime.runFork(startConsumer);
+    logger.info("Server", "Consumer started");
+    isReady = true;
+
+    // 3. Start HTTP server
     const server = Bun.serve({
       port: config.port,
       hostname: "127.0.0.1",
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
 
           try {
             const body = await req.json();
-            const result = await Effect.runPromise(Effect.provide(handleWatcherEvent(body), LiveLayer));
+            const result = await runtime.runPromise(handleWatcherEvent(body));
             return new Response(result.message, { status: result.status });
           } catch (error) {
             logger.error("Server", "Failed to process event", error);
@@ -169,7 +169,7 @@ async function main(): Promise<void> {
             return new Response("Sync already in progress", { status: 409 });
           }
 
-          Effect.runPromise(Effect.provide(resync, LiveLayer)).catch((error) => {
+          runtime.runPromise(resync).catch((error) => {
             logger.error("Server", "Resync failed", error);
           });
           return new Response("Resync started", { status: 202 });
@@ -182,8 +182,8 @@ async function main(): Promise<void> {
 
     logger.info("Server", `Listening on http://localhost:${server.port}`);
 
-    // 3. Run initial sync
-    await Effect.runPromise(Effect.provide(initialSync, LiveLayer));
+    // 4. Run initial sync
+    await runtime.runPromise(initialSync);
   } catch (error) {
     logger.error("Server", "Startup failed", error);
     process.exit(1);
@@ -196,7 +196,8 @@ void main();
 process.on("SIGTERM", async () => {
   logger.info("Server", "Shutting down...");
   if (consumerFiber) {
-    await Effect.runPromise(Fiber.interrupt(consumerFiber));
+    await runtime.runPromise(Fiber.interrupt(consumerFiber));
   }
+  await runtime.dispose();
   process.exit(0);
 });

@@ -9,14 +9,14 @@
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
-    },
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
+    }
   },
   "lsp": {
     "oxlint": {
@@ -26,9 +26,9 @@
           "fixKind": "safe_fix",
           "run": "onType",
           "typeAware": true,
-          "unusedDisableDirectives": "deny",
-        },
-      },
+          "unusedDisableDirectives": "deny"
+        }
+      }
     },
     "oxfmt": {
       "initialization_options": {
@@ -39,9 +39,9 @@
           "fmt.experimental": true,
           "run": "onSave",
           "typeAware": false,
-          "unusedDisableDirectives": false,
-        },
-      },
-    },
-  },
+          "unusedDisableDirectives": false
+        }
+      }
+    }
+  }
 }

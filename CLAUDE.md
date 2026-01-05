@@ -37,13 +37,20 @@ curl -u admin:secret http://localhost:8080/resync    # force resync
 
 ## Testing
 
+**IMPORTANT:** Run tests via docker-compose.test.yml, not locally!
+
 ```bash
-bun run test              # all tests (in Docker)
-bun run test:unit         # unit only
-bun run test:integration  # integration only
-bun run test:e2e          # e2e (starts/stops container)
-bun run test:coverage     # with coverage
-bun --bun tsc --noEmit    # type check
+# Run all tests (unit + integration, excludes e2e)
+docker compose -f docker-compose.test.yml run --rm test
+
+# Run specific test file
+docker compose -f docker-compose.test.yml run --rm test bun test test/integration/effect/queue-consumer.test.ts
+
+# Run e2e tests (starts/stops container automatically)
+bun run test:e2e
+
+# Type check (locally is fine)
+bun --bun tsc --noEmit
 ```
 
 ## Project Structure
@@ -118,6 +125,19 @@ Effect.gen(function* () {
     }),
   ),
 );
+```
+
+**ManagedRuntime** — share single Layer instance across all Effect calls:
+
+```typescript
+// ✅ Correct: single runtime, shared queue
+const runtime = ManagedRuntime.make(LiveLayer);
+await runtime.runPromise(effect1);
+await runtime.runPromise(effect2); // same queue instance
+
+// ❌ Wrong: each provide creates NEW queue instance
+await Effect.runPromise(Effect.provide(effect1, LiveLayer));
+await Effect.runPromise(Effect.provide(effect2, LiveLayer)); // different queue!
 ```
 
 **Mirror structure** — /data mirrors /files:
