@@ -27,7 +27,7 @@ fi
 export RATE_LIMIT
 
 # Generate nginx.conf from template
-envsubst '${BUN_PORT} ${RATE_LIMIT}' < /app/nginx.conf.template > /tmp/nginx.conf
+sed -e "s/\${BUN_PORT}/$BUN_PORT/g" -e "s/\${RATE_LIMIT}/$RATE_LIMIT/g" /app/nginx.conf.template > /tmp/nginx.conf
 
 # Remove auth block if not configured
 if [ "$AUTH_ENABLED" = "0" ]; then
