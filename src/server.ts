@@ -4,8 +4,10 @@ import { mkdir, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "./config.ts";
 import { logger } from "./utils/errors.ts";
-import { RawWatcherEvent } from "./effect/types.ts";
-import { adaptWatcherEvent, adaptSyncPlan } from "./effect/adapters/event-adapter.ts";
+import { RawBooksEvent, RawDataEvent } from "./effect/types.ts";
+import { adaptBooksEvent } from "./effect/adapters/books-adapter.ts";
+import { adaptDataEvent } from "./effect/adapters/data-adapter.ts";
+import { adaptSyncPlan } from "./effect/adapters/sync-plan-adapter.ts";
 import { startConsumer } from "./effect/consumer.ts";
 import { registerHandlers } from "./effect/handlers/index.ts";
 import { ErrorLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
@@ -94,27 +96,44 @@ const resync = Effect.gen(function* () {
   ),
 );
 
-// Handle incoming watcher event
-const handleWatcherEvent = (body: unknown) =>
+// Handle incoming books watcher event
+const handleBooksEvent = (body: unknown) =>
   Effect.gen(function* () {
     const queue = yield* EventQueueService;
 
-    // Validate event schema
-    const parseResult = Schema.decodeUnknownEither(RawWatcherEvent)(body);
+    const parseResult = Schema.decodeUnknownEither(RawBooksEvent)(body);
     if (parseResult._tag === "Left") {
-      logger.warn("Server", "Invalid event schema", { body });
+      logger.warn("Server", "Invalid books event schema", { body });
       return { status: 400, message: "Invalid event" };
     }
 
     const raw = parseResult.right;
-
-    // Adapt to typed event (with deduplication)
-    const event = yield* adaptWatcherEvent(raw);
+    const event = yield* adaptBooksEvent(raw);
     if (event === null) {
       return { status: 202, message: "Deduplicated" };
     }
 
-    // Enqueue
+    yield* queue.enqueue(event);
+    return { status: 202, message: "OK" };
+  });
+
+// Handle incoming data watcher event
+const handleDataEvent = (body: unknown) =>
+  Effect.gen(function* () {
+    const queue = yield* EventQueueService;
+
+    const parseResult = Schema.decodeUnknownEither(RawDataEvent)(body);
+    if (parseResult._tag === "Left") {
+      logger.warn("Server", "Invalid data event schema", { body });
+      return { status: 400, message: "Invalid event" };
+    }
+
+    const raw = parseResult.right;
+    const event = yield* adaptDataEvent(raw);
+    if (event === null) {
+      return { status: 202, message: "Deduplicated" };
+    }
+
     yield* queue.enqueue(event);
     return { status: 202, message: "OK" };
   });
@@ -143,18 +162,34 @@ async function main(): Promise<void> {
       async fetch(req) {
         const url = new URL(req.url);
 
-        // POST /events — receive events from inotifywait
-        if (req.method === "POST" && url.pathname === "/events") {
+        // POST /events/books — receive events from books watcher
+        if (req.method === "POST" && url.pathname === "/events/books") {
           if (!isReady) {
             return new Response("Queue not ready", { status: 503 });
           }
 
           try {
             const body = await req.json();
-            const result = await runtime.runPromise(handleWatcherEvent(body));
+            const result = await runtime.runPromise(handleBooksEvent(body));
             return new Response(result.message, { status: result.status });
           } catch (error) {
-            logger.error("Server", "Failed to process event", error);
+            logger.error("Server", "Failed to process books event", error);
+            return new Response("Error", { status: 500 });
+          }
+        }
+
+        // POST /events/data — receive events from data watcher
+        if (req.method === "POST" && url.pathname === "/events/data") {
+          if (!isReady) {
+            return new Response("Queue not ready", { status: 503 });
+          }
+
+          try {
+            const body = await req.json();
+            const result = await runtime.runPromise(handleDataEvent(body));
+            return new Response(result.message, { status: result.status });
+          } catch (error) {
+            logger.error("Server", "Failed to process data event", error);
             return new Response("Error", { status: 500 });
           }
         }

@@ -15,20 +15,20 @@ echo "[watcher] Bun server is up"
 echo "[watcher] Starting /books watcher..."
 inotifywait -m -r \
   -e close_write -e delete -e moved_from -e moved_to -e create \
-  --format '{"watcher":"books","parent":"%w","name":"%f","events":"%e"}' \
+  --format '{"parent":"%w","name":"%f","events":"%e"}' \
   "$BOOKS_DIR" 2>/dev/null | \
   while read -r line; do
-    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events" 2>/dev/null || true
+    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events/books" 2>/dev/null || true
   done &
 BOOKS_WATCHER_PID=$!
 
 echo "[watcher] Starting /data watcher..."
 inotifywait -m -r \
   -e close_write -e moved_to \
-  --format '{"watcher":"data","parent":"%w","name":"%f","events":"%e"}' \
+  --format '{"parent":"%w","name":"%f","events":"%e"}' \
   "$DATA_DIR" 2>/dev/null | \
   while read -r line; do
-    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events" 2>/dev/null || true
+    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events/data" 2>/dev/null || true
   done &
 DATA_WATCHER_PID=$!
 
