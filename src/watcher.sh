@@ -4,10 +4,10 @@ set -e
 BOOKS_DIR="${FILES:-/books}"
 DATA_DIR="${DATA:-/data}"
 BUN_PORT="${PORT:-3000}"
-SERVER_URL="http://localhost:$BUN_PORT"
+SERVER_URL="http://127.0.0.1:$BUN_PORT"
 
 echo "[watcher] Waiting for Bun server on port $BUN_PORT..."
-until nc -z localhost "$BUN_PORT" 2>/dev/null; do
+until nc -z 127.0.0.1 "$BUN_PORT" 2>/dev/null; do
   sleep 0.5
 done
 echo "[watcher] Bun server is up"
@@ -18,7 +18,7 @@ inotifywait -m -r \
   --format '{"watcher":"books","parent":"%w","name":"%f","events":"%e"}' \
   "$BOOKS_DIR" 2>/dev/null | \
   while read -r line; do
-    curl -s -X POST -H "Content-Type: application/json" -d "$line" "$SERVER_URL/events" > /dev/null || true
+    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events" 2>/dev/null || true
   done &
 BOOKS_WATCHER_PID=$!
 
@@ -28,7 +28,7 @@ inotifywait -m -r \
   --format '{"watcher":"data","parent":"%w","name":"%f","events":"%e"}' \
   "$DATA_DIR" 2>/dev/null | \
   while read -r line; do
-    curl -s -X POST -H "Content-Type: application/json" -d "$line" "$SERVER_URL/events" > /dev/null || true
+    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events" 2>/dev/null || true
   done &
 DATA_WATCHER_PID=$!
 

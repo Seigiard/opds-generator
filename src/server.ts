@@ -1,6 +1,7 @@
 import { Effect, Fiber, ManagedRuntime } from "effect";
 import { Schema } from "@effect/schema";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { config } from "./config.ts";
 import { logger } from "./utils/errors.ts";
 import { RawWatcherEvent } from "./effect/types.ts";
@@ -73,13 +74,12 @@ const resync = Effect.gen(function* () {
   const errorLog = yield* ErrorLogService;
   yield* errorLog.clear();
 
-  // Clear data directory
+  // Clear data directory contents (not the directory itself - nginx holds it open)
   yield* Effect.tryPromise({
-    try: () => rm(config.dataPath, { recursive: true, force: true }),
-    catch: (e) => e as Error,
-  });
-  yield* Effect.tryPromise({
-    try: () => mkdir(config.dataPath, { recursive: true }),
+    try: async () => {
+      const entries = await readdir(config.dataPath);
+      await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
+    },
     catch: (e) => e as Error,
   });
   logger.info("Resync", "Cleared data directory");
