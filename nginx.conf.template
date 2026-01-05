@@ -1,3 +1,4 @@
+daemon off;
 worker_processes auto;
 error_log /dev/stderr warn;
 pid /run/nginx.pid;
@@ -19,11 +20,6 @@ http {
     tcp_nopush on;
 
     # ETag enabled by default
-
-    # OPDS MIME type for XML feeds
-    types {
-        application/atom+xml xml;
-    }
 
     server {
         listen 80;
