@@ -39,3 +39,6 @@ files/*
 !files/test/
 !files/test/**
 files/test/.DS_Store
+
+dropbox/*
+docker-compose.dropbox.yml
