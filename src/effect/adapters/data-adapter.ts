@@ -43,14 +43,6 @@ export const adaptDataEvent = (raw: RawDataEvent) =>
     const path = `${raw.parent}/${raw.name}`;
     const eventId = `raw:data:${path}:${Date.now()}`;
 
-    // Log event received (all events including ignored)
-    log.info("Adapter", "Event received", {
-      event_type: "event_received",
-      event_id: eventId,
-      event_tag: eventType._tag,
-      path,
-    });
-
     if (eventType._tag === "Ignored") {
       // Log ignored event
       log.debug("Adapter", "Event ignored", {
