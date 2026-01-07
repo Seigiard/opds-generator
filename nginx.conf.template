@@ -25,6 +25,9 @@ http {
         listen 80;
         server_name _;
 
+        # Use relative redirects (no host prefix)
+        absolute_redirect off;
+
         # Index file for directories
         index feed.xml;
 
