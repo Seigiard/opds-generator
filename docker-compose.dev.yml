@@ -2,18 +2,28 @@ services:
   opds:
     build:
       context: .
-      target: development
+      target: production
     ports:
-      - "8080:8080"
+      - "8080:80"
     volumes:
       - ./src:/app/src:ro
       - ./static:/app/static:ro
       - ./files:/books:ro
       - ./data:/data
+      - ./nginx.conf.template:/app/nginx.conf.template:ro
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
     environment:
       - FILES=/books
       - DATA=/data
-      - PORT=8080
+      - PORT=3000
       - BASE_URL=http://localhost:8080
       - DEV_MODE=true
-    command: ["bun", "run", "--watch", "src/index.ts"]
+      # Uncomment to test /resync endpoint:
+      # - ADMIN_USER=admin
+      # - ADMIN_TOKEN=secret
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

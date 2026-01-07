@@ -76,7 +76,7 @@
             <a href="{atom:link[@rel='subsection']/@href}"><xsl:value-of select="atom:title" /></a>
           </h3>
           <xsl:if test="atom:summary">
-            <p class="card__description"><xsl:value-of select="atom:summary" /></p>
+            <p><xsl:value-of select="atom:summary" /></p>
           </xsl:if>
         </div>
       </article>
@@ -106,7 +106,7 @@
         <div class="card__info">
           <h3 class="card__title"><xsl:value-of select="atom:title" /></h3>
           <xsl:if test="atom:author">
-            <p class="card__description"><xsl:value-of select="atom:author/atom:name" /></p>
+            <p><xsl:value-of select="atom:author/atom:name" /></p>
           </xsl:if>
         </div>
         <label class="popup-trigger">

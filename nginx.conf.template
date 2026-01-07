@@ -1,0 +1,113 @@
+daemon off;
+worker_processes auto;
+error_log /dev/stderr warn;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    charset utf-8;
+    charset_types text/xml application/xml application/atom+xml;
+
+    access_log /dev/stdout;
+
+    sendfile on;
+    tcp_nopush on;
+
+    # ETag enabled by default
+
+    server {
+        listen 80;
+        server_name _;
+
+        # Use relative redirects (no host prefix)
+        absolute_redirect off;
+
+        # Index file for directories
+        index feed.xml;
+
+        # Root redirect to feed.xml
+        location = / {
+            return 302 /feed.xml;
+        }
+
+        # /opds redirect to feed.xml
+        location = /opds {
+            return 302 /feed.xml;
+        }
+
+        # Static assets from /static folder
+        location /static/ {
+            alias /app/static/;
+            expires 1d;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # Admin endpoint: /resync (only if auth configured)
+        # AUTH_BLOCK_START
+        location = /resync {
+            auth_basic "OPDS Admin";
+            auth_basic_user_file /etc/nginx/.htpasswd;
+
+            proxy_pass http://127.0.0.1:${BUN_PORT}/resync;
+            proxy_method POST;
+            proxy_set_header Host $host;
+        }
+
+        # AUTH_BLOCK_END
+
+        # Rate limit for book downloads (if configured)
+        location ~ /[^/]+/file$ {
+            root /data;
+            try_files $uri =404;
+
+            # RATE_LIMIT will be 0 or value like "1m"
+            limit_rate ${RATE_LIMIT};
+        }
+
+        # Images - cache 1 day, then validate with ETag
+        location ~ \.(jpg|jpeg|png|webp)$ {
+            root /data;
+            expires 1d;
+            add_header Cache-Control "public, must-revalidate";
+        }
+
+        # XML feeds - always validate freshness
+        location ~ \.xml$ {
+            root /data;
+            try_files $uri $uri/ =404;
+            add_header Cache-Control "no-cache";
+            error_page 404 = @check_initializing;
+        }
+
+        # All other paths - serve from /data
+        location / {
+            root /data;
+            try_files $uri $uri/ =404;
+
+            # 503 for missing feed.xml (initializing)
+            error_page 404 = @check_initializing;
+        }
+
+        location @check_initializing {
+            # If requesting feed.xml and it doesn't exist, return 503
+            if ($uri ~* feed\.xml$) {
+                return 503;
+            }
+            return 404;
+        }
+
+        # Custom error pages
+        error_page 503 @initializing;
+        location @initializing {
+            default_type application/json;
+            return 503 '{"status":"initializing","message":"Server is starting, please retry later"}';
+            add_header Retry-After 5;
+        }
+    }
+}

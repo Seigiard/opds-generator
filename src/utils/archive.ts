@@ -2,8 +2,9 @@ import { createExtractorFromFile } from "node-unrar-js";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnWithTimeout, spawnWithTimeoutText } from "./process.ts";
 
-export type ArchiveType = "zip" | "rar" | "7z" | "tar";
+type ArchiveType = "zip" | "rar" | "7z" | "tar";
 
 const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
   zip: [0x50, 0x4b, 0x03, 0x04],
@@ -13,7 +14,7 @@ const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
 
 const USTAR_MAGIC = [0x75, 0x73, 0x74, 0x61, 0x72]; // "ustar"
 
-export async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
+async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
   try {
     const file = Bun.file(filePath);
     const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
@@ -53,22 +54,21 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): P
   };
 
   try {
-    const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const [output, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      proc.exited,
-    ]);
-    if (exitCode !== 0) return [];
+    const { stdout, exitCode, timedOut } = await spawnWithTimeoutText({ command: commands[type] });
+    if (timedOut || exitCode !== 0) return [];
 
     if (type === "7z") {
-      return output
+      return stdout
         .split("\n")
         .filter((line) => line.startsWith("Path = "))
         .map((line) => line.slice(7))
         .slice(1);
     }
 
-    return output.trim().split("\n").filter((line) => line.length > 0 && !line.endsWith("/"));
+    return stdout
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0 && !line.endsWith("/"));
   } catch {
     return [];
   }
@@ -86,10 +86,11 @@ export async function listEntries(filePath: string): Promise<string[]> {
 
 async function readEntryTar(filePath: string, entryPath: string): Promise<Buffer | null> {
   try {
-    const proc = Bun.spawn(["tar", "-xOf", filePath, entryPath], { stdout: "pipe", stderr: "pipe" });
-    const [data, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
-    if (exitCode !== 0 || data.byteLength === 0) return null;
-    return Buffer.from(data);
+    const { stdout, exitCode, timedOut } = await spawnWithTimeout({
+      command: ["tar", "-xOf", filePath, entryPath],
+    });
+    if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
+    return Buffer.from(stdout);
   } catch {
     return null;
   }
@@ -123,13 +124,9 @@ async function readEntryShell(filePath: string, entryPath: string, type: "zip" |
   };
 
   try {
-    const proc = Bun.spawn(commands[type], { stdout: "pipe", stderr: "pipe" });
-    const [data, exitCode] = await Promise.all([
-      new Response(proc.stdout).arrayBuffer(),
-      proc.exited,
-    ]);
-    if (exitCode !== 0 || data.byteLength === 0) return null;
-    return Buffer.from(data);
+    const { stdout, exitCode, timedOut } = await spawnWithTimeout({ command: commands[type] });
+    if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
+    return Buffer.from(stdout);
   } catch {
     return null;
   }

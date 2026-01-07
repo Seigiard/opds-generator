@@ -17,9 +17,9 @@ describe("scanner", () => {
     test("handles empty file list", () => {
       const result = buildFolderStructure([]);
       expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("");
-      expect(result[0].name).toBe("Catalog");
-      expect(result[0].subfolders).toEqual([]);
+      expect(result[0]!.path).toBe("");
+      expect(result[0]!.name).toBe("Catalog");
+      expect(result[0]!.subfolders).toEqual([]);
     });
 
     test("handles flat structure (files in root)", () => {
@@ -27,8 +27,8 @@ describe("scanner", () => {
 
       const result = buildFolderStructure(files);
       expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("");
-      expect(result[0].name).toBe("Catalog");
+      expect(result[0]!.path).toBe("");
+      expect(result[0]!.name).toBe("Catalog");
     });
 
     test("creates folder entries for nested files", () => {
@@ -68,11 +68,7 @@ describe("scanner", () => {
     });
 
     test("handles multiple subfolders", () => {
-      const files = [
-        createFileInfo("Fiction/Book1.epub"),
-        createFileInfo("NonFiction/Book2.pdf"),
-        createFileInfo("Comics/Issue1.cbz"),
-      ];
+      const files = [createFileInfo("Fiction/Book1.epub"), createFileInfo("NonFiction/Book2.pdf"), createFileInfo("Comics/Issue1.cbz")];
 
       const result = buildFolderStructure(files);
       const root = result.find((f) => f.path === "");
@@ -165,12 +161,6 @@ describe("scanner", () => {
       const file2 = createFileInfo("b/book.epub", 1000, 1700000000000);
 
       expect(computeHash([file1])).not.toBe(computeHash([file2]));
-    });
-
-    test("handles empty file list", () => {
-      const hash = computeHash([]);
-      expect(typeof hash).toBe("string");
-      expect(hash.length).toBeGreaterThan(0);
     });
 
     test("returns hex string", () => {

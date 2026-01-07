@@ -10,4 +10,5 @@ services:
       - ./bunfig.toml:/app/bunfig.toml:ro
     environment:
       - LOG_LEVEL=warn
-    command: ["bun", "test"]
+    # Run all test folders except e2e (e2e requires running container, use bun run test:e2e)
+    command: ["sh", "-c", "bun test $(find test -type d -mindepth 1 -maxdepth 1 ! -name e2e)"]

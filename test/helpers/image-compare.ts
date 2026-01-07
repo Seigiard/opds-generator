@@ -2,11 +2,7 @@ import { join } from "node:path";
 
 const REFERENCE_COVER = join(import.meta.dir, "../../files/test/cover.jpg");
 
-export async function compareImages(
-  imageA: Buffer,
-  imageB: Buffer,
-  threshold = 0.1
-): Promise<{ similar: boolean; rmse: number }> {
+export async function compareImages(imageA: Buffer, imageB: Buffer, threshold = 0.1): Promise<{ similar: boolean; rmse: number }> {
   const id = Date.now();
   const tmpA = `/tmp/compare_a_${id}.jpg`;
   const tmpB = `/tmp/compare_b_${id}.jpg`;
@@ -25,7 +21,7 @@ export async function compareImages(
   await proc.exited;
 
   const match = stderr.match(/\(([\d.]+)\)/);
-  const rmse = match ? parseFloat(match[1]) : 1;
+  const rmse = match?.[1] ? parseFloat(match[1]) : 1;
 
   await Bun.$`rm -f ${tmpA} ${tmpB}`.quiet();
 

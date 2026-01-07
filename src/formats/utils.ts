@@ -90,7 +90,12 @@ export function getStringArray(val: unknown): string[] | undefined {
 
 export function cleanDescription(desc: string | undefined): string | undefined {
   if (!desc) return undefined;
-  return desc.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim() || undefined;
+  return (
+    desc
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || undefined
+  );
 }
 
 export function parseDate(date: string | undefined): string | undefined {

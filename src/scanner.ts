@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
+import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "./constants.ts";
 
 export async function scanFiles(rootPath: string): Promise<FileInfo[]> {
   const files: FileInfo[] = [];
@@ -81,7 +82,7 @@ export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
   return folders;
 }
 
-export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
+async function scanDataMirror(dataPath: string): Promise<Set<string>> {
   const paths = new Set<string>();
 
   async function scan(dirPath: string, relativePath: string): Promise<void> {
@@ -95,8 +96,8 @@ export async function scanDataMirror(dataPath: string): Promise<Set<string>> {
         const entryPath = join(dirPath, entry.name);
         const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
-        const hasBookEntry = await Bun.file(join(entryPath, "entry.xml")).exists();
-        const hasFolderEntry = await Bun.file(join(entryPath, "_entry.xml")).exists();
+        const hasBookEntry = await Bun.file(join(entryPath, ENTRY_FILE)).exists();
+        const hasFolderEntry = await Bun.file(join(entryPath, FOLDER_ENTRY_FILE)).exists();
 
         if (hasBookEntry) {
           paths.add(entryRelPath);
@@ -122,10 +123,7 @@ export interface SyncPlan {
   folders: FolderInfo[];
 }
 
-export async function createSyncPlan(
-  files: FileInfo[],
-  dataPath: string
-): Promise<SyncPlan> {
+export async function createSyncPlan(files: FileInfo[], dataPath: string): Promise<SyncPlan> {
   const folders = buildFolderStructure(files);
   const existingPaths = await scanDataMirror(dataPath);
 
@@ -138,12 +136,12 @@ export async function createSyncPlan(
 
   for (const file of files) {
     const dataDir = join(dataPath, file.relativePath);
-    const entryFile = Bun.file(join(dataDir, "entry.xml"));
+    const entryFile = Bun.file(join(dataDir, ENTRY_FILE));
 
     if (!(await entryFile.exists())) {
       toProcess.push(file);
     } else {
-      const entryStat = await stat(join(dataDir, "entry.xml"));
+      const entryStat = await stat(join(dataDir, ENTRY_FILE));
       if (file.mtime > entryStat.mtimeMs) {
         toProcess.push(file);
       }
@@ -156,9 +154,8 @@ export async function createSyncPlan(
     }
   }
 
-  // Always regenerate folders to keep counts up to date
+  // Always regenerate folders to keep counts up to date (including root for feed.xml)
   for (const folder of folders) {
-    if (folder.path === "") continue; // Root doesn't need _entry.xml
     foldersToProcess.push(folder);
   }
 
@@ -166,13 +163,9 @@ export async function createSyncPlan(
 }
 
 export function computeHash(files: FileInfo[]): string {
-  const sorted = [...files].sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath)
-  );
+  const sorted = [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
-  const data = sorted
-    .map((f) => `${f.relativePath}|${f.size}|${Math.floor(f.mtime)}`)
-    .join("\n");
+  const data = sorted.map((f) => `${f.relativePath}|${f.size}|${Math.floor(f.mtime)}`).join("\n");
 
   return Bun.hash(data).toString(16);
 }

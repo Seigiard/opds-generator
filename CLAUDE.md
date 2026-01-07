@@ -1,152 +1,267 @@
-Default to using Bun instead of Node.js.
+## Quick Reference
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun install` instead of `npm install`
-- Use `bun run <script>` instead of `npm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+| Instead of              | Use                         |
+| ----------------------- | --------------------------- |
+| `node`, `ts-node`       | `bun <file>`                |
+| `npm install/run`       | `bun install/run`           |
+| `jest`, `vitest`        | `bun test`                  |
+| `express`               | `Bun.serve()`               |
+| `fs.readFile/writeFile` | `Bun.file()`, `Bun.write()` |
+| `execa`                 | ``Bun.$`cmd` ``             |
+| `crypto`                | `Bun.hash()`                |
+| `dotenv`                | Bun auto-loads .env         |
+| `curl` in healthcheck   | `wget` (curl not in image)  |
 
-## Bun APIs
+## Task Completion Checklist
 
-- `Bun.serve()` for HTTP server. Don't use `express`.
-- `Bun.file()` for file operations. Prefer over `node:fs` readFile/writeFile.
-- `Bun.$\`cmd\``for shell commands. Don't use`execa`.
-- `Bun.hash()` for hashing. Don't use `crypto`.
-- `Bun.write()` for writing files.
+After completing any task:
+
+```bash
+bun run lint:fix && bun run format
+bun run test
+npx knip  # check unused exports/deps
+```
+
+Update `PLAN.md`, `CLAUDE.md`, or `@ARCHITECTURE.md` if architecture changed.
+
+## Development Workflow
+
+Docker dev runs at http://localhost:8080 — do NOT run bun locally.
+Gracefully shutdown after tests.
+
+```bash
+docker compose -f docker-compose.dev.yml up          # start
+docker compose -f docker-compose.dev.yml logs -f     # logs
+curl http://localhost:8080/feed.xml                  # test
+curl -u admin:secret http://localhost:8080/resync    # force resync
+```
+
+## Environment Variables
+
+| Variable        | Default                 | Description                        |
+| --------------- | ----------------------- | ---------------------------------- |
+| `FILES`         | `/books`                | Source books directory             |
+| `DATA`          | `/data`                 | Generated metadata cache           |
+| `PORT`          | `3000`                  | Internal Bun server port           |
+| `BASE_URL`      | `http://localhost:8080` | External URL for OPDS links        |
+| `LOG_LEVEL`     | `info`                  | debug \| info \| warn \| error     |
+| `DEV_MODE`      | `false`                 | Enable Bun --watch hot reload      |
+| `ADMIN_USER`    | -                       | /resync Basic Auth username        |
+| `ADMIN_TOKEN`   | -                       | /resync Basic Auth password        |
+| `RATE_LIMIT_MB` | `0`                     | Download rate limit MB/s (0 = off) |
+
+## Testing
+
+**IMPORTANT:** Run tests via docker, not locally!
+
+```bash
+# Run unit + integration tests (inside docker)
+bun run test
+
+# Run e2e tests (nginx + event logging, outside docker)
+bun run test:e2e
+
+# Run ALL tests (unit + integration + e2e)
+bun run test:all
+
+# Run specific test file
+docker compose -f docker-compose.test.yml run --rm test bun test test/integration/effect/queue-consumer.test.ts
+
+# Type check (locally is fine)
+bun --bun tsc --noEmit
+```
+
+### Test Structure
+
+```
+test/
+├── setup.ts             # Global test setup
+├── helpers/             # Mock services, assertions, fs utils
+├── unit/                # Pure logic, no external deps
+│   ├── utils/
+│   └── effect/handlers/
+├── integration/         # Requires docker (ImageMagick, poppler, etc.)
+│   ├── formats/         # Format handler tests
+│   └── effect/          # Queue + cascade flow tests
+└── e2e/                 # Full system tests
+    ├── nginx.test.ts    # nginx routing + auth
+    └── event-logging.test.ts  # Event lifecycle tracing
+```
 
 ## Project Structure
 
 ```
 src/
-├── index.ts           # HTTP server + fs.watch
-├── scanner.ts         # File scanning, sync planning
-├── processor.ts       # Book/folder processing, XML generation
-├── opds.ts            # Feed assembly from XML files
-├── types.ts           # Shared types
-├── formats/           # Format handlers (FormatHandler interface)
-│   ├── types.ts       # FormatHandler, BookMetadata
-│   ├── index.ts       # Handler registry
-│   ├── utils.ts       # Shared XML parsing utilities
-│   ├── epub.ts        # EPUB handler
-│   ├── fb2.ts         # FB2/FBZ handler
-│   ├── mobi.ts        # MOBI/AZW handler
-│   ├── pdf.ts         # PDF handler (pdfinfo, pdftoppm)
-│   ├── comic.ts       # CBZ/CBR/CB7/CBT handler (ComicInfo.xml, CoMet)
-│   └── txt.ts         # TXT handler
-└── utils/
-    ├── archive.ts     # ZIP/RAR/7z/TAR extraction
-    └── image.ts       # ImageMagick resize
-
-test/
-├── helpers/
-│   └── image-compare.ts  # Cover comparison using ImageMagick RMSE
-├── unit/                 # Unit tests
-└── integration/
-    └── formats/          # Format handler integration tests
+├── server.ts        # HTTP server + initial sync + DI setup
+├── config.ts        # Environment configuration
+├── constants.ts     # File constants (feed.xml, entry.xml, etc.)
+├── scanner.ts       # File scanning, sync planning
+├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS)
+├── watcher.sh       # inotifywait → POST /events
+├── effect/          # EffectTS event handling
+│   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
+│   ├── services.ts  # DI services
+│   ├── consumer.ts  # Event loop
+│   ├── adapters/    # Raw → typed event conversion
+│   │   ├── books-adapter.ts    # /books watcher events
+│   │   ├── data-adapter.ts     # /data watcher events
+│   │   └── sync-plan-adapter.ts # Initial sync → events
+│   └── handlers/    # book-sync, folder-sync, etc.
+├── formats/         # FormatHandler implementations
+│   ├── types.ts     # FormatHandler, BookMetadata
+│   ├── index.ts     # Handler registry
+│   ├── utils.ts     # XML parsing utilities
+│   └── *.ts         # epub, fb2, mobi, pdf, comic, txt, djvu
+├── logging/         # Structured logging
+│   ├── types.ts     # LogLevel, LogContext
+│   ├── logger.ts    # Flat JSON logger to stdout
+│   └── index.ts     # Exports
+└── utils/           # archive, image, process, processor, opds
 ```
 
-## Architecture: Mirror Structure
+## Architecture: Dual Server
 
-/data mirrors /files structure:
+```
+nginx:80 (external)          Bun:3000 (localhost only)
+├── /opds → /feed.xml        ├── POST /events/books ← books watcher
+├── /static/* → /app/static  ├── POST /events/data ← data watcher
+├── /resync → auth → proxy   └── POST /resync ← nginx
+└── /* → /data/*
+```
 
-- Each book → folder with entry.xml, cover.jpg, thumb.jpg
-- Each folder → \_feed.xml (header) + \_entry.xml (for parent)
-- Feed assembly: read \_feed.xml + all nested entry.xml/\_entry.xml
+## Architecture: EffectTS Layers
 
-## opds-ts Library
+1. **Adapters** (`adapters/*.ts`) — raw inotify → typed EventType
+2. **Queue** (`EventQueueService`) — typed events only
+3. **Consumer** (`consumer.ts`) — gets handler via `HandlerRegistry.get()`
+4. **Handlers** (`handlers/*.ts`) — return `EventType[]` for cascades
 
-Use opds-ts for OPDS XML generation:
+### DI Services
+
+| Service                | Purpose                                |
+| ---------------------- | -------------------------------------- |
+| `ConfigService`        | filesPath, dataPath, baseUrl, port     |
+| `LoggerService`        | info, warn, error, debug (JSON stdout) |
+| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite  |
+| `DeduplicationService` | TTL-based (500ms) event filtering      |
+| `EventQueueService`    | enqueue, enqueueMany, size, take       |
+| `HandlerRegistry`      | Map<tag, handler>                      |
+
+### Key Patterns
+
+**Cascade events** — handlers return events, don't call each other:
+
+```typescript
+return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
+```
+
+**Flag cleanup** — use `Effect.ensuring`:
+
+```typescript
+Effect.gen(function* () {
+  isSyncing = true;
+  yield* doWork;
+}).pipe(
+  Effect.ensuring(
+    Effect.sync(() => {
+      isSyncing = false;
+    }),
+  ),
+);
+```
+
+**ManagedRuntime** — share single Layer instance across all Effect calls:
+
+```typescript
+// ✅ Correct: single runtime, shared queue
+const runtime = ManagedRuntime.make(LiveLayer);
+await runtime.runPromise(effect1);
+await runtime.runPromise(effect2); // same queue instance
+
+// ❌ Wrong: each provide creates NEW queue instance
+await Effect.runPromise(Effect.provide(effect1, LiveLayer));
+await Effect.runPromise(Effect.provide(effect2, LiveLayer)); // different queue!
+```
+
+**Mirror structure** — /data mirrors /books:
+
+- Book → folder with `entry.xml`, `cover.jpg`, `thumb.jpg`, `file` (symlink)
+- Folder → `feed.xml` + `_entry.xml` (for parent)
+
+## Adding New Format Handler
+
+1. Create `src/formats/{format}.ts` implementing FormatHandler interface
+2. Export `registration: FormatHandlerRegistration`
+3. Import and add to registrations array in `src/formats/index.ts`
+
+### Handler Interface
+
+```typescript
+interface FormatHandler {
+  getMetadata(): BookMetadata;       // Sync extraction
+  getCover(): Promise<Buffer | null>; // Async cover extraction
+}
+
+interface FormatHandlerRegistration {
+  extensions: string[];               // ["epub", "epub3"]
+  create: FormatHandlerFactory;       // async factory function
+}
+```
+
+### Supported Formats
+
+| Format | Extensions         | Dependencies      |
+| ------ | ------------------ | ----------------- |
+| EPUB   | .epub              | unzip             |
+| FB2    | .fb2, .fbz         | unzip (fbz)       |
+| MOBI   | .mobi, .azw, .azw3 | -                 |
+| PDF    | .pdf               | poppler-utils     |
+| DJVU   | .djvu              | djvulibre         |
+| Comics | .cbz, .cbr, .cb7   | node-7z, unrar-js |
+| Text   | .txt               | -                 |
+
+## opds-ts Usage
 
 ```typescript
 import { Entry, Feed } from "opds-ts/v1.2";
 
-// Create book entry
 const entry = new Entry(id, title)
   .setAuthor(author)
-  .setSummary(description)
   .addImage(coverUrl)
-  .addThumbnail(thumbUrl)
   .addAcquisition(downloadUrl, mimeType, "open-access");
 
-const xml = entry.toXml({ prettyPrint: true });
-
-// Create feed
 const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "navigation");
 ```
 
-## Adding New Format Handler
+## Troubleshooting
 
-1. Create `src/formats/{format}.ts`
-2. Implement factory pattern:
+### Queue Not Processing Events
 
-   ```typescript
-   async function createHandler(filePath: string): Promise<FormatHandler | null> {
-     const data = await readFileOnce(filePath);
-     return {
-       getMetadata() {
-         return data.metadata;
-       },
-       async getCover() {
-         return data.cover;
-       },
-     };
-   }
+Check ManagedRuntime usage — each `Effect.provide()` creates NEW queue instance.
+Always use shared runtime: `const runtime = ManagedRuntime.make(LiveLayer)`
 
-   export const registration: FormatHandlerRegistration = {
-     extensions: ["ext1", "ext2"],
-     create: createHandler,
-   };
-   ```
+### Infinite Loop in Watchers
 
-3. Register in `src/formats/index.ts`
+- data watcher excludes `.jsonl` files
+- feed.xml is NOT watched (only entry.xml and \_entry.xml)
+- Check watcher.sh exclusion patterns
 
-## Development Workflow
+### Tests Failing
 
-**IMPORTANT**: Docker dev environment is running at http://localhost:8080 and watches for file changes automatically. Do NOT run `bun` locally to test - use curl against the running container.
+- Always run tests in Docker: `bun run test`
+- Integration tests require ImageMagick, poppler-utils, djvulibre
+- Check test fixtures exist in test/fixtures/
 
-```bash
-# Start dev environment (runs once, then watches for changes)
-docker compose -f docker-compose.dev.yml up
+### Resync Not Working
 
-# Test changes - just curl the running container
-curl http://localhost:8080/health
-curl http://localhost:8080/opds
+- Requires ADMIN_USER + ADMIN_TOKEN environment variables
+- nginx removes auth block if not configured
+- Check entrypoint.sh AUTH_ENABLED logic
 
-# Check logs
-docker compose -f docker-compose.dev.yml logs -f
+### Healthcheck Commands
 
-# Clear data cache (forces full rescan)
-docker compose -f docker-compose.dev.yml exec opds sh -c 'rm -rf /data/*'
-```
-
-## Testing & Linting
+Docker healthcheck uses `wget` (NOT `curl` — not in alpine image):
 
 ```bash
-# Run tests (always in Docker - all tools available)
-bun run test
-
-# Run unit tests only
-bun run test:unit
-
-# Run integration tests only
-bun run test:integration
-
-# Run tests with coverage
-bun run test:coverage
-
-# Lint (type-aware, run before commits)
-bun run lint
-
-# Lint with auto-fix
-bun run lint:fix
-
-# Type check
-bun --bun tsc --noEmit
+wget -q --spider http://127.0.0.1/feed.xml
 ```
-
-**IMPORTANT**: Always run `bun run lint:fix` before committing changes.
-**NOTE**: Tests always run in Docker to ensure all tools (pdfinfo, 7zz, imagemagick) are available.
-
-## Documentation
-
-After completing tasks, update PLAN.md and CLAUDE.md if architecture or workflow changed. Keep updates concise — no redundant info.

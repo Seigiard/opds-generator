@@ -1,7 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
 import { createXmlParser, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
-import { logger, logHandlerError } from "../utils/errors.ts";
+import { log, logHandlerError } from "../logging/index.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
@@ -58,7 +58,10 @@ function formatDateFromNumbers(year?: number, month?: number): string | undefine
 
 function parseGenresString(genre?: string): string[] | undefined {
   if (!genre) return undefined;
-  const genres = genre.split(",").map((s) => s.trim()).filter(Boolean);
+  const genres = genre
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return genres.length > 0 ? genres : undefined;
 }
 
@@ -107,7 +110,7 @@ async function parseComicInfo(filePath: string, entries: string[]): Promise<{ me
 
     return { metadata, pages: info.Pages?.Page };
   } catch (error) {
-    logger.warn("Comic", "Failed to parse ComicInfo.xml", { file: filePath, error: String(error) });
+    log.warn("Comic", "Failed to parse ComicInfo.xml", { file: filePath, error: String(error) });
     return null;
   }
 }
@@ -136,7 +139,7 @@ async function parseCoMet(filePath: string, entries: string[]): Promise<BookMeta
       rights: toStringOrUndefined(comet.rights),
     };
   } catch (error) {
-    logger.warn("Comic", "Failed to parse CoMet.xml", { file: filePath, error: String(error) });
+    log.warn("Comic", "Failed to parse CoMet.xml", { file: filePath, error: String(error) });
     return null;
   }
 }
@@ -204,14 +207,9 @@ async function createComicHandler(filePath: string): Promise<FormatHandler | nul
     const entries = await listEntries(filePath);
     if (entries.length === 0) return null;
 
-    const images = entries.filter((e) =>
-      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext))
-    );
+    const images = entries.filter((e) => IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)));
 
-    const [comicInfoResult, cometMetadata] = await Promise.all([
-      parseComicInfo(filePath, entries),
-      parseCoMet(filePath, entries),
-    ]);
+    const [comicInfoResult, cometMetadata] = await Promise.all([parseComicInfo(filePath, entries), parseCoMet(filePath, entries)]);
 
     const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
     const pages = comicInfoResult?.pages;

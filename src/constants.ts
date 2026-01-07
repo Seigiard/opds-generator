@@ -1,8 +1,12 @@
-export const SYNC_DEBOUNCE_MS = 500;
-export const PROCESSING_CONCURRENCY = 5;
-
+// Image size constants
 export const COVER_MAX_SIZE = 1400;
 export const THUMBNAIL_MAX_SIZE = 512;
 
-export const IMAGE_CACHE_MAX_AGE = 31536000; // 1 year
-export const PLACEHOLDER_CACHE_MAX_AGE = 3600; // 1 hour
+// File constants for the contract between Bun and nginx
+// These names are used in both TypeScript code and nginx.conf.template
+export const FEED_FILE = "feed.xml";
+export const ENTRY_FILE = "entry.xml";
+export const FOLDER_ENTRY_FILE = "_entry.xml";
+export const BOOK_FILE = "file";
+export const COVER_FILE = "cover.jpg";
+export const THUMB_FILE = "thumb.jpg";

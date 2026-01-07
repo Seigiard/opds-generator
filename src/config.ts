@@ -1,8 +1,9 @@
-import { logger } from "./utils/errors.ts";
+import { log } from "./logging/index.ts";
 
-export interface Config {
+interface Config {
   filesPath: string;
   dataPath: string;
+  baseUrl: string;
   port: number;
   devMode: boolean;
   logLevel: string;
@@ -11,7 +12,7 @@ export interface Config {
 function requireEnv(name: string, defaultValue?: string): string {
   const value = process.env[name] || defaultValue;
   if (!value) {
-    logger.error("Config", `Missing required environment variable: ${name}`);
+    log.error("Config", `Missing required environment variable: ${name}`);
     process.exit(1);
   }
   return value;
@@ -20,18 +21,21 @@ function requireEnv(name: string, defaultValue?: string): string {
 function parsePort(value: string): number {
   const port = parseInt(value, 10);
   if (isNaN(port) || port < 1 || port > 65535) {
-    logger.error("Config", `Invalid PORT: ${value} (must be 1-65535)`);
+    log.error("Config", `Invalid PORT: ${value} (must be 1-65535)`);
     process.exit(1);
   }
   return port;
 }
 
 function loadConfig(): Config {
-  const port = parsePort(process.env.PORT || "8080");
+  // Internal Bun server port (nginx proxies to this)
+  const port = parsePort(process.env.PORT || "3000");
 
   return {
     filesPath: requireEnv("FILES", "./files"),
     dataPath: requireEnv("DATA", "./data"),
+    // BASE_URL is for external access (nginx port, not internal Bun port)
+    baseUrl: process.env.BASE_URL || "http://localhost:8080",
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",

@@ -1,34 +1,43 @@
 {
   "name": "opds-generator",
-  "module": "src/index.ts",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "module": "src/server.ts",
   "scripts": {
-    "start": "docker compose up -d",
+    "start": "docker compose up",
     "dev": "docker compose -f docker-compose.dev.yml up",
     "rebuild": "docker compose build",
     "rebuild:dev": "docker compose -f docker-compose.dev.yml build",
     "rebuild:test": "docker compose -f docker-compose.test.yml build",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "test": "docker compose -f docker-compose.test.yml run --rm test",
-    "test:local": "bun test",
     "test:unit": "docker compose -f docker-compose.test.yml run --rm test bun test test/unit",
     "test:integration": "docker compose -f docker-compose.test.yml run --rm test bun test test/integration",
-    "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage"
+    "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage",
+    "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && bun test test/e2e; docker compose -f docker-compose.e2e.yml down",
+    "test:all": "bun run test && bun run test:e2e"
+  },
+  "dependencies": {
+    "@effect/schema": "^0.75.5",
+    "effect": "^3.19.14",
+    "fast-xml-parser": "^5.3.3",
+    "knip": "^5.79.0",
+    "node-unrar-js": "^2.0.2",
+    "opds-ts": "^2.1.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "oxfmt": "^0.21.0",
     "oxlint": "latest",
     "oxlint-tsgolint": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
-  "dependencies": {
-    "chokidar": "^5.0.0",
-    "fast-xml-parser": "^5.3.3",
-    "node-unrar-js": "^2.0.2",
-    "opds-ts": "^2.1.0"
+  "lint-staged": {
+    "*": "oxfmt --no-error-on-unmatched-pattern"
   }
 }

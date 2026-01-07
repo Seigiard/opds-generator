@@ -13,7 +13,7 @@
 - [x] Генерация OPDS Navigation + Acquisition feeds
 - [x] Имя файла (без расширения) → title
 - [x] HTTP сервер (Bun.serve + Bun.file)
-- [x] fs.watch — авто-ребилд при изменении файлов (debounce 500ms)
+- [x] inotifywait + EffectTS Queue — событийная обработка файлов
 - [x] Dockerfile + docker-compose (dev/prod multi-stage)
 - [x] Автоопределение типа ZIP (комикс/fb2)
 - [x] Endpoint /cover/{path} (1400px max)
@@ -24,6 +24,8 @@
 - [x] Reset endpoint (/reset in DEV_MODE)
 - [x] Security: path traversal protection (resolveSafePath)
 - [x] Reliability: sync dirty flag, process lifecycle fixes
+- [x] ErrorLogService: JSONL error logging to /data/errors.jsonl
+- [x] Cascade events: cleanup handlers trigger parent feed regeneration
 - [x] Structured logging with LOG_LEVEL support (debug/info/warn/error)
 - [x] EPUB: fast-xml-parser, EPUB 3.0 cover, fallback chain
 - [x] FB2: metadata + cover extraction
@@ -39,8 +41,7 @@
    Картинки или Картинки в директориях — комикс
    файл fb2 — fb2
    и т.д.
-3. Тесты для комиксов. Подготовить тестовые данные
-4. упростить генерацию xml файлов: отслеживать изменения в папках/(feed|entry).xml и только на эти изменения генерировать фид
+2. Тесты для комиксов. Подготовить тестовые данные
 
 ### Поддержка форматов
 
@@ -104,13 +105,27 @@ LOG_LEVEL=info          # debug | info | warn | error
 
 ```
 src/
-├── index.ts           # Entry point: Bun.serve() + fs.watch + sync
+├── server.ts          # HTTP server + initial sync + DI setup
+├── watcher.sh         # inotifywait → curl POST /events
 ├── scanner.ts         # scanFiles, createSyncPlan, computeHash
-├── processor.ts       # processBook, processFolder, XML builders
-├── opds.ts            # buildFeed (сборка из файлов)
 ├── types.ts           # FileInfo, BookEntry, FolderInfo
-├── constants.ts       # Magic numbers (sizes, timeouts, cache TTL)
+├── constants.ts       # Magic numbers (sizes, timeouts)
 ├── config.ts          # Typed config with env validation
+├── effect/
+│   ├── types.ts       # RawWatcherEvent schema + EventType union
+│   ├── services.ts    # DI services (Config, Logger, FileSystem, Queue, Registry)
+│   ├── consumer.ts    # Event loop (processEvent, startConsumer)
+│   ├── adapters/
+│   │   └── event-adapter.ts  # adaptWatcherEvent (raw→typed), adaptSyncPlan
+│   └── handlers/
+│       ├── index.ts            # registerHandlers() for HandlerRegistry
+│       ├── book-sync.ts
+│       ├── book-cleanup.ts
+│       ├── folder-sync.ts
+│       ├── folder-cleanup.ts
+│       ├── folder-meta-sync.ts
+│       ├── folder-entry-xml-changed.ts
+│       └── parent-meta-sync.ts
 ├── routes/
 │   ├── index.ts       # createRouter, resolveSafePath
 │   ├── opds.ts        # handleOpds (feed serving)
@@ -126,11 +141,10 @@ src/
 │   └── pdf.ts         # PDF handler (poppler-utils)
 └── utils/
     ├── archive.ts     # ZIP/RAR/7z extraction
-    ├── array.ts       # Type-safe array access helpers
-    ├── concurrency.ts # Batch processing with concurrency limit
     ├── errors.ts      # Logger + error classes
     ├── image.ts       # ImageMagick resize
     ├── opds.ts        # XML/feed helpers
+    ├── process.ts     # spawnWithTimeout for external commands
     └── processor.ts   # URL encoding, file size formatting
 ```
 

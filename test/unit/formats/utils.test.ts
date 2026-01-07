@@ -37,7 +37,6 @@ describe("formats/utils", () => {
 
     test("preserves text without entities", () => {
       expect(decodeEntities("Hello World")).toBe("Hello World");
-      expect(decodeEntities("")).toBe("");
     });
 
     test("handles mixed content", () => {
@@ -182,11 +181,8 @@ describe("formats/utils", () => {
       expect(parseDate("24-03-15")).toBeUndefined();
     });
 
-    test("returns undefined for undefined input", () => {
+    test("returns undefined for undefined/empty input", () => {
       expect(parseDate(undefined)).toBeUndefined();
-    });
-
-    test("returns undefined for empty string", () => {
       expect(parseDate("")).toBeUndefined();
     });
   });

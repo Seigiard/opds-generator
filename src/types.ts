@@ -13,17 +13,6 @@ export interface FolderInfo {
   bookCount: number;
 }
 
-export interface BookEntry {
-  title: string;
-  author?: string;
-  description?: string;
-  format: string;
-  mimeType: string;
-  filePath: string;
-  fileSize: number;
-  hasCover: boolean;
-}
-
 export const MIME_TYPES: Record<string, string> = {
   epub: "application/epub+zip",
   pdf: "application/pdf",

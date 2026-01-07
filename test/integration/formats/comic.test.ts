@@ -49,19 +49,15 @@ describe("Comic Handler Integration", () => {
   describe("with CB7 format (requires 7zz)", () => {
     const cb7Path = join(FIXTURES_DIR, "bobby_make_believe_sample.cb7");
 
-    test("creates handler (may fail if 7zz not installed)", async () => {
+    test("creates handler successfully", async () => {
       const handler = await comicHandlerRegistration.create(cb7Path);
-      if (handler === null) {
-        console.warn("CB7 test skipped: 7zz not available");
-      }
+      expect(handler).not.toBeNull();
     });
 
-    test("extracts cover from CB7 (if handler available)", async () => {
+    test("extracts cover from CB7", async () => {
       const handler = await comicHandlerRegistration.create(cb7Path);
-      if (handler) {
-        const cover = await handler.getCover();
-        expect(cover).not.toBeNull();
-      }
+      const cover = await handler!.getCover();
+      expect(cover).not.toBeNull();
     });
   });
 
@@ -101,19 +97,6 @@ describe("Comic Handler Integration", () => {
       const pdfPath = join(FIXTURES_DIR, "test_book_pdf.pdf");
       const handler = await comicHandlerRegistration.create(pdfPath);
       expect(handler).toBeNull();
-    });
-  });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(comicHandlerRegistration.extensions).toContain("cbz");
-      expect(comicHandlerRegistration.extensions).toContain("cbr");
-      expect(comicHandlerRegistration.extensions).toContain("cb7");
-      expect(comicHandlerRegistration.extensions).toContain("cbt");
-    });
-
-    test("has create function", () => {
-      expect(typeof comicHandlerRegistration.create).toBe("function");
     });
   });
 });

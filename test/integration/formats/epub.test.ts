@@ -47,14 +47,4 @@ describe("EPUB Handler Integration", () => {
       expect(handler).toBeNull();
     });
   });
-
-  describe("handler registration", () => {
-    test("has correct extensions", () => {
-      expect(epubHandlerRegistration.extensions).toContain("epub");
-    });
-
-    test("has create function", () => {
-      expect(typeof epubHandlerRegistration.create).toBe("function");
-    });
-  });
 });

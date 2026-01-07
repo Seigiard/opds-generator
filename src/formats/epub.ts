@@ -1,7 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
 import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
-import { logHandlerError } from "../utils/errors.ts";
+import { logHandlerError } from "../logging/index.ts";
 
 const xmlParser = createXmlParser(["subject", "creator", "item", "meta"]);
 
@@ -96,11 +96,7 @@ function findCoverPath(opfData: OPFPackage, opfDir: string): string | undefined 
   return undefined;
 }
 
-async function findCoverWithFallback(
-  opfData: OPFPackage,
-  opfDir: string,
-  filePath: string
-): Promise<string | undefined> {
+async function findCoverWithFallback(opfData: OPFPackage, opfDir: string, filePath: string): Promise<string | undefined> {
   // 1. Try metadata (EPUB 2.0 + 3.0)
   const metaCover = findCoverPath(opfData, opfDir);
   if (metaCover) return metaCover;
