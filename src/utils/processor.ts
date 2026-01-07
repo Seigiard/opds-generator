@@ -9,7 +9,19 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function normalizeFilenameTitle(filename: string): string {
-  return filename.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const hyphens = (filename.match(/-/g) || []).length;
+  const underscores = (filename.match(/_/g) || []).length;
+
+  let result = filename.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+
+  if (hyphens > underscores) {
+    result = result.replace(/-+/g, " ");
+  } else {
+    result = result.replace(/_+/g, " ");
+  }
+
+  result = result.replace(/\s+/g, " ").trim();
+  return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
 export function formatFolderDescription(folderCount: number, bookCount: number): string | undefined {

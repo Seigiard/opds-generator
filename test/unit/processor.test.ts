@@ -54,31 +54,44 @@ describe("processor", () => {
   });
 
   describe("normalizeFilenameTitle", () => {
-    test("replaces underscores with spaces", () => {
+    test("replaces underscores with spaces when majority separator", () => {
       expect(normalizeFilenameTitle("Hello_World")).toBe("Hello World");
-      expect(normalizeFilenameTitle("multiple__underscores")).toBe("multiple underscores");
+      expect(normalizeFilenameTitle("multiple__underscores")).toBe("Multiple underscores");
     });
 
-    test("replaces hyphens with spaces", () => {
-      expect(normalizeFilenameTitle("Hello-World")).toBe("Hello World");
-      expect(normalizeFilenameTitle("multiple--hyphens")).toBe("multiple hyphens");
+    test("replaces hyphens with spaces when majority separator", () => {
+      expect(normalizeFilenameTitle("my-awesome-book")).toBe("My awesome book");
+      expect(normalizeFilenameTitle("multiple--hyphens")).toBe("Multiple hyphens");
     });
 
-    test("replaces mixed separators", () => {
-      expect(normalizeFilenameTitle("Hello_-_World")).toBe("Hello World");
-      expect(normalizeFilenameTitle("a_-b-_c")).toBe("a b c");
+    test("preserves minority separator", () => {
+      expect(normalizeFilenameTitle("sci-fi_books_2024")).toBe("Sci-fi books 2024");
+      expect(normalizeFilenameTitle("book_about_a-b")).toBe("Book about a-b");
+      expect(normalizeFilenameTitle("test-very-long_title")).toBe("Test very long_title");
+    });
+
+    test("prefers underscore as separator when equal count", () => {
+      expect(normalizeFilenameTitle("e-book_collection")).toBe("E-book collection");
+    });
+
+    test("splits camelCase", () => {
+      expect(normalizeFilenameTitle("camelCase")).toBe("Camel Case");
+      expect(normalizeFilenameTitle("TheLordOfTheRings")).toBe("The Lord Of The Rings");
+      expect(normalizeFilenameTitle("XMLParser")).toBe("XML Parser");
     });
 
     test("normalizes multiple spaces", () => {
       expect(normalizeFilenameTitle("Hello   World")).toBe("Hello World");
     });
 
-    test("trims whitespace", () => {
+    test("trims whitespace and edge separators", () => {
       expect(normalizeFilenameTitle("  Hello World  ")).toBe("Hello World");
       expect(normalizeFilenameTitle("_Hello_")).toBe("Hello");
+      expect(normalizeFilenameTitle("___book_title___")).toBe("Book title");
+      expect(normalizeFilenameTitle("---my-book---")).toBe("My book");
     });
 
-    test("preserves other characters", () => {
+    test("preserves special characters", () => {
       expect(normalizeFilenameTitle("Hello (World) [2024]")).toBe("Hello (World) [2024]");
       expect(normalizeFilenameTitle("Book #1")).toBe("Book #1");
     });
@@ -87,8 +100,9 @@ describe("processor", () => {
       expect(normalizeFilenameTitle("Книга_автора")).toBe("Книга автора");
     });
 
-    test("handles complex filenames", () => {
-      expect(normalizeFilenameTitle("Author_Name_-_Book_Title_(2024)")).toBe("Author Name Book Title (2024)");
+    test("capitalizes first letter", () => {
+      expect(normalizeFilenameTitle("hello_world")).toBe("Hello world");
+      expect(normalizeFilenameTitle("test")).toBe("Test");
     });
   });
 
