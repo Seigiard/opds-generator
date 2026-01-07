@@ -8,18 +8,23 @@ export function naturalSort(a: string, b: string): number {
   return collator.compare(a, b);
 }
 
-export function extractTitle(entryXml: string): string {
-  const match = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
-  if (!match?.[1]) return "";
-
-  let title = match[1].trim();
-
-  title = title
+function decodeXmlEntities(text: string): string {
+  return text
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
 
-  return title;
+export function extractTitle(entryXml: string): string {
+  const match = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+  if (!match?.[1]) return "";
+  return decodeXmlEntities(match[1].trim());
+}
+
+export function extractAuthor(entryXml: string): string | undefined {
+  const match = entryXml.match(/<author>\s*<name>([\s\S]*?)<\/name>\s*<\/author>/);
+  if (!match?.[1]) return undefined;
+  return decodeXmlEntities(match[1].trim());
 }

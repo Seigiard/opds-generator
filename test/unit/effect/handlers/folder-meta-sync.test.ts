@@ -181,7 +181,7 @@ describe("folderMetaSync handler", () => {
     expect(content).toContain("kind=acquisition");
   });
 
-  test("sorts entries naturally", async () => {
+  test("sorts folder entries naturally by title", async () => {
     const items = ["item10", "item2", "item1"];
     for (const item of items) {
       const itemPath = join(DATA_DIR, item);
@@ -200,6 +200,48 @@ describe("folderMetaSync handler", () => {
 
     expect(item1Pos).toBeLessThan(item2Pos);
     expect(item2Pos).toBeLessThan(item10Pos);
+  });
+
+  test("sorts books by author (no author first), then by title", async () => {
+    const books = [
+      { dir: "book1.epub", title: "Японская книга", author: "А. Иванова" },
+      { dir: "book2.epub", title: "Книга без автора", author: undefined },
+      { dir: "book3.epub", title: "Абсолютная книга", author: "А. Иванова" },
+      { dir: "book4.epub", title: "Басни", author: "Язепов Потап" },
+      { dir: "book5.epub", title: "Шестая книга без автора", author: undefined },
+    ];
+
+    for (const book of books) {
+      const bookPath = join(DATA_DIR, book.dir);
+      await mkdir(bookPath, { recursive: true });
+      const authorTag = book.author ? `<author><name>${book.author}</name></author>` : "";
+      await Bun.write(
+        join(bookPath, "entry.xml"),
+        `<entry xmlns="http://www.w3.org/2005/Atom"><title>${book.title}</title>${authorTag}</entry>`,
+      );
+    }
+
+    await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(DATA_DIR)), TestLayer));
+
+    const feedPath = join(DATA_DIR, "feed.xml");
+    const content = await readFile(feedPath, "utf-8");
+
+    // Expected order:
+    // 1. Книга без автора (no author)
+    // 2. Шестая книга без автора (no author)
+    // 3. А. Иванова - Абсолютная книга
+    // 4. А. Иванова - Японская книга
+    // 5. Язепов Потап - Басни
+    const pos1 = content.indexOf("Книга без автора");
+    const pos2 = content.indexOf("Шестая книга без автора");
+    const pos3 = content.indexOf("Абсолютная книга");
+    const pos4 = content.indexOf("Японская книга");
+    const pos5 = content.indexOf("Басни");
+
+    expect(pos1).toBeLessThan(pos2); // No author books sorted by title
+    expect(pos2).toBeLessThan(pos3); // No author before authors
+    expect(pos3).toBeLessThan(pos4); // Same author sorted by title
+    expect(pos4).toBeLessThan(pos5); // Different authors sorted alphabetically
   });
 
   test("logs processing info", async () => {

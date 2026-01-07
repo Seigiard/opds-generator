@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { stripXmlDeclaration, naturalSort, extractTitle } from "../../../src/utils/opds.ts";
+import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../../src/utils/opds.ts";
 
 describe("utils/opds", () => {
   describe("stripXmlDeclaration", () => {
@@ -118,6 +118,45 @@ describe("utils/opds", () => {
     test("handles mixed content with entities", () => {
       const xml = "<entry><title>Чому ми досі живі? Путівник &amp; Поради</title></entry>";
       expect(extractTitle(xml)).toBe("Чому ми досі живі? Путівник & Поради");
+    });
+  });
+
+  describe("extractAuthor", () => {
+    test("extracts author name from entry", () => {
+      const xml = "<entry><author><name>Test Author</name></author></entry>";
+      expect(extractAuthor(xml)).toBe("Test Author");
+    });
+
+    test("returns undefined for missing author", () => {
+      const xml = "<entry><title>No Author Book</title></entry>";
+      expect(extractAuthor(xml)).toBeUndefined();
+    });
+
+    test("handles whitespace around name", () => {
+      const xml = `<entry><author>
+        <name>  Spaced Author  </name>
+      </author></entry>`;
+      expect(extractAuthor(xml)).toBe("Spaced Author");
+    });
+
+    test("decodes HTML entities", () => {
+      const xml = "<entry><author><name>Author &amp; Co.</name></author></entry>";
+      expect(extractAuthor(xml)).toBe("Author & Co.");
+    });
+
+    test("handles Cyrillic names", () => {
+      const xml = "<entry><author><name>Иванов Иван</name></author></entry>";
+      expect(extractAuthor(xml)).toBe("Иванов Иван");
+    });
+
+    test("returns undefined for empty name", () => {
+      const xml = "<entry><author><name></name></author></entry>";
+      expect(extractAuthor(xml)).toBeUndefined();
+    });
+
+    test("returns undefined for author without name element", () => {
+      const xml = "<entry><author><uri>http://example.com</uri></author></entry>";
+      expect(extractAuthor(xml)).toBeUndefined();
     });
   });
 });

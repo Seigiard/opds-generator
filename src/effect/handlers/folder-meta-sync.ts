@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { join, relative } from "node:path";
 import { readdir, stat } from "node:fs/promises";
 import { Feed, Entry } from "opds-ts/v1.2";
-import { stripXmlDeclaration, naturalSort, extractTitle } from "../../utils/opds.ts";
+import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
@@ -45,6 +45,7 @@ export const folderMetaSync = (
     interface EntryWithTitle {
       xml: string;
       title: string;
+      author?: string;
       dirName: string;
     }
 
@@ -79,7 +80,8 @@ export const folderMetaSync = (
               const entryXml = await bookEntryFile.text();
               const xml = stripXmlDeclaration(entryXml);
               const title = extractTitle(xml) || item;
-              bookEntries.push({ xml, title, dirName: item });
+              const author = extractAuthor(xml);
+              bookEntries.push({ xml, title, author, dirName: item });
             }
           }
         }
@@ -97,13 +99,26 @@ export const folderMetaSync = (
       }),
     );
 
-    // Sort by title, fallback to dirName for deterministic order
+    // Folders: sort by title
     const sortByTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
       const cmp = naturalSort(a.title, b.title);
       return cmp !== 0 ? cmp : naturalSort(a.dirName, b.dirName);
     };
+
+    // Books: sort by author (no author first), then by title
+    const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
+      if (!a.author && b.author) return -1;
+      if (a.author && !b.author) return 1;
+      if (a.author && b.author) {
+        const authorCmp = naturalSort(a.author, b.author);
+        if (authorCmp !== 0) return authorCmp;
+      }
+      const titleCmp = naturalSort(a.title, b.title);
+      return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
+    };
+
     readResult.folderEntries.sort(sortByTitle);
-    readResult.bookEntries.sort(sortByTitle);
+    readResult.bookEntries.sort(sortByAuthorTitle);
 
     const entries = [...readResult.folderEntries.map((e) => e.xml), ...readResult.bookEntries.map((e) => e.xml)];
     const hasBooks = readResult.bookEntries.length > 0;
