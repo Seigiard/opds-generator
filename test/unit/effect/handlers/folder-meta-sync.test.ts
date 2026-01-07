@@ -223,4 +223,99 @@ describe("folderMetaSync handler", () => {
     expect(content).toContain("SciFi");
     expect(content).toContain('href="/Fiction/SciFi/feed.xml"');
   });
+
+  describe("_entry.xml count updates", () => {
+    test("updates _entry.xml with book count only", async () => {
+      const nestedPath = join(DATA_DIR, "Fiction");
+      const sourceFolder = join(FILES_DIR, "Fiction");
+      await mkdir(nestedPath, { recursive: true });
+      await mkdir(sourceFolder, { recursive: true });
+
+      // Add 3 books
+      for (let i = 1; i <= 3; i++) {
+        const bookPath = join(nestedPath, `book${i}.epub`);
+        await mkdir(bookPath, { recursive: true });
+        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
+      }
+
+      await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(nestedPath)), TestLayer));
+
+      const entryPath = join(nestedPath, "_entry.xml");
+      const content = await readFile(entryPath, "utf-8");
+
+      expect(content).toContain("📚 3</summary>");
+    });
+
+    test("updates _entry.xml with folder count only", async () => {
+      const nestedPath = join(DATA_DIR, "Categories");
+      const sourceFolder = join(FILES_DIR, "Categories");
+      await mkdir(nestedPath, { recursive: true });
+      await mkdir(sourceFolder, { recursive: true });
+
+      // Add 2 subfolders
+      for (const name of ["SciFi", "Fantasy"]) {
+        const subPath = join(nestedPath, name);
+        await mkdir(subPath, { recursive: true });
+        await Bun.write(join(subPath, "_entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>${name}</title></entry>`);
+      }
+
+      await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(nestedPath)), TestLayer));
+
+      const entryPath = join(nestedPath, "_entry.xml");
+      const content = await readFile(entryPath, "utf-8");
+
+      expect(content).toContain("🗂 2</summary>");
+    });
+
+    test("updates _entry.xml with combined count", async () => {
+      const nestedPath = join(DATA_DIR, "Library");
+      const sourceFolder = join(FILES_DIR, "Library");
+      await mkdir(nestedPath, { recursive: true });
+      await mkdir(sourceFolder, { recursive: true });
+
+      // Add 1 subfolder
+      const subPath = join(nestedPath, "Fiction");
+      await mkdir(subPath, { recursive: true });
+      await Bun.write(join(subPath, "_entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>');
+
+      // Add 2 books
+      for (let i = 1; i <= 2; i++) {
+        const bookPath = join(nestedPath, `book${i}.epub`);
+        await mkdir(bookPath, { recursive: true });
+        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
+      }
+
+      await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(nestedPath)), TestLayer));
+
+      const entryPath = join(nestedPath, "_entry.xml");
+      const content = await readFile(entryPath, "utf-8");
+
+      expect(content).toContain("🗂 1 · 📚 2</summary>");
+    });
+
+    test("_entry.xml has no summary for empty folder", async () => {
+      const nestedPath = join(DATA_DIR, "Empty");
+      const sourceFolder = join(FILES_DIR, "Empty");
+      await mkdir(nestedPath, { recursive: true });
+      await mkdir(sourceFolder, { recursive: true });
+
+      await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(nestedPath)), TestLayer));
+
+      const entryPath = join(nestedPath, "_entry.xml");
+      const content = await readFile(entryPath, "utf-8");
+
+      expect(content).not.toContain("<summary>");
+    });
+
+    test("does not create _entry.xml for root folder", async () => {
+      await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(DATA_DIR)), TestLayer));
+
+      const entryPath = join(DATA_DIR, "_entry.xml");
+      const exists = await stat(entryPath)
+        .then(() => true)
+        .catch(() => false);
+
+      expect(exists).toBe(false);
+    });
+  });
 });

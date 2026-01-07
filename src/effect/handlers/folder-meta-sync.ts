@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import { join, relative } from "node:path";
 import { readdir, stat } from "node:fs/promises";
-import { Feed } from "opds-ts/v1.2";
+import { Feed, Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle } from "../../utils/opds.ts";
-import { encodeUrlPath, normalizeFilenameTitle } from "../../utils/processor.ts";
+import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
@@ -124,6 +124,22 @@ export const folderMetaSync = (
       subfolders: readResult.folderEntries.length,
       books: readResult.bookEntries.length,
     });
+
+    // Update this folder's _entry.xml with current count (non-root only)
+    if (relativePath !== "") {
+      const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);
+      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
+
+      const description = formatFolderDescription(readResult.folderEntries.length, readResult.bookEntries.length);
+      if (description) {
+        entry.setSummary(description);
+      }
+
+      const entryXml = entry.toXml({ prettyPrint: true });
+      yield* fs.atomicWrite(entryOutputPath, entryXml);
+
+      yield* logger.debug("FolderMetaSync", "Updated _entry.xml count", { path: relativePath });
+    }
 
     return [];
   });

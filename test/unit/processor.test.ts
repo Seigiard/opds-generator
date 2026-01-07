@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../src/utils/processor.ts";
+import { encodeUrlPath, formatFileSize, formatFolderDescription, normalizeFilenameTitle } from "../../src/utils/processor.ts";
 
 describe("processor", () => {
   describe("encodeUrlPath", () => {
@@ -89,6 +89,27 @@ describe("processor", () => {
 
     test("handles complex filenames", () => {
       expect(normalizeFilenameTitle("Author_Name_-_Book_Title_(2024)")).toBe("Author Name Book Title (2024)");
+    });
+  });
+
+  describe("formatFolderDescription", () => {
+    test("returns undefined for empty folder", () => {
+      expect(formatFolderDescription(0, 0)).toBeUndefined();
+    });
+
+    test("returns book count only when no folders", () => {
+      expect(formatFolderDescription(0, 1)).toBe("📚 1");
+      expect(formatFolderDescription(0, 502)).toBe("📚 502");
+    });
+
+    test("returns folder count only when no books", () => {
+      expect(formatFolderDescription(1, 0)).toBe("🗂 1");
+      expect(formatFolderDescription(5, 0)).toBe("🗂 5");
+    });
+
+    test("returns combined count when both present", () => {
+      expect(formatFolderDescription(1, 1)).toBe("🗂 1 · 📚 1");
+      expect(formatFolderDescription(5, 502)).toBe("🗂 5 · 📚 502");
     });
   });
 });
