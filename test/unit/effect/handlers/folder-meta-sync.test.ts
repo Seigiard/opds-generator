@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import { ConfigService, LoggerService, FileSystemService } from "../../../../src/effect/services.ts";
 import { folderMetaSync } from "../../../../src/effect/handlers/folder-meta-sync.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
+import type { LogContext } from "../../../../src/logging/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, rm, stat, readFile } from "node:fs/promises";
@@ -12,7 +13,7 @@ const DATA_DIR = join(TEST_DIR, "data");
 const FILES_DIR = join(TEST_DIR, "files");
 
 const mockLogger = {
-  infoCalls: [] as Array<{ tag: string; msg: string; meta?: Record<string, unknown> }>,
+  infoCalls: [] as Array<{ tag: string; msg: string; ctx?: LogContext }>,
   warnCalls: [] as Array<{ tag: string; msg: string }>,
   reset() {
     this.infoCalls = [];
@@ -25,13 +26,12 @@ const TestConfigService = Layer.succeed(ConfigService, {
   dataPath: DATA_DIR,
   baseUrl: "http://localhost:8080",
   port: 3000,
-  eventLogEnabled: false,
 });
 
 const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg, meta) =>
+  info: (tag, msg, ctx) =>
     Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg, meta });
+      mockLogger.infoCalls.push({ tag, msg, ctx });
     }),
   warn: (tag, msg) =>
     Effect.sync(() => {

@@ -34,6 +34,12 @@ async function execInContainer(cmd: string): Promise<string> {
   return output;
 }
 
+// Helper: strip ANSI color codes from string
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 // Helper: get logs from docker container since timestamp
 async function getLogsSince(since: string): Promise<LogEntry[]> {
   const proc = Bun.spawn(["docker", "compose", "-f", "docker-compose.e2e.yml", "logs", "--since", since, "--no-log-prefix", "opds"]);
@@ -43,6 +49,7 @@ async function getLogsSince(since: string): Promise<LogEntry[]> {
   return output
     .trim()
     .split("\n")
+    .map((line) => stripAnsi(line))
     .filter((line) => line.startsWith("{"))
     .map((line) => {
       try {
@@ -95,14 +102,18 @@ function getDockerTimestamp(): string {
 }
 
 describe("Event Logging E2E", () => {
-  beforeAll(async () => {
-    // Ensure test folders don't exist (cleanup from previous runs)
-    await execInContainer(
-      `rm -rf ${BOOKS_DIR}/${TEST_FOLDER} ${BOOKS_DIR}/${TEST_FOLDER}-copy ${BOOKS_DIR}/${TEST_FOLDER}-duplicate ${BOOKS_DIR}/test-events-book1.pdf ${BOOKS_DIR}/test-events-book3.pdf`,
-    );
-    // Wait for any cleanup events to be processed
-    await waitForProcessing(3000);
-  });
+  beforeAll(
+    async () => {
+      // Ensure test folders don't exist (cleanup from previous runs)
+      await execInContainer(
+        `rm -rf ${BOOKS_DIR}/${TEST_FOLDER} ${BOOKS_DIR}/${TEST_FOLDER}-copy ${BOOKS_DIR}/${TEST_FOLDER}-duplicate ${BOOKS_DIR}/test-events-book1.pdf ${BOOKS_DIR}/test-events-book3.pdf`,
+      );
+      // Wait for initial sync AND cleanup events to be processed
+      // The consumer may still be processing initial sync events when container becomes healthy
+      await waitForProcessing(10000);
+    },
+    { timeout: 15000 },
+  );
 
   afterAll(async () => {
     // Cleanup all test artifacts
@@ -117,7 +128,7 @@ describe("Event Logging E2E", () => {
 
       // Create test folder inside container
       await execInContainer(`mkdir -p ${BOOKS_DIR}/${TEST_FOLDER}`);
-      await waitForProcessing();
+      await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
 

@@ -5,6 +5,7 @@ import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
 import type { EventType } from "../../../src/effect/types.ts";
+import type { LogContext } from "../../../src/logging/types.ts";
 
 // Mock tracking
 interface MockFs {
@@ -17,10 +18,10 @@ interface MockFs {
 }
 
 interface MockLogger {
-  infoCalls: Array<{ tag: string; msg: string; meta?: Record<string, unknown> }>;
-  warnCalls: Array<{ tag: string; msg: string; meta?: Record<string, unknown> }>;
+  infoCalls: Array<{ tag: string; msg: string; ctx?: LogContext }>;
+  warnCalls: Array<{ tag: string; msg: string; ctx?: LogContext }>;
   errorCalls: Array<{ tag: string; msg: string; error?: unknown }>;
-  debugCalls: Array<{ tag: string; msg: string; meta?: Record<string, unknown> }>;
+  debugCalls: Array<{ tag: string; msg: string; ctx?: LogContext }>;
   reset: () => void;
 }
 
@@ -60,25 +61,24 @@ const TestConfigService = Layer.succeed(ConfigService, {
   dataPath: "/test/data",
   baseUrl: "http://test.local",
   port: 8080,
-  eventLogEnabled: false,
 });
 
 const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg, meta) =>
+  info: (tag, msg, ctx) =>
     Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg, meta });
+      mockLogger.infoCalls.push({ tag, msg, ctx });
     }),
-  warn: (tag, msg, meta) =>
+  warn: (tag, msg, ctx) =>
     Effect.sync(() => {
-      mockLogger.warnCalls.push({ tag, msg, meta });
+      mockLogger.warnCalls.push({ tag, msg, ctx });
     }),
   error: (tag, msg, error) =>
     Effect.sync(() => {
       mockLogger.errorCalls.push({ tag, msg, error });
     }),
-  debug: (tag, msg, meta) =>
+  debug: (tag, msg, ctx) =>
     Effect.sync(() => {
-      mockLogger.debugCalls.push({ tag, msg, meta });
+      mockLogger.debugCalls.push({ tag, msg, ctx });
     }),
 });
 

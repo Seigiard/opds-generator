@@ -26,7 +26,6 @@ const TestConfigService = Layer.succeed(ConfigService, {
   dataPath: DATA_DIR,
   baseUrl: "http://localhost:8080",
   port: 3000,
-  eventLogEnabled: false,
 });
 
 const TestLoggerService = Layer.succeed(LoggerService, {
