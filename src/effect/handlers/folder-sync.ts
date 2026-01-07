@@ -75,5 +75,5 @@ export const folderSync = (
       yield* logger.info("FolderSync", "Root folder - no _entry.xml needed");
     }
 
-    return [];
+    return [{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const;
   });

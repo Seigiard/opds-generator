@@ -154,9 +154,8 @@ export async function createSyncPlan(files: FileInfo[], dataPath: string): Promi
     }
   }
 
-  // Always regenerate folders to keep counts up to date
+  // Always regenerate folders to keep counts up to date (including root for feed.xml)
   for (const folder of folders) {
-    if (folder.path === "") continue; // Root doesn't need _entry.xml
     foldersToProcess.push(folder);
   }
 

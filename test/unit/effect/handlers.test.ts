@@ -203,6 +203,30 @@ describe("Effect Handlers", () => {
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite?.content).toContain("Fiction/feed.xml");
     });
+
+    test("returns cascade event to generate root feed.xml", async () => {
+      const effect = folderSync(folderCreatedEvent("/test/books/", ""));
+
+      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
+
+      expect(cascades).toHaveLength(1);
+      expect(cascades[0]).toEqual({
+        _tag: "FolderMetaSyncRequested",
+        path: "/test/data",
+      });
+    });
+
+    test("returns cascade event to generate folder feed.xml", async () => {
+      const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
+
+      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
+
+      expect(cascades).toHaveLength(1);
+      expect(cascades[0]).toEqual({
+        _tag: "FolderMetaSyncRequested",
+        path: "/test/data/Fiction",
+      });
+    });
   });
 
   describe("bookCleanup", () => {

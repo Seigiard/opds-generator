@@ -88,6 +88,21 @@ describe("nginx integration", () => {
     });
   });
 
+  describe("initial sync", () => {
+    test("creates root feed.xml with valid OPDS structure", async () => {
+      const response = await fetch(`${BASE_URL}/feed.xml`);
+      expect(response.status).toBe(200);
+
+      const feedContent = await response.text();
+      expect(feedContent).toContain('<?xml version="1.0"');
+      expect(feedContent).toContain("<feed");
+      expect(feedContent).toContain('xmlns="http://www.w3.org/2005/Atom"');
+      expect(feedContent).toContain("kind=navigation");
+      expect(feedContent).toContain('rel="self"');
+      expect(feedContent).toContain("</feed>");
+    });
+  });
+
   // /resync tests last - they trigger async operations that affect other tests
   describe("/resync endpoint", () => {
     test("GET /resync without auth returns 401 (when enabled)", async () => {
