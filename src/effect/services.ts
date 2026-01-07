@@ -2,7 +2,7 @@ import { Context, Effect, Layer, Queue } from "effect";
 import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
 import { config } from "../config.ts";
 import { log } from "../logging/index.ts";
-import type { LogContext } from "../logging/index.ts";
+import type { LogContext } from "../logging/types.ts";
 import type { EventType } from "./types.ts";
 
 // Config Service
