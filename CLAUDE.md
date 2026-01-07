@@ -37,20 +37,20 @@ curl -u admin:secret http://localhost:8080/resync    # force resync
 
 ## Testing
 
-**IMPORTANT:** Run tests via docker-compose.test.yml, not locally!
+**IMPORTANT:** Run tests via docker, not locally!
 
 ```bash
-# Run all tests (unit + integration, excludes e2e)
-docker compose -f docker-compose.test.yml run --rm test
+# Run unit + integration tests (inside docker)
+bun run test
+
+# Run e2e tests (nginx + event logging, outside docker)
+bun run test:e2e
+
+# Run ALL tests (unit + integration + e2e)
+bun run test:all
 
 # Run specific test file
 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/effect/queue-consumer.test.ts
-
-# Run e2e tests (starts/stops container automatically)
-bun run test:e2e
-
-# Run e2e events tests (starts/stops container automatically)
-bun run test:e2e:events
 
 # Type check (locally is fine)
 bun --bun tsc --noEmit
