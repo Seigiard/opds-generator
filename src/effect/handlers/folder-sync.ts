@@ -22,7 +22,7 @@ export const folderSync = (
     const relativePath = relative(config.filesPath, folderPath);
     const folderDataDir = join(config.dataPath, relativePath);
 
-    yield* logger.info("FolderSync", `Processing: ${relativePath || "(root)"}`);
+    yield* logger.info("FolderSync", "Processing", { path: relativePath || "(root)" });
 
     // Create data directory
     yield* fs.mkdir(folderDataDir, { recursive: true });
@@ -70,7 +70,7 @@ export const folderSync = (
       const entryXml = entry.toXml({ prettyPrint: true });
       yield* fs.atomicWrite(join(folderDataDir, FOLDER_ENTRY_FILE), entryXml);
 
-      yield* logger.info("FolderSync", `Done: ${relativePath}`, counts);
+      yield* logger.info("FolderSync", "Done", { path: relativePath, subfolders: counts.subfolders, books: counts.books });
     } else {
       yield* logger.info("FolderSync", "Root folder - no _entry.xml needed");
     }

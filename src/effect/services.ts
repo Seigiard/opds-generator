@@ -1,7 +1,8 @@
 import { Context, Effect, Layer, Queue } from "effect";
-import { mkdir, rm, readdir, stat, rename, symlink, unlink, appendFile } from "node:fs/promises";
+import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
 import { config } from "../config.ts";
-import { logger } from "../utils/errors.ts";
+import { log } from "../logging/index.ts";
+import type { LogContext } from "../logging/index.ts";
 import type { EventType } from "./types.ts";
 
 // Config Service
@@ -12,7 +13,6 @@ export class ConfigService extends Context.Tag("ConfigService")<
     readonly dataPath: string;
     readonly baseUrl: string;
     readonly port: number;
-    readonly eventLogEnabled: boolean;
   }
 >() {}
 
@@ -20,10 +20,10 @@ export class ConfigService extends Context.Tag("ConfigService")<
 export class LoggerService extends Context.Tag("LoggerService")<
   LoggerService,
   {
-    readonly info: (tag: string, msg: string, meta?: Record<string, unknown>) => Effect.Effect<void>;
-    readonly warn: (tag: string, msg: string, meta?: Record<string, unknown>) => Effect.Effect<void>;
-    readonly error: (tag: string, msg: string, error?: unknown) => Effect.Effect<void>;
-    readonly debug: (tag: string, msg: string, meta?: Record<string, unknown>) => Effect.Effect<void>;
+    readonly info: (tag: string, msg: string, ctx?: LogContext) => Effect.Effect<void>;
+    readonly warn: (tag: string, msg: string, ctx?: LogContext) => Effect.Effect<void>;
+    readonly error: (tag: string, msg: string, err?: unknown, ctx?: LogContext) => Effect.Effect<void>;
+    readonly debug: (tag: string, msg: string, ctx?: LogContext) => Effect.Effect<void>;
   }
 >() {}
 
@@ -62,61 +62,10 @@ export class EventQueueService extends Context.Tag("EventQueueService")<
   }
 >() {}
 
-// Error Log Entry type
-export interface ErrorLogEntry {
-  timestamp: string;
-  event_tag: string;
-  path?: string;
-  error: string;
-  stack?: string;
-}
-
-// Error Log Service
-export class ErrorLogService extends Context.Tag("ErrorLogService")<
-  ErrorLogService,
-  {
-    readonly log: (entry: ErrorLogEntry) => Effect.Effect<void>;
-    readonly clear: () => Effect.Effect<void>;
-  }
->() {}
-
-// Event Log Entry types
-export type EventLogEntryType =
-  | "event_received"
-  | "event_ignored"
-  | "event_deduplicated"
-  | "handler_start"
-  | "handler_complete"
-  | "handler_error"
-  | "cascades_generated";
-
-export interface EventLogEntry {
-  timestamp: string;
-  type: EventLogEntryType;
-  event_id: string;
-  event_tag: string;
-  path?: string;
-  handler?: string;
-  duration_ms?: number;
-  cascades?: number;
-  cascade_tags?: string[];
-  error?: string;
-}
-
-// Event Log Service
-export class EventLogService extends Context.Tag("EventLogService")<
-  EventLogService,
-  {
-    readonly log: (entry: EventLogEntry) => Effect.Effect<void>;
-    readonly clear: () => Effect.Effect<void>;
-    readonly isEnabled: () => boolean;
-  }
->() {}
-
 // Handler type for registry
 export type EventHandler = (
   event: EventType,
-) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService | ErrorLogService | EventLogService>;
+) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService>;
 
 // Handler Registry Service
 export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
@@ -134,14 +83,13 @@ const LiveConfigService = Layer.succeed(ConfigService, {
   dataPath: config.dataPath,
   baseUrl: config.baseUrl,
   port: config.port,
-  eventLogEnabled: config.eventLogEnabled,
 });
 
 const LiveLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg, meta) => Effect.sync(() => logger.info(tag, msg, meta)),
-  warn: (tag, msg, meta) => Effect.sync(() => logger.warn(tag, msg, meta)),
-  error: (tag, msg, error) => Effect.sync(() => logger.error(tag, msg, error)),
-  debug: (tag, msg, meta) => Effect.sync(() => logger.debug(tag, msg, meta)),
+  info: (tag, msg, ctx) => Effect.sync(() => log.info(tag, msg, ctx)),
+  warn: (tag, msg, ctx) => Effect.sync(() => log.warn(tag, msg, ctx)),
+  error: (tag, msg, err, ctx) => Effect.sync(() => log.error(tag, msg, err, ctx)),
+  debug: (tag, msg, ctx) => Effect.sync(() => log.debug(tag, msg, ctx)),
 });
 
 const LiveFileSystemService = Layer.succeed(FileSystemService, {
@@ -267,62 +215,6 @@ const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
   },
 });
 
-// Error Log Service - JSONL file in data directory
-const errorLogPath = `${config.dataPath}/errors.jsonl`;
-
-const LiveErrorLogService = Layer.succeed(ErrorLogService, {
-  log: (entry: ErrorLogEntry) =>
-    Effect.tryPromise({
-      try: () => appendFile(errorLogPath, JSON.stringify(entry) + "\n"),
-      catch: (e) => e as Error,
-    }).pipe(
-      Effect.catchAll((e) => {
-        logger.error("ErrorLogService", "Failed to write error log", e);
-        return Effect.void;
-      }),
-    ),
-
-  clear: () =>
-    Effect.promise(async () => {
-      await Bun.write(errorLogPath, "");
-    }).pipe(
-      Effect.catchAll((e) => {
-        logger.error("ErrorLogService", "Failed to clear error log", e);
-        return Effect.void;
-      }),
-    ),
-});
-
-// Event Log Service - JSONL file for event tracing
-const eventLogPath = `${config.dataPath}/events.jsonl`;
-
-const LiveEventLogService = Layer.succeed(EventLogService, {
-  log: (entry: EventLogEntry) => {
-    if (!config.eventLogEnabled) return Effect.void;
-    return Effect.tryPromise({
-      try: () => appendFile(eventLogPath, JSON.stringify(entry) + "\n"),
-      catch: (e) => e as Error,
-    }).pipe(
-      Effect.catchAll((e) => {
-        logger.error("EventLogService", "Failed to write event log", e);
-        return Effect.void;
-      }),
-    );
-  },
-
-  clear: () =>
-    Effect.promise(async () => {
-      await Bun.write(eventLogPath, "");
-    }).pipe(
-      Effect.catchAll((e) => {
-        logger.error("EventLogService", "Failed to clear event log", e);
-        return Effect.void;
-      }),
-    ),
-
-  isEnabled: () => config.eventLogEnabled,
-});
-
 // Combined live layer
 export const LiveLayer = Layer.mergeAll(
   LiveConfigService,
@@ -331,6 +223,4 @@ export const LiveLayer = Layer.mergeAll(
   LiveDeduplicationService,
   LiveEventQueueService,
   LiveHandlerRegistry,
-  LiveErrorLogService,
-  LiveEventLogService,
 );

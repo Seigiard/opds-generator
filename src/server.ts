@@ -3,14 +3,14 @@ import { Schema } from "@effect/schema";
 import { mkdir, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "./config.ts";
-import { logger } from "./utils/errors.ts";
+import { log } from "./logging/index.ts";
 import { RawBooksEvent, RawDataEvent } from "./effect/types.ts";
 import { adaptBooksEvent } from "./effect/adapters/books-adapter.ts";
 import { adaptDataEvent } from "./effect/adapters/data-adapter.ts";
 import { adaptSyncPlan } from "./effect/adapters/sync-plan-adapter.ts";
 import { startConsumer } from "./effect/consumer.ts";
 import { registerHandlers } from "./effect/handlers/index.ts";
-import { ErrorLogService, EventLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
+import { EventQueueService, LiveLayer } from "./effect/services.ts";
 import { scanFiles, createSyncPlan } from "./scanner.ts";
 
 // Shared runtime - single instance of all services
@@ -25,7 +25,7 @@ let consumerFiber: Fiber.RuntimeFiber<never, Error> | null = null;
 const doSync = Effect.gen(function* () {
   const queue = yield* EventQueueService;
 
-  logger.info("InitialSync", "Starting...");
+  log.info("InitialSync", "Starting");
   const startTime = Date.now();
 
   yield* Effect.tryPromise({
@@ -37,13 +37,17 @@ const doSync = Effect.gen(function* () {
     try: () => scanFiles(config.filesPath),
     catch: (e) => e as Error,
   });
-  logger.info("InitialSync", `Found ${files.length} books`);
+  log.info("InitialSync", "Books found", { books_found: files.length });
 
   const plan = yield* Effect.tryPromise({
     try: () => createSyncPlan(files, config.dataPath),
     catch: (e) => e as Error,
   });
-  logger.info("InitialSync", `Plan: +${plan.toProcess.length} process, -${plan.toDelete.length} delete, ${plan.folders.length} folders`);
+  log.info("InitialSync", "Sync plan created", {
+    books_process: plan.toProcess.length,
+    books_delete: plan.toDelete.length,
+    folders_count: plan.folders.length,
+  });
 
   // Convert sync plan to events
   const events = adaptSyncPlan(plan, config.filesPath);
@@ -52,7 +56,7 @@ const doSync = Effect.gen(function* () {
   yield* queue.enqueueMany(events);
 
   const duration = Date.now() - startTime;
-  logger.info("InitialSync", `Queued ${events.length} events in ${duration}ms`);
+  log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: duration });
 });
 
 // Initial sync: manages isSyncing flag with guaranteed cleanup
@@ -67,18 +71,10 @@ const initialSync = Effect.gen(function* () {
   ),
 );
 
-// Resync: clear data and error/event logs, run sync (manages own flag)
+// Resync: clear data, run sync (manages own flag)
 const resync = Effect.gen(function* () {
   isSyncing = true;
-  logger.info("Resync", "Starting full resync...");
-
-  // Clear error log
-  const errorLog = yield* ErrorLogService;
-  yield* errorLog.clear();
-
-  // Clear event log
-  const eventLog = yield* EventLogService;
-  yield* eventLog.clear();
+  log.info("Resync", "Starting full resync");
 
   // Clear data directory contents (not the directory itself - nginx holds it open)
   yield* Effect.tryPromise({
@@ -88,7 +84,7 @@ const resync = Effect.gen(function* () {
     },
     catch: (e) => e as Error,
   });
-  logger.info("Resync", "Cleared data directory");
+  log.info("Resync", "Cleared data directory");
 
   // Run sync logic (doSync, not initialSync to avoid double flag management)
   yield* doSync;
@@ -107,7 +103,7 @@ const handleBooksEvent = (body: unknown) =>
 
     const parseResult = Schema.decodeUnknownEither(RawBooksEvent)(body);
     if (parseResult._tag === "Left") {
-      logger.warn("Server", "Invalid books event schema", { body });
+      log.warn("Server", "Invalid books event schema", { body });
       return { status: 400, message: "Invalid event" };
     }
 
@@ -128,7 +124,7 @@ const handleDataEvent = (body: unknown) =>
 
     const parseResult = Schema.decodeUnknownEither(RawDataEvent)(body);
     if (parseResult._tag === "Left") {
-      logger.warn("Server", "Invalid data event schema", { body });
+      log.warn("Server", "Invalid data event schema", { body });
       return { status: 400, message: "Invalid event" };
     }
 
@@ -145,14 +141,7 @@ const handleDataEvent = (body: unknown) =>
 // Initialize handlers only
 const initHandlers = Effect.gen(function* () {
   yield* registerHandlers;
-  logger.info("Server", "Handlers registered");
-});
-
-// Clear event log on startup (don't persist between restarts)
-const clearEventLogOnStartup = Effect.gen(function* () {
-  const eventLog = yield* EventLogService;
-  yield* eventLog.clear();
-  logger.info("Server", "Event log cleared");
+  log.info("Server", "Handlers registered");
 });
 
 // Main entry point
@@ -161,15 +150,12 @@ async function main(): Promise<void> {
     // 1. Register handlers
     await runtime.runPromise(initHandlers);
 
-    // 2. Clear event log (don't persist between restarts)
-    await runtime.runPromise(clearEventLogOnStartup);
-
-    // 3. Start consumer in background (using runFork for proper fiber execution)
+    // 2. Start consumer in background (using runFork for proper fiber execution)
     consumerFiber = runtime.runFork(startConsumer);
-    logger.info("Server", "Consumer started");
+    log.info("Server", "Consumer started");
     isReady = true;
 
-    // 4. Start HTTP server
+    // 3. Start HTTP server
     const server = Bun.serve({
       port: config.port,
       hostname: "127.0.0.1",
@@ -187,7 +173,7 @@ async function main(): Promise<void> {
             const result = await runtime.runPromise(handleBooksEvent(body));
             return new Response(result.message, { status: result.status });
           } catch (error) {
-            logger.error("Server", "Failed to process books event", error);
+            log.error("Server", "Failed to process books event", error);
             return new Response("Error", { status: 500 });
           }
         }
@@ -203,7 +189,7 @@ async function main(): Promise<void> {
             const result = await runtime.runPromise(handleDataEvent(body));
             return new Response(result.message, { status: result.status });
           } catch (error) {
-            logger.error("Server", "Failed to process data event", error);
+            log.error("Server", "Failed to process data event", error);
             return new Response("Error", { status: 500 });
           }
         }
@@ -219,7 +205,7 @@ async function main(): Promise<void> {
           }
 
           runtime.runPromise(resync).catch((error) => {
-            logger.error("Server", "Resync failed", error);
+            log.error("Server", "Resync failed", error);
           });
           return new Response("Resync started", { status: 202 });
         }
@@ -229,12 +215,12 @@ async function main(): Promise<void> {
       },
     });
 
-    logger.info("Server", `Listening on http://localhost:${server.port}`);
+    log.info("Server", "Listening", { port: server.port });
 
-    // 5. Run initial sync
+    // 4. Run initial sync
     await runtime.runPromise(initialSync);
   } catch (error) {
-    logger.error("Server", "Startup failed", error);
+    log.error("Server", "Startup failed", error);
     process.exit(1);
   }
 }
@@ -243,7 +229,7 @@ void main();
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-  logger.info("Server", "Shutting down...");
+  log.info("Server", "Shutting down");
   if (consumerFiber) {
     await runtime.runPromise(Fiber.interrupt(consumerFiber));
   }

@@ -1,22 +1,23 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
-const AUTH = Buffer.from("admin:secret").toString("base64");
 
 // Container paths
 const BOOKS_DIR = "/books";
 const TEST_FOLDER = "test-events";
 const FIXTURE_PDF = "/books/test/Test Book - Test Author.pdf";
 
-interface EventLogEntry {
-  timestamp: string;
-  type: string;
-  event_id: string;
-  event_tag: string;
+interface LogEntry {
+  ts: string;
+  level: string;
+  tag: string;
+  msg: string;
+  event_type?: string;
+  event_id?: string;
+  event_tag?: string;
   path?: string;
-  handler?: string;
   duration_ms?: number;
-  cascades?: number;
+  cascade_count?: number;
   cascade_tags?: string[];
   error?: string;
 }
@@ -33,34 +34,24 @@ async function execInContainer(cmd: string): Promise<string> {
   return output;
 }
 
-// Helper: fetch events from server
-async function getEvents(): Promise<EventLogEntry[]> {
-  const response = await fetch(`${BASE_URL}/events.jsonl`, {
-    headers: { Authorization: `Basic ${AUTH}` },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch events: ${response.status}`);
-  }
-  const text = await response.text();
-  if (!text.trim()) return [];
+// Helper: get logs from docker container since timestamp
+async function getLogsSince(since: string): Promise<LogEntry[]> {
+  const proc = Bun.spawn(["docker", "compose", "-f", "docker-compose.e2e.yml", "logs", "--since", since, "--no-log-prefix", "opds"]);
+  const output = await new Response(proc.stdout).text();
+  await proc.exited;
 
-  return text
+  return output
     .trim()
     .split("\n")
+    .filter((line) => line.startsWith("{"))
     .map((line) => {
       try {
-        return JSON.parse(line);
+        return JSON.parse(line) as LogEntry;
       } catch {
         return null;
       }
     })
-    .filter(Boolean) as EventLogEntry[];
-}
-
-// Helper: get events since timestamp
-async function getEventsSince(since: string): Promise<EventLogEntry[]> {
-  const events = await getEvents();
-  return events.filter((e) => e.timestamp >= since);
+    .filter((e): e is LogEntry => e !== null);
 }
 
 // Helper: wait for events to be processed
@@ -79,22 +70,28 @@ async function dataExists(relativePath: string): Promise<boolean> {
 }
 
 // Helper: find events by tag and path
-function findEvents(events: EventLogEntry[], tag: string, pathContains?: string): EventLogEntry[] {
-  return events.filter((e) => {
-    if (e.event_tag !== tag) return false;
+function findEvents(logs: LogEntry[], eventTag: string, pathContains?: string): LogEntry[] {
+  return logs.filter((e) => {
+    if (e.event_tag !== eventTag) return false;
     if (pathContains && (!e.path || !e.path.includes(pathContains))) return false;
     return true;
   });
 }
 
 // Helper: find handler events (start/complete)
-function findHandlerEvents(events: EventLogEntry[], tag: string, pathContains?: string): EventLogEntry[] {
-  return events.filter((e) => {
-    if (e.event_tag !== tag) return false;
-    if (!["handler_start", "handler_complete"].includes(e.type)) return false;
+function findHandlerEvents(logs: LogEntry[], eventTag: string, pathContains?: string): LogEntry[] {
+  return logs.filter((e) => {
+    if (e.event_tag !== eventTag) return false;
+    if (!e.event_type || !["handler_start", "handler_complete"].includes(e.event_type)) return false;
     if (pathContains && (!e.path || !e.path.includes(pathContains))) return false;
     return true;
   });
+}
+
+// Helper: get timestamp for docker logs --since flag
+function getDockerTimestamp(): string {
+  // Docker expects RFC3339 or relative time
+  return new Date().toISOString();
 }
 
 describe("Event Logging E2E", () => {
@@ -116,22 +113,22 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 1: Setup", () => {
     test("create folder triggers FolderCreated event", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Create test folder inside container
       await execInContainer(`mkdir -p ${BOOKS_DIR}/${TEST_FOLDER}`);
       await waitForProcessing();
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have FolderCreated event
-      const folderCreatedEvents = findEvents(events, "FolderCreated", TEST_FOLDER);
-      expect(folderCreatedEvents.length).toBeGreaterThan(0);
+      const folderCreatedLogs = findEvents(logs, "FolderCreated", TEST_FOLDER);
+      expect(folderCreatedLogs.length).toBeGreaterThan(0);
 
       // Should have handler_start and handler_complete for FolderCreated
-      const handlerEvents = findHandlerEvents(events, "FolderCreated", TEST_FOLDER);
-      expect(handlerEvents.some((e) => e.type === "handler_start")).toBe(true);
-      expect(handlerEvents.some((e) => e.type === "handler_complete")).toBe(true);
+      const handlerLogs = findHandlerEvents(logs, "FolderCreated", TEST_FOLDER);
+      expect(handlerLogs.some((e) => e.event_type === "handler_start")).toBe(true);
+      expect(handlerLogs.some((e) => e.event_type === "handler_complete")).toBe(true);
     });
 
     test("folder data structure is created", async () => {
@@ -143,22 +140,22 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 2: Adding books", () => {
     test("add book1 triggers BookCreated event", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Copy PDF to test folder inside container
       await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf"`);
       await waitForProcessing(3000); // PDF processing takes longer
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookCreated event
-      const bookCreatedEvents = findEvents(events, "BookCreated", "test-events-book1.pdf");
-      expect(bookCreatedEvents.length).toBeGreaterThan(0);
+      const bookCreatedLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
+      expect(bookCreatedLogs.length).toBeGreaterThan(0);
 
       // Should have handler events
-      const handlerEvents = findHandlerEvents(events, "BookCreated", "test-events-book1.pdf");
-      expect(handlerEvents.some((e) => e.type === "handler_start")).toBe(true);
-      expect(handlerEvents.some((e) => e.type === "handler_complete")).toBe(true);
+      const handlerLogs = findHandlerEvents(logs, "BookCreated", "test-events-book1.pdf");
+      expect(handlerLogs.some((e) => e.event_type === "handler_start")).toBe(true);
+      expect(handlerLogs.some((e) => e.event_type === "handler_complete")).toBe(true);
     });
 
     test("book1 data structure is created", async () => {
@@ -168,17 +165,17 @@ describe("Event Logging E2E", () => {
     });
 
     test("add book2 triggers BookCreated event", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Copy another PDF inside container
       await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book2.pdf"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookCreated event
-      const bookCreatedEvents = findEvents(events, "BookCreated", "test-events-book2.pdf");
-      expect(bookCreatedEvents.length).toBeGreaterThan(0);
+      const bookCreatedLogs = findEvents(logs, "BookCreated", "test-events-book2.pdf");
+      expect(bookCreatedLogs.length).toBeGreaterThan(0);
     });
 
     test("feed.xml contains both books", async () => {
@@ -192,67 +189,67 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 3: Book operations", () => {
     test("move book1 to root triggers BookDeleted + BookCreated", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Move book1 from test-events/ to root inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookDeleted from folder
-      const deletedEvents = findEvents(events, "BookDeleted", "test-events-book1.pdf");
-      expect(deletedEvents.length).toBeGreaterThan(0);
+      const deletedLogs = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
+      expect(deletedLogs.length).toBeGreaterThan(0);
 
       // Should have BookCreated in root
-      const createdEvents = findEvents(events, "BookCreated", "test-events-book1.pdf");
-      expect(createdEvents.length).toBeGreaterThan(0);
+      const createdLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
+      expect(createdLogs.length).toBeGreaterThan(0);
     });
 
     test("rename book1 to book3 triggers BookDeleted + BookCreated", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Rename in root inside container
       await execInContainer(`mv "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookDeleted for book1
-      const deletedEvents = findEvents(events, "BookDeleted", "test-events-book1.pdf");
-      expect(deletedEvents.length).toBeGreaterThan(0);
+      const deletedLogs = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
+      expect(deletedLogs.length).toBeGreaterThan(0);
 
       // Should have BookCreated for book3
-      const createdEvents = findEvents(events, "BookCreated", "test-events-book3.pdf");
-      expect(createdEvents.length).toBeGreaterThan(0);
+      const createdLogs = findEvents(logs, "BookCreated", "test-events-book3.pdf");
+      expect(createdLogs.length).toBeGreaterThan(0);
     });
 
     test("copy book3 to book1 triggers BookCreated", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Copy back inside container
       await execInContainer(`cp "${BOOKS_DIR}/test-events-book3.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookCreated for book1
-      const createdEvents = findEvents(events, "BookCreated", "test-events-book1.pdf");
-      expect(createdEvents.length).toBeGreaterThan(0);
+      const createdLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
+      expect(createdLogs.length).toBeGreaterThan(0);
     });
 
     test("delete book1 and book3 triggers BookDeleted", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Delete both books inside container
       await execInContainer(`rm "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have BookDeleted for both
-      const deleted1 = findEvents(events, "BookDeleted", "test-events-book1.pdf");
-      const deleted3 = findEvents(events, "BookDeleted", "test-events-book3.pdf");
+      const deleted1 = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
+      const deleted3 = findEvents(logs, "BookDeleted", "test-events-book3.pdf");
       expect(deleted1.length).toBeGreaterThan(0);
       expect(deleted3.length).toBeGreaterThan(0);
     });
@@ -262,55 +259,55 @@ describe("Event Logging E2E", () => {
     test(
       "copy folder triggers FolderCreated + BookCreated for contents",
       async () => {
-        const before = new Date().toISOString();
+        const before = getDockerTimestamp();
 
         // Copy folder inside container
         await execInContainer(`cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`);
         await waitForProcessing(5000);
 
-        const events = await getEventsSince(before);
+        const logs = await getLogsSince(before);
 
         // Should have FolderCreated
-        const folderCreated = findEvents(events, "FolderCreated", `${TEST_FOLDER}-copy`);
+        const folderCreated = findEvents(logs, "FolderCreated", `${TEST_FOLDER}-copy`);
         expect(folderCreated.length).toBeGreaterThan(0);
 
         // Should have BookCreated for book2 (the only book left in folder)
-        const bookCreated = findEvents(events, "BookCreated", "test-events-book2.pdf");
+        const bookCreated = findEvents(logs, "BookCreated", "test-events-book2.pdf");
         expect(bookCreated.length).toBeGreaterThan(0);
       },
       { timeout: 15000 },
     );
 
     test("rename folder triggers FolderDeleted + FolderCreated", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Rename folder inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-copy" "${BOOKS_DIR}/${TEST_FOLDER}-duplicate"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have FolderDeleted for -copy
-      const deleted = findEvents(events, "FolderDeleted", `${TEST_FOLDER}-copy`);
+      const deleted = findEvents(logs, "FolderDeleted", `${TEST_FOLDER}-copy`);
       expect(deleted.length).toBeGreaterThan(0);
 
       // Should have FolderCreated for -duplicate
-      const created = findEvents(events, "FolderCreated", `${TEST_FOLDER}-duplicate`);
+      const created = findEvents(logs, "FolderCreated", `${TEST_FOLDER}-duplicate`);
       expect(created.length).toBeGreaterThan(0);
     });
 
     test("move folder into another triggers events", async () => {
-      const before = new Date().toISOString();
+      const before = getDockerTimestamp();
 
       // Move -duplicate into test-events inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-duplicate" "${BOOKS_DIR}/${TEST_FOLDER}/${TEST_FOLDER}-duplicate"`);
       await waitForProcessing(3000);
 
-      const events = await getEventsSince(before);
+      const logs = await getLogsSince(before);
 
       // Should have some folder events
-      const folderEvents = events.filter((e) => e.event_tag.includes("Folder") && e.path?.includes("duplicate"));
-      expect(folderEvents.length).toBeGreaterThan(0);
+      const folderLogs = logs.filter((e) => e.event_tag?.includes("Folder") && e.path?.includes("duplicate"));
+      expect(folderLogs.length).toBeGreaterThan(0);
     });
   });
 
@@ -318,20 +315,20 @@ describe("Event Logging E2E", () => {
     test(
       "delete folder with contents triggers FolderDeleted + BookDeleted",
       async () => {
-        const before = new Date().toISOString();
+        const before = getDockerTimestamp();
 
         // Delete entire test folder inside container
         await execInContainer(`rm -rf "${BOOKS_DIR}/${TEST_FOLDER}"`);
         await waitForProcessing(5000);
 
-        const events = await getEventsSince(before);
+        const logs = await getLogsSince(before);
 
         // Should have FolderDeleted
-        const folderDeleted = findEvents(events, "FolderDeleted", TEST_FOLDER);
+        const folderDeleted = findEvents(logs, "FolderDeleted", TEST_FOLDER);
         expect(folderDeleted.length).toBeGreaterThan(0);
 
         // Should have BookDeleted for remaining books
-        const bookDeleted = events.filter((e) => e.event_tag === "BookDeleted");
+        const bookDeleted = logs.filter((e) => e.event_tag === "BookDeleted");
         expect(bookDeleted.length).toBeGreaterThan(0);
       },
       { timeout: 15000 },

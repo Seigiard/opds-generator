@@ -17,18 +17,18 @@ export const bookCleanup = (
     const relativePath = relative(config.filesPath, filePath);
     const bookDataDir = join(config.dataPath, relativePath);
 
-    yield* logger.info("BookCleanup", `Removing: ${relativePath}`);
+    yield* logger.info("BookCleanup", "Removing", { path: relativePath });
 
     yield* fs.rm(bookDataDir, { recursive: true }).pipe(
       Effect.catchAll((error) => {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return logger.debug("BookCleanup", `Already removed: ${relativePath}`);
+          return logger.debug("BookCleanup", "Already removed", { path: relativePath });
         }
         return Effect.fail(error);
       }),
     );
 
-    yield* logger.info("BookCleanup", `Done: ${relativePath}`);
+    yield* logger.info("BookCleanup", "Done", { path: relativePath });
 
     // Cascade: regenerate parent folder's feed.xml
     const parentDataDir = dirname(bookDataDir);

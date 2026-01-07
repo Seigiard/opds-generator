@@ -18,10 +18,10 @@ export const parentMetaSync = (
     const parentRelativePath = relative(config.dataPath, parentDataDir);
 
     if (parentDataDir === config.dataPath || parentRelativePath === ".") {
-      yield* logger.info("ParentMetaSync", "Parent is root, returning FolderMetaSyncRequested for root");
+      yield* logger.info("ParentMetaSync", "Triggering root sync", { path: "/" });
       return [{ _tag: "FolderMetaSyncRequested", path: config.dataPath }] as const;
     }
 
-    yield* logger.info("ParentMetaSync", `Returning FolderMetaSyncRequested for: ${parentRelativePath}`);
+    yield* logger.info("ParentMetaSync", "Triggering parent sync", { path: parentRelativePath });
     return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const;
   });

@@ -18,7 +18,7 @@ export const folderEntryXmlChanged = (
     const parentDataDir = dirname(normalizedDir);
     const parentRelativePath = relative(config.dataPath, parentDataDir);
 
-    yield* logger.info("FolderEntryXmlChanged", `Triggering folder-meta-sync for current and parent`);
+    yield* logger.info("FolderEntryXmlChanged", "Triggering folder-meta-sync for current and parent");
 
     // Emit events for both current folder and parent
     const events: EventType[] = [{ _tag: "FolderMetaSyncRequested", path: normalizedDir }];

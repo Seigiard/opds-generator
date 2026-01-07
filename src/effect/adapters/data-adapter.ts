@@ -1,6 +1,7 @@
 import { Effect, Match } from "effect";
+import { log } from "../../logging/index.ts";
 import type { RawDataEvent, EventType } from "../types.ts";
-import { DeduplicationService, EventLogService } from "../services.ts";
+import { DeduplicationService } from "../services.ts";
 import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
 // Classify data watcher event using Effect Match
@@ -37,16 +38,14 @@ function getEventKey(event: EventType): string {
 export const adaptDataEvent = (raw: RawDataEvent) =>
   Effect.gen(function* () {
     const dedup = yield* DeduplicationService;
-    const eventLog = yield* EventLogService;
 
     const eventType = classifyDataEvent(raw);
     const path = `${raw.parent}/${raw.name}`;
     const eventId = `raw:data:${path}:${Date.now()}`;
 
     // Log event received (all events including ignored)
-    yield* eventLog.log({
-      timestamp: new Date().toISOString(),
-      type: "event_received",
+    log.info("Adapter", "Event received", {
+      event_type: "event_received",
       event_id: eventId,
       event_tag: eventType._tag,
       path,
@@ -54,9 +53,8 @@ export const adaptDataEvent = (raw: RawDataEvent) =>
 
     if (eventType._tag === "Ignored") {
       // Log ignored event
-      yield* eventLog.log({
-        timestamp: new Date().toISOString(),
-        type: "event_ignored",
+      log.debug("Adapter", "Event ignored", {
+        event_type: "event_ignored",
         event_id: eventId,
         event_tag: "Ignored",
         path,
@@ -69,9 +67,8 @@ export const adaptDataEvent = (raw: RawDataEvent) =>
 
     if (!shouldProcess) {
       // Log deduplicated event
-      yield* eventLog.log({
-        timestamp: new Date().toISOString(),
-        type: "event_deduplicated",
+      log.debug("Adapter", "Event deduplicated", {
+        event_type: "event_deduplicated",
         event_id: eventId,
         event_tag: eventType._tag,
         path,

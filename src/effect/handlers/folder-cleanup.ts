@@ -17,18 +17,18 @@ export const folderCleanup = (
     const relativePath = relative(config.filesPath, folderPath);
     const folderDataDir = join(config.dataPath, relativePath);
 
-    yield* logger.info("FolderCleanup", `Removing: ${relativePath}`);
+    yield* logger.info("FolderCleanup", "Removing", { path: relativePath });
 
     yield* fs.rm(folderDataDir, { recursive: true }).pipe(
       Effect.catchAll((error) => {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return logger.debug("FolderCleanup", `Already removed: ${relativePath}`);
+          return logger.debug("FolderCleanup", "Already removed", { path: relativePath });
         }
         return Effect.fail(error);
       }),
     );
 
-    yield* logger.info("FolderCleanup", `Done: ${relativePath}`);
+    yield* logger.info("FolderCleanup", "Done", { path: relativePath });
 
     // Cascade: regenerate parent folder's feed.xml (unless at root)
     const parentDataDir = dirname(folderDataDir);

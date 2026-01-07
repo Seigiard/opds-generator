@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { logger } from "./errors.ts";
+import { log } from "../logging/index.ts";
 export { COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../constants.ts";
 
 export async function saveBufferAsImage(buffer: Buffer, destPath: string, maxSize: number): Promise<boolean> {
@@ -21,7 +21,7 @@ export async function saveBufferAsImage(buffer: Buffer, destPath: string, maxSiz
     ]);
     return exitCode === 0;
   } catch (error) {
-    logger.warn("Image", "Failed to save buffer as image", { dest: destPath, error: String(error) });
+    log.warn("Image", "Failed to save buffer as image", { file: destPath, error: String(error) });
     return false;
   }
 }

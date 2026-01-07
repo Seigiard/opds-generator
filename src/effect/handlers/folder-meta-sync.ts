@@ -29,12 +29,12 @@ export const folderMetaSync = (
         Effect.catchAll(() => Effect.succeed(false)),
       );
       if (!sourceFolderExists) {
-        yield* logger.debug("FolderMetaSync", `Skipping (source folder deleted): ${relativePath}`);
+        yield* logger.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
         return [];
       }
     }
 
-    yield* logger.info("FolderMetaSync", `Processing: ${relativePath || "(root)"}`);
+    yield* logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
     const feedOutputPath = join(normalizedDir, FEED_FILE);
     const rawFolderName = relativePath.split("/").pop() || "Catalog";
@@ -89,7 +89,8 @@ export const folderMetaSync = (
       catch: (e) => e as Error,
     }).pipe(
       Effect.catchAll((error) => {
-        logger.warn("FolderMetaSync", `Error reading folder: ${relativePath}`, {
+        logger.warn("FolderMetaSync", "Error reading folder", {
+          path: relativePath,
           error: String(error),
         });
         return Effect.succeed({ folderEntries: [] as EntryWithTitle[], bookEntries: [] as EntryWithTitle[] });
@@ -118,8 +119,9 @@ export const folderMetaSync = (
 
     yield* fs.atomicWrite(feedOutputPath, completeFeed);
 
-    yield* logger.info("FolderMetaSync", `Generated ${relativePath || "/"}/feed.xml`, {
-      folders: readResult.folderEntries.length,
+    yield* logger.info("FolderMetaSync", "Generated feed.xml", {
+      path: relativePath || "/",
+      subfolders: readResult.folderEntries.length,
       books: readResult.bookEntries.length,
     });
 

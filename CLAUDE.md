@@ -49,6 +49,9 @@ docker compose -f docker-compose.test.yml run --rm test bun test test/integratio
 # Run e2e tests (starts/stops container automatically)
 bun run test:e2e
 
+# Run e2e events tests (starts/stops container automatically)
+bun run test:e2e:events
+
 # Type check (locally is fine)
 bun --bun tsc --noEmit
 ```

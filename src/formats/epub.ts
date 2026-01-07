@@ -1,7 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
 import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
-import { logHandlerError } from "../utils/errors.ts";
+import { logHandlerError } from "../logging/index.ts";
 
 const xmlParser = createXmlParser(["subject", "creator", "item", "meta"]);
 

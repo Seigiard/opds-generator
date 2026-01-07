@@ -23,7 +23,7 @@ export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], 
     const relativePath = relative(config.filesPath, filePath);
     const bookDataDir = join(config.dataPath, relativePath);
 
-    yield* logger.info("BookSync", `Processing: ${relativePath}`);
+    yield* logger.info("BookSync", "Processing", { path: relativePath });
 
     // Get file stats via DI
     const fileStat = yield* fs.stat(filePath);
@@ -113,7 +113,7 @@ export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], 
     // Create symlink to original file
     yield* fs.symlink(filePath, join(bookDataDir, BOOK_FILE));
 
-    yield* logger.info("BookSync", `Done: ${relativePath}`, { hasCover });
+    yield* logger.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
 
     return [];
   });

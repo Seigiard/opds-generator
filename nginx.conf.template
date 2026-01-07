@@ -56,25 +56,6 @@ http {
             proxy_set_header Host $host;
         }
 
-        # Debug endpoint: /events.jsonl (event log)
-        location = /events.jsonl {
-            auth_basic "OPDS Admin";
-            auth_basic_user_file /etc/nginx/.htpasswd;
-
-            alias /data/events.jsonl;
-            default_type application/json;
-            add_header Cache-Control "no-cache";
-        }
-
-        # Debug endpoint: /errors.jsonl (error log)
-        location = /errors.jsonl {
-            auth_basic "OPDS Admin";
-            auth_basic_user_file /etc/nginx/.htpasswd;
-
-            alias /data/errors.jsonl;
-            default_type application/json;
-            add_header Cache-Control "no-cache";
-        }
         # AUTH_BLOCK_END
 
         # Rate limit for book downloads (if configured)

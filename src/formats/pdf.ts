@@ -1,5 +1,5 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
-import { logHandlerError } from "../utils/errors.ts";
+import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
 
 interface PdfInfo {

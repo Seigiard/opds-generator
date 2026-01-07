@@ -1,4 +1,4 @@
-import { logger } from "./utils/errors.ts";
+import { log } from "./logging/index.ts";
 
 interface Config {
   filesPath: string;
@@ -7,13 +7,12 @@ interface Config {
   port: number;
   devMode: boolean;
   logLevel: string;
-  eventLogEnabled: boolean;
 }
 
 function requireEnv(name: string, defaultValue?: string): string {
   const value = process.env[name] || defaultValue;
   if (!value) {
-    logger.error("Config", `Missing required environment variable: ${name}`);
+    log.error("Config", `Missing required environment variable: ${name}`);
     process.exit(1);
   }
   return value;
@@ -22,7 +21,7 @@ function requireEnv(name: string, defaultValue?: string): string {
 function parsePort(value: string): number {
   const port = parseInt(value, 10);
   if (isNaN(port) || port < 1 || port > 65535) {
-    logger.error("Config", `Invalid PORT: ${value} (must be 1-65535)`);
+    log.error("Config", `Invalid PORT: ${value} (must be 1-65535)`);
     process.exit(1);
   }
   return port;
@@ -40,7 +39,6 @@ function loadConfig(): Config {
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",
-    eventLogEnabled: process.env.EVENT_LOG_ENABLED === "true",
   };
 }
 

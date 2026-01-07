@@ -3,21 +3,14 @@ import { Effect, Layer } from "effect";
 import { adaptBooksEvent } from "../../../src/effect/adapters/books-adapter.ts";
 import { adaptDataEvent } from "../../../src/effect/adapters/data-adapter.ts";
 import type { RawBooksEvent, RawDataEvent } from "../../../src/effect/types.ts";
-import { DeduplicationService, EventLogService } from "../../../src/effect/services.ts";
+import { DeduplicationService } from "../../../src/effect/services.ts";
 
 // Mock deduplication service that always allows processing
 const TestDeduplicationService = Layer.succeed(DeduplicationService, {
   shouldProcess: () => Effect.succeed(true),
 });
 
-// Mock event log service that does nothing
-const TestEventLogService = Layer.succeed(EventLogService, {
-  log: () => Effect.void,
-  clear: () => Effect.void,
-  isEnabled: () => false,
-});
-
-const TestLayer = Layer.mergeAll(TestDeduplicationService, TestEventLogService);
+const TestLayer = TestDeduplicationService;
 
 // Helper to run adaptBooksEvent with mock services
 const classifyBooksEvent = async (event: RawBooksEvent) => {
@@ -223,7 +216,7 @@ describe("adaptBooksEvent (books watcher classification)", () => {
           }),
       });
 
-      const DedupTestLayer = Layer.mergeAll(TestDedupService, TestEventLogService);
+      const DedupTestLayer = TestDedupService;
 
       const event: RawBooksEvent = {
         parent: "/books/Fiction/",
