@@ -1,0 +1,27 @@
+services:
+  opds:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8080:80"
+    volumes:
+      - ./files:/books
+      - opds-data:/data
+    environment:
+      - FILES=/books
+      - DATA=/data
+      - PORT=3000
+      - BASE_URL=http://localhost:8080
+      - ADMIN_USER=admin
+      - ADMIN_TOKEN=secret
+      - EVENT_LOG_ENABLED=true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/feed.xml"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  opds-data:

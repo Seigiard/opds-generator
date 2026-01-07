@@ -10,7 +10,7 @@ import { adaptDataEvent } from "./effect/adapters/data-adapter.ts";
 import { adaptSyncPlan } from "./effect/adapters/sync-plan-adapter.ts";
 import { startConsumer } from "./effect/consumer.ts";
 import { registerHandlers } from "./effect/handlers/index.ts";
-import { ErrorLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
+import { ErrorLogService, EventLogService, EventQueueService, LiveLayer } from "./effect/services.ts";
 import { scanFiles, createSyncPlan } from "./scanner.ts";
 
 // Shared runtime - single instance of all services
@@ -67,7 +67,7 @@ const initialSync = Effect.gen(function* () {
   ),
 );
 
-// Resync: clear data and error log, run sync (manages own flag)
+// Resync: clear data and error/event logs, run sync (manages own flag)
 const resync = Effect.gen(function* () {
   isSyncing = true;
   logger.info("Resync", "Starting full resync...");
@@ -75,6 +75,10 @@ const resync = Effect.gen(function* () {
   // Clear error log
   const errorLog = yield* ErrorLogService;
   yield* errorLog.clear();
+
+  // Clear event log
+  const eventLog = yield* EventLogService;
+  yield* eventLog.clear();
 
   // Clear data directory contents (not the directory itself - nginx holds it open)
   yield* Effect.tryPromise({
@@ -144,18 +148,28 @@ const initHandlers = Effect.gen(function* () {
   logger.info("Server", "Handlers registered");
 });
 
+// Clear event log on startup (don't persist between restarts)
+const clearEventLogOnStartup = Effect.gen(function* () {
+  const eventLog = yield* EventLogService;
+  yield* eventLog.clear();
+  logger.info("Server", "Event log cleared");
+});
+
 // Main entry point
 async function main(): Promise<void> {
   try {
     // 1. Register handlers
     await runtime.runPromise(initHandlers);
 
-    // 2. Start consumer in background (using runFork for proper fiber execution)
+    // 2. Clear event log (don't persist between restarts)
+    await runtime.runPromise(clearEventLogOnStartup);
+
+    // 3. Start consumer in background (using runFork for proper fiber execution)
     consumerFiber = runtime.runFork(startConsumer);
     logger.info("Server", "Consumer started");
     isReady = true;
 
-    // 3. Start HTTP server
+    // 4. Start HTTP server
     const server = Bun.serve({
       port: config.port,
       hostname: "127.0.0.1",
@@ -217,7 +231,7 @@ async function main(): Promise<void> {
 
     logger.info("Server", `Listening on http://localhost:${server.port}`);
 
-    // 4. Run initial sync
+    // 5. Run initial sync
     await runtime.runPromise(initialSync);
   } catch (error) {
     logger.error("Server", "Startup failed", error);

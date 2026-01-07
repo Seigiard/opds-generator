@@ -1,7 +1,7 @@
 import { Effect, Match } from "effect";
 import { BOOK_EXTENSIONS } from "../../types.ts";
 import type { RawBooksEvent, EventType } from "../types.ts";
-import { DeduplicationService } from "../services.ts";
+import { DeduplicationService, EventLogService } from "../services.ts";
 
 // Parse inotify events string into components
 function parseEvents(events: string): { event: string; isDir: boolean } {
@@ -99,12 +99,46 @@ function getEventKey(event: EventType): string {
 export const adaptBooksEvent = (raw: RawBooksEvent) =>
   Effect.gen(function* () {
     const dedup = yield* DeduplicationService;
+    const eventLog = yield* EventLogService;
 
     const eventType = classifyBooksEvent(raw);
-    if (eventType._tag === "Ignored") return null;
+    const path = `${raw.parent}/${raw.name}`;
+    const eventId = `raw:books:${path}:${Date.now()}`;
+
+    // Log event received (all events including ignored)
+    yield* eventLog.log({
+      timestamp: new Date().toISOString(),
+      type: "event_received",
+      event_id: eventId,
+      event_tag: eventType._tag,
+      path,
+    });
+
+    if (eventType._tag === "Ignored") {
+      // Log ignored event
+      yield* eventLog.log({
+        timestamp: new Date().toISOString(),
+        type: "event_ignored",
+        event_id: eventId,
+        event_tag: "Ignored",
+        path,
+      });
+      return null;
+    }
 
     const key = getEventKey(eventType);
     const shouldProcess = yield* dedup.shouldProcess(key);
+
+    if (!shouldProcess) {
+      // Log deduplicated event
+      yield* eventLog.log({
+        timestamp: new Date().toISOString(),
+        type: "event_deduplicated",
+        event_id: eventId,
+        event_tag: eventType._tag,
+        path,
+      });
+    }
 
     return shouldProcess ? eventType : null;
   });

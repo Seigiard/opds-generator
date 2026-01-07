@@ -3,21 +3,30 @@ import { Effect, Layer } from "effect";
 import { adaptBooksEvent } from "../../../src/effect/adapters/books-adapter.ts";
 import { adaptDataEvent } from "../../../src/effect/adapters/data-adapter.ts";
 import type { RawBooksEvent, RawDataEvent } from "../../../src/effect/types.ts";
-import { DeduplicationService } from "../../../src/effect/services.ts";
+import { DeduplicationService, EventLogService } from "../../../src/effect/services.ts";
 
 // Mock deduplication service that always allows processing
 const TestDeduplicationService = Layer.succeed(DeduplicationService, {
   shouldProcess: () => Effect.succeed(true),
 });
 
+// Mock event log service that does nothing
+const TestEventLogService = Layer.succeed(EventLogService, {
+  log: () => Effect.void,
+  clear: () => Effect.void,
+  isEnabled: () => false,
+});
+
+const TestLayer = Layer.mergeAll(TestDeduplicationService, TestEventLogService);
+
 // Helper to run adaptBooksEvent with mock services
 const classifyBooksEvent = async (event: RawBooksEvent) => {
-  return Effect.runPromise(Effect.provide(adaptBooksEvent(event), TestDeduplicationService));
+  return Effect.runPromise(Effect.provide(adaptBooksEvent(event), TestLayer));
 };
 
 // Helper to run adaptDataEvent with mock services
 const classifyDataEvent = async (event: RawDataEvent) => {
-  return Effect.runPromise(Effect.provide(adaptDataEvent(event), TestDeduplicationService));
+  return Effect.runPromise(Effect.provide(adaptDataEvent(event), TestLayer));
 };
 
 describe("adaptBooksEvent (books watcher classification)", () => {
@@ -214,14 +223,16 @@ describe("adaptBooksEvent (books watcher classification)", () => {
           }),
       });
 
+      const DedupTestLayer = Layer.mergeAll(TestDedupService, TestEventLogService);
+
       const event: RawBooksEvent = {
         parent: "/books/Fiction/",
         name: "book.epub",
         events: "CLOSE_WRITE",
       };
 
-      const result1 = await Effect.runPromise(Effect.provide(adaptBooksEvent(event), TestDedupService));
-      const result2 = await Effect.runPromise(Effect.provide(adaptBooksEvent(event), TestDedupService));
+      const result1 = await Effect.runPromise(Effect.provide(adaptBooksEvent(event), DedupTestLayer));
+      const result2 = await Effect.runPromise(Effect.provide(adaptBooksEvent(event), DedupTestLayer));
 
       expect(result1?._tag).toBe("BookCreated");
       expect(result2).toBeNull();

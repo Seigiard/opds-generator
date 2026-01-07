@@ -25,6 +25,7 @@ BOOKS_WATCHER_PID=$!
 echo "[watcher] Starting /data watcher..."
 inotifywait -m -r \
   -e close_write -e moved_to \
+  --exclude '(events\.jsonl|errors\.jsonl)$' \
   --format '{"parent":"%w","name":"%f","events":"%e"}' \
   "$DATA_DIR" 2>/dev/null | \
   while read -r line; do

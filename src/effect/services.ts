@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Queue } from "effect";
-import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
+import { mkdir, rm, readdir, stat, rename, symlink, unlink, appendFile } from "node:fs/promises";
 import { config } from "../config.ts";
 import { logger } from "../utils/errors.ts";
 import type { EventType } from "./types.ts";
@@ -12,6 +12,7 @@ export class ConfigService extends Context.Tag("ConfigService")<
     readonly dataPath: string;
     readonly baseUrl: string;
     readonly port: number;
+    readonly eventLogEnabled: boolean;
   }
 >() {}
 
@@ -79,10 +80,43 @@ export class ErrorLogService extends Context.Tag("ErrorLogService")<
   }
 >() {}
 
+// Event Log Entry types
+export type EventLogEntryType =
+  | "event_received"
+  | "event_ignored"
+  | "event_deduplicated"
+  | "handler_start"
+  | "handler_complete"
+  | "handler_error"
+  | "cascades_generated";
+
+export interface EventLogEntry {
+  timestamp: string;
+  type: EventLogEntryType;
+  event_id: string;
+  event_tag: string;
+  path?: string;
+  handler?: string;
+  duration_ms?: number;
+  cascades?: number;
+  cascade_tags?: string[];
+  error?: string;
+}
+
+// Event Log Service
+export class EventLogService extends Context.Tag("EventLogService")<
+  EventLogService,
+  {
+    readonly log: (entry: EventLogEntry) => Effect.Effect<void>;
+    readonly clear: () => Effect.Effect<void>;
+    readonly isEnabled: () => boolean;
+  }
+>() {}
+
 // Handler type for registry
 export type EventHandler = (
   event: EventType,
-) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService | ErrorLogService>;
+) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService | ErrorLogService | EventLogService>;
 
 // Handler Registry Service
 export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
@@ -100,6 +134,7 @@ const LiveConfigService = Layer.succeed(ConfigService, {
   dataPath: config.dataPath,
   baseUrl: config.baseUrl,
   port: config.port,
+  eventLogEnabled: config.eventLogEnabled,
 });
 
 const LiveLoggerService = Layer.succeed(LoggerService, {
@@ -237,11 +272,9 @@ const errorLogPath = `${config.dataPath}/errors.jsonl`;
 
 const LiveErrorLogService = Layer.succeed(ErrorLogService, {
   log: (entry: ErrorLogEntry) =>
-    Effect.promise(async () => {
-      const line = JSON.stringify(entry) + "\n";
-      const file = Bun.file(errorLogPath);
-      const existing = (await file.exists()) ? await file.text() : "";
-      await Bun.write(errorLogPath, existing + line);
+    Effect.tryPromise({
+      try: () => appendFile(errorLogPath, JSON.stringify(entry) + "\n"),
+      catch: (e) => e as Error,
     }).pipe(
       Effect.catchAll((e) => {
         logger.error("ErrorLogService", "Failed to write error log", e);
@@ -260,6 +293,36 @@ const LiveErrorLogService = Layer.succeed(ErrorLogService, {
     ),
 });
 
+// Event Log Service - JSONL file for event tracing
+const eventLogPath = `${config.dataPath}/events.jsonl`;
+
+const LiveEventLogService = Layer.succeed(EventLogService, {
+  log: (entry: EventLogEntry) => {
+    if (!config.eventLogEnabled) return Effect.void;
+    return Effect.tryPromise({
+      try: () => appendFile(eventLogPath, JSON.stringify(entry) + "\n"),
+      catch: (e) => e as Error,
+    }).pipe(
+      Effect.catchAll((e) => {
+        logger.error("EventLogService", "Failed to write event log", e);
+        return Effect.void;
+      }),
+    );
+  },
+
+  clear: () =>
+    Effect.promise(async () => {
+      await Bun.write(eventLogPath, "");
+    }).pipe(
+      Effect.catchAll((e) => {
+        logger.error("EventLogService", "Failed to clear event log", e);
+        return Effect.void;
+      }),
+    ),
+
+  isEnabled: () => config.eventLogEnabled,
+});
+
 // Combined live layer
 export const LiveLayer = Layer.mergeAll(
   LiveConfigService,
@@ -269,4 +332,5 @@ export const LiveLayer = Layer.mergeAll(
   LiveEventQueueService,
   LiveHandlerRegistry,
   LiveErrorLogService,
+  LiveEventLogService,
 );

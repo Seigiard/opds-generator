@@ -1,6 +1,13 @@
 import { Effect } from "effect";
 import type { EventType } from "./types.ts";
-import { ErrorLogService, EventQueueService, HandlerRegistry, LoggerService } from "./services.ts";
+import { ErrorLogService, EventLogService, EventQueueService, HandlerRegistry, LoggerService } from "./services.ts";
+
+// Generate unique event ID for tracing
+function generateEventId(event: EventType, path: string | undefined): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 7);
+  return `${event._tag}:${path ?? "unknown"}:${timestamp}:${random}`;
+}
 
 // Extract path from event if available
 function getEventPath(event: EventType): string | undefined {
@@ -16,6 +23,20 @@ const processEvent = (event: EventType) =>
     const registry = yield* HandlerRegistry;
     const logger = yield* LoggerService;
     const errorLog = yield* ErrorLogService;
+    const eventLog = yield* EventLogService;
+
+    const path = getEventPath(event);
+    const eventId = generateEventId(event, path);
+    const startTime = Date.now();
+
+    // Log handler start
+    yield* eventLog.log({
+      timestamp: new Date().toISOString(),
+      type: "handler_start",
+      event_id: eventId,
+      event_tag: event._tag,
+      path,
+    });
 
     // Get handler from registry
     const handler = registry.get(event._tag);
@@ -29,21 +50,61 @@ const processEvent = (event: EventType) =>
       Effect.map((cascades) => ({ ok: true as const, cascades })),
       Effect.catchAll((error) =>
         Effect.gen(function* () {
+          const duration = Date.now() - startTime;
+
           yield* logger.error("Consumer", `Handler failed for ${event._tag}`, error);
           yield* errorLog.log({
             timestamp: new Date().toISOString(),
             event_tag: event._tag,
-            path: getEventPath(event),
+            path,
             error: String(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
+
+          // Log handler error
+          yield* eventLog.log({
+            timestamp: new Date().toISOString(),
+            type: "handler_error",
+            event_id: eventId,
+            event_tag: event._tag,
+            path,
+            handler: event._tag,
+            duration_ms: duration,
+            error: String(error),
+          });
+
           return { ok: false as const, cascades: [] as readonly EventType[] };
         }),
       ),
     );
 
+    const duration = Date.now() - startTime;
+
+    // Log handler completion
+    yield* eventLog.log({
+      timestamp: new Date().toISOString(),
+      type: "handler_complete",
+      event_id: eventId,
+      event_tag: event._tag,
+      path,
+      handler: event._tag,
+      duration_ms: duration,
+      cascades: result.cascades.length,
+    });
+
     // Cascading events go to end of queue (FIFO)
     if (result.ok && result.cascades.length > 0) {
+      // Log cascades generated
+      yield* eventLog.log({
+        timestamp: new Date().toISOString(),
+        type: "cascades_generated",
+        event_id: eventId,
+        event_tag: event._tag,
+        path,
+        cascades: result.cascades.length,
+        cascade_tags: result.cascades.map((e) => e._tag),
+      });
+
       yield* queue.enqueueMany(result.cascades);
     }
   });

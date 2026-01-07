@@ -7,6 +7,7 @@ interface Config {
   port: number;
   devMode: boolean;
   logLevel: string;
+  eventLogEnabled: boolean;
 }
 
 function requireEnv(name: string, defaultValue?: string): string {
@@ -39,6 +40,7 @@ function loadConfig(): Config {
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",
+    eventLogEnabled: process.env.EVENT_LOG_ENABLED === "true",
   };
 }
 

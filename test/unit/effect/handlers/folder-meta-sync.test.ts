@@ -9,6 +9,7 @@ import { mkdir, rm, stat, readFile } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-folder-meta-test-${Date.now()}`);
 const DATA_DIR = join(TEST_DIR, "data");
+const FILES_DIR = join(TEST_DIR, "files");
 
 const mockLogger = {
   infoCalls: [] as Array<{ tag: string; msg: string; meta?: Record<string, unknown> }>,
@@ -24,6 +25,7 @@ const TestConfigService = Layer.succeed(ConfigService, {
   dataPath: DATA_DIR,
   baseUrl: "http://localhost:8080",
   port: 3000,
+  eventLogEnabled: false,
 });
 
 const TestLoggerService = Layer.succeed(LoggerService, {
@@ -209,7 +211,9 @@ describe("folderMetaSync handler", () => {
 
   test("handles nested folder path", async () => {
     const nestedPath = join(DATA_DIR, "Fiction", "SciFi");
+    const sourceFolder = join(FILES_DIR, "Fiction", "SciFi");
     await mkdir(nestedPath, { recursive: true });
+    await mkdir(sourceFolder, { recursive: true }); // Source folder must exist for check
 
     await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(nestedPath)), TestLayer));
 

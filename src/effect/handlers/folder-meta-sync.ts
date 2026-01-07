@@ -21,6 +21,19 @@ export const folderMetaSync = (
     const normalizedDir = folderDataDir.endsWith("/") ? folderDataDir.slice(0, -1) : folderDataDir;
     const relativePath = relative(config.dataPath, normalizedDir);
 
+    // Check if source folder still exists (handles race with deletion)
+    if (relativePath !== "") {
+      const sourceFolder = join(config.filesPath, relativePath);
+      const sourceFolderExists = yield* fs.stat(sourceFolder).pipe(
+        Effect.map((s) => s.isDirectory()),
+        Effect.catchAll(() => Effect.succeed(false)),
+      );
+      if (!sourceFolderExists) {
+        yield* logger.debug("FolderMetaSync", `Skipping (source folder deleted): ${relativePath}`);
+        return [];
+      }
+    }
+
     yield* logger.info("FolderMetaSync", `Processing: ${relativePath || "(root)"}`);
 
     const feedOutputPath = join(normalizedDir, FEED_FILE);
