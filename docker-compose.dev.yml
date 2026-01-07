@@ -22,7 +22,7 @@ services:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/feed.xml"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
       interval: 10s
       timeout: 5s
       retries: 3
