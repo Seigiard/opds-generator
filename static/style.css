@@ -83,10 +83,11 @@ h6 {
   --card-max-width: 11rem;
   --card-radius: 0.125rem 0.3rem 0.3rem 0.125rem;
   --card-light-radius: 0 0.3rem 0.3rem 0;
-  --card-shadow: inset 4px 1px 3px #ffffff60, inset 0 -1px 2px #00000080, 10px 0px 10px -5px #00000030, 0px 0px 1px 0px #0000007d;
+  --card-shadow:
+    inset 4px 1px 3px #ffffff60, inset 0 -1px 2px #00000080, 10px 0px 10px -5px #00000030, 0px 0px 1px 0px #0000007d;
   --card-pages-shadow:
-    10px 40px 40px -10px #00000030, inset -2px 0 0 grey, inset -3px 0 0 #dbdbdb, inset -4px 0 0 #fff, inset -5px 0 0 #dbdbdb,
-    inset -6px 0 0 #fff, inset -7px 0 0 #dbdbdb, inset -8px 0 0 #fff, inset -9px 0 0 #dbdbdb;
+    10px 40px 40px -10px #00000030, inset -2px 0 0 grey, inset -3px 0 0 #dbdbdb, inset -4px 0 0 #fff,
+    inset -5px 0 0 #dbdbdb, inset -6px 0 0 #fff, inset -7px 0 0 #dbdbdb, inset -8px 0 0 #fff, inset -9px 0 0 #dbdbdb;
   --card-focus-ring: var(--color-accent);
   --card-rotate-1: 5deg;
   --card-rotate-2: -5deg;
@@ -110,8 +111,9 @@ h6 {
     --card-bg: #27272a;
     --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
     --card-pages-shadow:
-      10px 40px 40px -10px #00000060, inset -2px 0 0 #52525b, inset -3px 0 0 #3f3f46, inset -4px 0 0 #27272a, inset -5px 0 0 #3f3f46,
-      inset -6px 0 0 #27272a, inset -7px 0 0 #3f3f46, inset -8px 0 0 #27272a, inset -9px 0 0 #3f3f46;
+      10px 40px 40px -10px #00000060, inset -2px 0 0 #52525b, inset -3px 0 0 #3f3f46, inset -4px 0 0 #27272a,
+      inset -5px 0 0 #3f3f46, inset -6px 0 0 #27272a, inset -7px 0 0 #3f3f46, inset -8px 0 0 #27272a,
+      inset -9px 0 0 #3f3f46;
   }
 }
 
@@ -379,7 +381,9 @@ body:has(.popup-trigger__wrapper input:checked) {
   overflow: hidden;
 }
 .popup-trigger input,
-.popup-trigger span {
+.popup-trigger span,
+.popup__close-button input,
+.popup__close-button span {
   height: 1px;
   margin: -1px;
   overflow: hidden;
@@ -402,7 +406,7 @@ body:has(.popup-trigger__wrapper input:checked) {
   position: absolute;
   z-index: 10;
 }
-.popup-trigger__wrapper:has(input:checked) .popup-trigger {
+.popup__close-button {
   background:
     linear-gradient(45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%),
     linear-gradient(-45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%);
@@ -421,11 +425,11 @@ body:has(.popup-trigger__wrapper input:checked) {
   width: 1.5rem;
   z-index: 101;
 }
-.popup-trigger__wrapper:has(input:checked) .popup-trigger:has(:focus-visible) {
+.popup__close-button:focus-visible {
   outline-color: var(--card-focus-ring);
 }
 @media (hover: hover) and (pointer: fine) {
-  .popup-trigger__wrapper:has(input:checked) .popup-trigger:hover {
+  .popup-trigger__wrapper:has(input:checked) + .popup .popup__close-button:hover {
     transform: scale(1.1);
   }
 }

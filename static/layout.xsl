@@ -53,6 +53,9 @@
             </xsl:choose>
           </xsl:for-each>
         </main>
+        <script src="https://unpkg.com/tabbable/dist/index.umd.js" />
+        <script src="https://unpkg.com/focus-trap/dist/focus-trap.umd.js" />
+        <script src="/static/main.js" />
       </body>
     </html>
   </xsl:template>
@@ -115,13 +118,12 @@
           </xsl:if>
         </div>
         <label class="popup-trigger">
-          <input type="checkbox" name="open-popup" />
-          <span class="show">Open Book Details</span>
-          <span class="hide">Hide Book Details</span>
+          <input type="checkbox" name="open-popup" id="checkbox-{generate-id()}" />
+          <span>Open Book Details</span>
         </label>
       </article>
 
-      <div class="popup">
+      <div class="popup" data-focus-group="{generate-id()}">
         <div class="popup__content">
           <div class="popup__cover" aria-hidden="true">
             <div class="book">
@@ -141,6 +143,9 @@
             </div>
           </div>
           <div class="popup__info">
+            <label tabindex='0' class="popup__close-button" for="checkbox-{generate-id()}">
+              <span>Close</span>
+            </label>
             <hgroup>
               <h2 class="popup__title"><xsl:value-of select="atom:title" /></h2>
               <xsl:if test="atom:author">
