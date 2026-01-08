@@ -24,4 +24,5 @@ EXPOSE 80
 
 VOLUME ["/books", "/data"]
 
-CMD ["/app/entrypoint.sh"]
+ENTRYPOINT []
+CMD ["/bin/sh", "/app/entrypoint.sh"]

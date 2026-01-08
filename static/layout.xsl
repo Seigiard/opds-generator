@@ -16,6 +16,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title><xsl:value-of select="atom:feed/atom:title" /></title>
         <link rel="stylesheet" href="/static/style.css" />
+        <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+        <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+        <link rel="manifest" href="/static/favicon/site.webmanifest" />
       </head>
       <body>
         <header class="header">
