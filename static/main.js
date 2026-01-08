@@ -1,78 +1,105 @@
 /*
-  Gridnav - a way to navigate lists with a keyboard in a
-  2D fashion instea of item-by-item
-  Copyright (c) 2016 Christian Heilmann
-  Licensed under the MIT license:
-  http://www.opensource.org/licenses/mit-license.php
-  Version:  1.0.0
+  Gridnav - keyboard 2D navigation for grids
+  Based on original by Christian Heilmann (c) 2016, MIT license
+  Modernized: ES6+, event.code instead of keyCode
 */
-var Gridnav = function (listelement) {
-  var that = this;
-  this.list = typeof listelement === "string" ? document.querySelector(listelement) : listelement;
-  if (!this.list) {
-    throw Error("List item could not be found");
+const Gridnav = function (listElement) {
+  const list = typeof listElement === "string" ? document.querySelector(listElement) : listElement;
+
+  if (!list) {
+    throw new Error("Gridnav: list element not found");
   }
-  this.setcodes = function (amount) {
-    that.codes = {
-      39: 1,
-      68: 1,
-      65: -1,
-      37: -1,
-      87: -that.amount,
-      38: -that.amount,
-      83: that.amount,
-      40: that.amount,
-    };
+
+  const element =
+    list.getAttribute("data-element") || list.firstElementChild?.firstElementChild?.tagName;
+  const amount = list.getAttribute("data-amount") ? +list.getAttribute("data-amount") : null;
+
+  const keyMoves = {
+    ArrowRight: 1,
+    KeyD: 1,
+    ArrowLeft: -1,
+    KeyA: -1,
+    ArrowUp: amount ? -amount : "up",
+    KeyW: amount ? -amount : "up",
+    ArrowDown: amount ? amount : "down",
+    KeyS: amount ? amount : "down",
   };
-  if (!this.list.getAttribute("data-element")) {
-    this.element = this.list.firstElementChild.firstElementChild.tagName;
-  } else {
-    this.element = this.list.getAttribute("data-element");
-  }
-  if (!this.list.getAttribute("data-amount")) {
-    this.amount = 6502;
-    this.setcodes(this.amount);
-  } else {
-    this.amount = +this.list.getAttribute("data-amount");
-    this.setcodes(this.amount);
-  }
-  this.setcodes(this.amount);
-  this.all = this.list.querySelectorAll(this.element);
-  this.keynav = function (ev) {
-    var t = ev.target;
-    var c;
-    var posx, posy;
-    if (t.matches && t.matches(that.element)) {
-      for (var i = 0; i < that.all.length; i++) {
-        if (that.all[i] === t) {
-          c = i;
-          posx = that.all[c].offsetLeft;
-          posy = that.all[c].offsetTop;
+
+  const all = list.querySelectorAll(element);
+
+  const getCard = (el) => el.closest(".card") || el;
+
+  const getCardPosition = (el) => {
+    const card = getCard(el);
+    return { x: card.offsetLeft, y: card.offsetTop };
+  };
+
+  const focusWithScroll = (el) => {
+    const card = getCard(el);
+    const rect = card.getBoundingClientRect();
+    const isAbove = rect.top < 0;
+    const isBelow = rect.bottom > window.innerHeight;
+
+    if (!isAbove && !isBelow) {
+      el.focus();
+      return;
+    }
+
+    const block = isBelow ? "end" : "start";
+    card.scrollIntoView({ block, behavior: "smooth" });
+
+    if ("onscrollend" in window) {
+      window.addEventListener("scrollend", () => el.focus(), { once: true });
+    } else {
+      setTimeout(() => el.focus(), 300);
+    }
+  };
+
+  const keynav = (ev) => {
+    const target = ev.target;
+    if (!target.matches?.(element)) return;
+
+    const move = keyMoves[ev.code];
+    if (!move) return;
+
+    let currentIndex = -1;
+    for (let i = 0; i < all.length; i++) {
+      if (all[i] === target) {
+        currentIndex = i;
+        break;
+      }
+    }
+    if (currentIndex === -1) return;
+
+    ev.preventDefault();
+
+    if (typeof move === "number") {
+      const nextIndex = currentIndex + move;
+      if (all[nextIndex]) {
+        focusWithScroll(all[nextIndex]);
+      }
+    } else {
+      const pos = getCardPosition(all[currentIndex]);
+      const direction = move === "up" ? -1 : 1;
+      let i = currentIndex + direction;
+
+      while (all[i]) {
+        const targetPos = getCardPosition(all[i]);
+        if (targetPos.x === pos.x && targetPos.y !== pos.y) {
+          focusWithScroll(all[i]);
           break;
         }
-      }
-      if (that.codes[ev.keyCode]) {
-        var kc = that.codes[ev.keyCode];
-        if (kc > -6502 && kc < 6502) {
-          if (that.all[c + kc]) {
-            that.all[c + kc].focus();
-          }
-        } else {
-          var add = kc < 0 ? -1 : 1;
-          while (that.all[i]) {
-            if (that.all[i].offsetLeft === posx && that.all[i].offsetTop !== posy) {
-              that.all[i].focus();
-              break;
-            }
-            i += add;
-          }
-        }
+        i += direction;
       }
     }
   };
-  this.list.addEventListener("keyup", this.keynav);
+
+  list.addEventListener("keydown", keynav);
+
+  return {
+    destroy: () => list.removeEventListener("keydown", keynav),
+  };
 };
-Gridnav.lists = [];
 
 (function () {
   "use strict";
@@ -83,16 +110,17 @@ Gridnav.lists = [];
   }
 
   function initGridNav() {
-    if (!Gridnav) return;
-    const a = new Gridnav(".books-grid");
-    console.log(a);
+    const grid = document.querySelector(".books-grid");
+    if (grid) {
+      Gridnav(grid);
+    }
   }
 
-  function handleEnterKey(checkbox, forceValue) {
-    return function (e) {
+  function handleEnterKey(checkbox) {
+    return (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      checkbox.checked = forceValue !== undefined ? forceValue : !checkbox.checked;
+      checkbox.checked = !checkbox.checked;
       checkbox.dispatchEvent(new Event("change"));
     };
   }
@@ -100,7 +128,7 @@ Gridnav.lists = [];
   function initFocusTraps() {
     if (!window.focusTrap) return;
 
-    document.querySelectorAll("[data-focus-group]").forEach(function (popup) {
+    document.querySelectorAll("[data-focus-group]").forEach((popup) => {
       const groupId = popup.getAttribute("data-focus-group");
       const checkbox = document.getElementById("checkbox-" + groupId);
       if (!checkbox) return;
@@ -108,12 +136,12 @@ Gridnav.lists = [];
       const trap = window.focusTrap.createFocusTrap(popup, {
         escapeDeactivates: true,
         clickOutsideDeactivates: true,
-        onDeactivate: function () {
+        onDeactivate: () => {
           checkbox.checked = false;
         },
       });
 
-      checkbox.addEventListener("change", function () {
+      checkbox.addEventListener("change", () => {
         checkbox.checked ? trap.activate() : trap.deactivate();
       });
 
@@ -121,10 +149,14 @@ Gridnav.lists = [];
 
       const closeLabel = popup.querySelector('[for="checkbox-' + groupId + '"]');
       if (closeLabel) {
-        closeLabel.addEventListener("keydown", handleEnterKey(checkbox, false));
+        closeLabel.addEventListener("keydown", handleEnterKey(checkbox));
       }
     });
   }
 
-  document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", init) : init();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
