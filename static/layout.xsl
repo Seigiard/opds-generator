@@ -26,11 +26,15 @@
         <header class="header">
           <div class="header__left">
             <nav class="header__breadcrumb">
-              <a class="header__home" href="/feed.xml" aria-label="Home">
-                <svg class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg>
-              </a>
+              <xsl:if
+                test="atom:feed/atom:link[@rel='start'] and atom:feed/atom:link[@rel='start']/@href != atom:feed/atom:link[@rel='self']/@href"
+              >
+                <a class="header__home" href="{atom:feed/atom:link[@rel='start']/@href}" aria-label="Home">
+                  <svg class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                  </svg>
+                </a>
+              </xsl:if>
               <xsl:if test="atom:feed/atom:link[@rel='up']">
                 <span class="header__separator" aria-hidden="true">›</span>
                 <span class="header__breadcrumb-text"><xsl:value-of select="atom:feed/atom:title" /></span>
