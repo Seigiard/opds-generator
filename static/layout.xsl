@@ -41,7 +41,7 @@
           <!-- search hidden -->
         </header>
 
-        <main class="books-grid">
+        <main class="books-grid" data-element=".card--folder a,.card--book input[type=checkbox]">
           <xsl:for-each select="atom:feed/atom:entry">
             <xsl:choose>
               <xsl:when test="atom:link[@rel='subsection']">
