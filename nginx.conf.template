@@ -61,10 +61,13 @@ http {
 
         # AUTH_BLOCK_END
 
-        # Rate limit for book downloads (if configured)
-        location ~ /[^/]+/file$ {
+        # Book downloads with Content-Disposition header for correct filename
+        location ~ ^(.+)/([^/]+\.(epub|pdf|mobi|azw|azw3|fb2|fbz|cbz|cbr|cb7|cbt|zip|djvu|txt))$ {
             root /data;
             try_files $uri =404;
+
+            # Force download with original filename
+            add_header Content-Disposition 'attachment; filename="$2"';
 
             # RATE_LIMIT will be 0 or value like "1m"
             limit_rate ${RATE_LIMIT};

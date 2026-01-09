@@ -8,7 +8,7 @@ import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../uti
 import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
-import { ENTRY_FILE, BOOK_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
+import { ENTRY_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
 
 export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
   Effect.gen(function* () {
@@ -104,14 +104,15 @@ export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], 
       entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
     }
 
-    entry.addAcquisition(`/${encodedPath}/file`, mimeType, "open-access");
+    const encodedFilename = encodeURIComponent(name);
+    entry.addAcquisition(`/${encodedPath}/${encodedFilename}`, mimeType, "open-access");
 
     // Write entry.xml (atomic)
     const entryXml = entry.toXml({ prettyPrint: true });
     yield* fs.atomicWrite(join(bookDataDir, ENTRY_FILE), entryXml);
 
-    // Create symlink to original file
-    yield* fs.symlink(filePath, join(bookDataDir, BOOK_FILE));
+    // Create symlink to original file (using original filename for correct download name)
+    yield* fs.symlink(filePath, join(bookDataDir, name));
 
     yield* logger.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
 

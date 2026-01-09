@@ -135,7 +135,7 @@ describe("bookSync handler", () => {
 
     await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("test.epub")), TestLayer));
 
-    const symlinkPath = join(DATA_DIR, "test.epub", "file");
+    const symlinkPath = join(DATA_DIR, "test.epub", "test.epub");
     const linkStat = await lstat(symlinkPath);
     expect(linkStat.isSymbolicLink()).toBe(true);
   });

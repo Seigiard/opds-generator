@@ -7,6 +7,5 @@ export const THUMBNAIL_MAX_SIZE = 512;
 export const FEED_FILE = "feed.xml";
 export const ENTRY_FILE = "entry.xml";
 export const FOLDER_ENTRY_FILE = "_entry.xml";
-export const BOOK_FILE = "file";
 export const COVER_FILE = "cover.jpg";
 export const THUMB_FILE = "thumb.jpg";

@@ -128,7 +128,7 @@ describe("Cascade Flow Integration", () => {
     const bookDataPath = join(DATA_DIR, "Fiction", "Test Book - Test Author.epub");
     const bookEntryPath = join(bookDataPath, "entry.xml");
     const coverPath = join(bookDataPath, "cover.jpg");
-    const symlinkPath = join(bookDataPath, "file");
+    const symlinkPath = join(bookDataPath, "Test Book - Test Author.epub");
 
     expect(
       await stat(bookEntryPath)
