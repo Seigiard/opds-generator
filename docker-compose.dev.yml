@@ -16,7 +16,6 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
-      - BASE_URL=http://localhost:8080
       - DEV_MODE=true
       # Uncomment to test /resync endpoint:
       # - ADMIN_USER=admin

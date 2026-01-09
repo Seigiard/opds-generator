@@ -96,7 +96,6 @@
 FILES=/path/to/books    # Директория с файлами
 DATA=/path/to/cache     # Кэш и метаданные
 PORT=8080               # HTTP порт
-BASE_URL=http://...     # Базовый URL для ссылок
 DEV_MODE=true           # Отключить кэширование
 LOG_LEVEL=info          # debug | info | warn | error
 ```

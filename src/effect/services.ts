@@ -11,7 +11,6 @@ export class ConfigService extends Context.Tag("ConfigService")<
   {
     readonly filesPath: string;
     readonly dataPath: string;
-    readonly baseUrl: string;
     readonly port: number;
   }
 >() {}
@@ -81,7 +80,6 @@ export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
 const LiveConfigService = Layer.succeed(ConfigService, {
   filesPath: config.filesPath,
   dataPath: config.dataPath,
-  baseUrl: config.baseUrl,
   port: config.port,
 });
 

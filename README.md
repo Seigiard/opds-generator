@@ -50,7 +50,6 @@ services:
       - /path/to/your/books:/books:ro
       - opds-data:/data
     environment:
-      - BASE_URL=http://localhost:8080
       # Optional: enable /resync endpoint with Basic Auth
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=your-secret-token
@@ -77,7 +76,6 @@ docker run -d \
   -p 8080:80 \
   -v /path/to/your/books:/books:ro \
   -v opds-data:/data \
-  -e BASE_URL=http://your-server:8080 \
   ghcr.io/seigiard/opds-generator:latest
 ```
 
@@ -91,16 +89,15 @@ docker-compose up -d --build
 
 ## Environment Variables
 
-| Variable        | Default                 | Description                           |
-| --------------- | ----------------------- | ------------------------------------- |
-| `FILES`         | `/books`                | Path to your books directory          |
-| `DATA`          | `/data`                 | Path for cache and metadata           |
-| `PORT`          | `3000`                  | Internal Bun server port              |
-| `BASE_URL`      | `http://localhost:8080` | Base URL for OPDS links               |
-| `DEV_MODE`      | `false`                 | Enable hot reload for Bun             |
-| `ADMIN_USER`    | -                       | Username for /resync Basic Auth       |
-| `ADMIN_TOKEN`   | -                       | Password for /resync Basic Auth       |
-| `RATE_LIMIT_MB` | `0`                     | Download rate limit in MB/s (0 = off) |
+| Variable        | Default  | Description                           |
+| --------------- | -------- | ------------------------------------- |
+| `FILES`         | `/books` | Path to your books directory          |
+| `DATA`          | `/data`  | Path for cache and metadata           |
+| `PORT`          | `3000`   | Internal Bun server port              |
+| `DEV_MODE`      | `false`  | Enable hot reload for Bun             |
+| `ADMIN_USER`    | -        | Username for /resync Basic Auth       |
+| `ADMIN_TOKEN`   | -        | Password for /resync Basic Auth       |
+| `RATE_LIMIT_MB` | `0`      | Download rate limit in MB/s (0 = off) |
 
 ## API
 

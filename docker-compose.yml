@@ -12,7 +12,6 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
-      - BASE_URL=http://localhost:8080
       # Uncomment to enable /resync endpoint with Basic Auth:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret

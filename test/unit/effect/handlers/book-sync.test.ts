@@ -25,7 +25,6 @@ const mockLogger = {
 const TestConfigService = Layer.succeed(ConfigService, {
   filesPath: FILES_DIR,
   dataPath: DATA_DIR,
-  baseUrl: "http://localhost:8080",
   port: 3000,
 });
 

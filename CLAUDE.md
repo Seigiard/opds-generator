@@ -38,17 +38,16 @@ curl -u admin:secret http://localhost:8080/resync    # force resync
 
 ## Environment Variables
 
-| Variable        | Default                 | Description                        |
-| --------------- | ----------------------- | ---------------------------------- |
-| `FILES`         | `/books`                | Source books directory             |
-| `DATA`          | `/data`                 | Generated metadata cache           |
-| `PORT`          | `3000`                  | Internal Bun server port           |
-| `BASE_URL`      | `http://localhost:8080` | External URL for OPDS links        |
-| `LOG_LEVEL`     | `info`                  | debug \| info \| warn \| error     |
-| `DEV_MODE`      | `false`                 | Enable Bun --watch hot reload      |
-| `ADMIN_USER`    | -                       | /resync Basic Auth username        |
-| `ADMIN_TOKEN`   | -                       | /resync Basic Auth password        |
-| `RATE_LIMIT_MB` | `0`                     | Download rate limit MB/s (0 = off) |
+| Variable        | Default  | Description                        |
+| --------------- | -------- | ---------------------------------- |
+| `FILES`         | `/books` | Source books directory             |
+| `DATA`          | `/data`  | Generated metadata cache           |
+| `PORT`          | `3000`   | Internal Bun server port           |
+| `LOG_LEVEL`     | `info`   | debug \| info \| warn \| error     |
+| `DEV_MODE`      | `false`  | Enable Bun --watch hot reload      |
+| `ADMIN_USER`    | -        | /resync Basic Auth username        |
+| `ADMIN_TOKEN`   | -        | /resync Basic Auth password        |
+| `RATE_LIMIT_MB` | `0`      | Download rate limit MB/s (0 = off) |
 
 ## Testing
 
