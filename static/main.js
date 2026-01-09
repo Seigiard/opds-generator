@@ -10,8 +10,7 @@ const Gridnav = function (listElement) {
     throw new Error("Gridnav: list element not found");
   }
 
-  const element =
-    list.getAttribute("data-element") || list.firstElementChild?.firstElementChild?.tagName;
+  const element = list.getAttribute("data-element") || list.firstElementChild?.firstElementChild?.tagName;
   const amount = list.getAttribute("data-amount") ? +list.getAttribute("data-amount") : null;
 
   const keyMoves = {
