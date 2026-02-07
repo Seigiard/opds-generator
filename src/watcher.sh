@@ -18,7 +18,15 @@ inotifywait -m -r \
   --format '{"parent":"%w","name":"%f","events":"%e"}' \
   "$BOOKS_DIR" 2>/dev/null | \
   while read -r line; do
-    wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events/books" 2>/dev/null || true
+    case "$line" in
+      *IN_Q_OVERFLOW*)
+        echo "[watcher] inotify queue overflow detected, triggering resync"
+        wget -q --post-data='' -O /dev/null "$SERVER_URL/resync" 2>/dev/null || true
+        ;;
+      *)
+        wget -q --post-data="$line" --header="Content-Type: application/json" -O /dev/null "$SERVER_URL/events/books" 2>/dev/null || true
+        ;;
+    esac
   done &
 BOOKS_WATCHER_PID=$!
 

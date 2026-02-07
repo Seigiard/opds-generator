@@ -1,8 +1,10 @@
-import { Effect, Fiber, ManagedRuntime } from "effect";
+import { Effect, Fiber, ManagedRuntime, Schedule } from "effect";
 import { Schema } from "@effect/schema";
 import { mkdir, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { Feed } from "opds-ts/v1.2";
 import { config } from "./config.ts";
+import { FEED_FILE } from "./constants.ts";
 import { log } from "./logging/index.ts";
 import { RawBooksEvent, RawDataEvent } from "./effect/types.ts";
 import { adaptBooksEvent } from "./effect/adapters/books-adapter.ts";
@@ -20,6 +22,7 @@ const runtime = ManagedRuntime.make(LiveLayer);
 let isReady = false;
 let isSyncing = false;
 let consumerFiber: Fiber.RuntimeFiber<never, Error> | null = null;
+let reconcileFiber: Fiber.RuntimeFiber<void, never> | null = null;
 
 // Internal sync logic (no flag management)
 const doSync = Effect.gen(function* () {
@@ -30,6 +33,28 @@ const doSync = Effect.gen(function* () {
 
   yield* Effect.tryPromise({
     try: () => mkdir(config.dataPath, { recursive: true }),
+    catch: (e) => e as Error,
+  });
+
+  // Seed feed.xml so nginx serves 200 while books are processing
+  yield* Effect.tryPromise({
+    try: async () => {
+      const feedPath = join(config.dataPath, FEED_FILE);
+      if (!(await Bun.file(feedPath).exists())) {
+        const seed = new Feed("urn:opds:catalog:root", "Catalog")
+          .addSelfLink(`/${FEED_FILE}`, "navigation")
+          .addNavigationLink("start", `/${FEED_FILE}`)
+          .setKind("navigation");
+        const xml = seed
+          .toXml({ prettyPrint: true })
+          .replace(
+            '<?xml version="1.0" encoding="utf-8"?>',
+            `<?xml version="1.0" encoding="utf-8"?>\n<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>`,
+          );
+        await Bun.write(feedPath, xml);
+        log.info("InitialSync", "Seed feed.xml created");
+      }
+    },
     catch: (e) => e as Error,
   });
 
@@ -95,6 +120,42 @@ const resync = Effect.gen(function* () {
     }),
   ),
 );
+
+// Periodic reconciliation: scan for missed events on interval
+const periodicReconciliation = Effect.gen(function* () {
+  const queue = yield* EventQueueService;
+
+  yield* Effect.gen(function* () {
+    if (isSyncing) {
+      log.debug("Reconciliation", "Skipped: sync in progress");
+      return;
+    }
+
+    const pending = yield* queue.size();
+    if (pending > 0) {
+      log.debug("Reconciliation", `Skipped: queue has ${pending} pending events`);
+      return;
+    }
+
+    log.info("Reconciliation", "Starting periodic reconciliation");
+    isSyncing = true;
+    yield* doSync.pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          isSyncing = false;
+        }),
+      ),
+    );
+    log.info("Reconciliation", "Completed");
+  }).pipe(
+    Effect.catchAll((error) =>
+      Effect.sync(() => {
+        log.error("Reconciliation", "Failed", error);
+      }),
+    ),
+    Effect.repeat(Schedule.spaced(`${config.reconcileInterval} seconds`)),
+  );
+});
 
 // Handle incoming books watcher event
 const handleBooksEvent = (body: unknown) =>
@@ -219,6 +280,12 @@ async function main(): Promise<void> {
 
     // 4. Run initial sync
     await runtime.runPromise(initialSync);
+
+    // 5. Start periodic reconciliation (if enabled)
+    if (config.reconcileInterval > 0) {
+      reconcileFiber = runtime.runFork(periodicReconciliation);
+      log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
+    }
   } catch (error) {
     log.error("Server", "Startup failed", error);
     process.exit(1);
@@ -230,6 +297,9 @@ void main();
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   log.info("Server", "Shutting down");
+  if (reconcileFiber) {
+    await runtime.runPromise(Fiber.interrupt(reconcileFiber));
+  }
   if (consumerFiber) {
     await runtime.runPromise(Fiber.interrupt(consumerFiber));
   }

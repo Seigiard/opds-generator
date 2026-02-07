@@ -6,6 +6,7 @@ interface Config {
   port: number;
   devMode: boolean;
   logLevel: string;
+  reconcileInterval: number;
 }
 
 function requireEnv(name: string, defaultValue?: string): string {
@@ -26,6 +27,15 @@ function parsePort(value: string): number {
   return port;
 }
 
+function parseReconcileInterval(value: string): number {
+  const seconds = parseInt(value, 10);
+  if (isNaN(seconds) || seconds < 0 || (seconds > 0 && seconds < 60)) {
+    log.error("Config", `Invalid RECONCILE_INTERVAL: ${value} (must be 0 or >= 60)`);
+    process.exit(1);
+  }
+  return seconds;
+}
+
 function loadConfig(): Config {
   // Internal Bun server port (nginx proxies to this)
   const port = parsePort(process.env.PORT || "3000");
@@ -36,6 +46,7 @@ function loadConfig(): Config {
     port,
     devMode: process.env.DEV_MODE === "true",
     logLevel: process.env.LOG_LEVEL || "info",
+    reconcileInterval: parseReconcileInterval(process.env.RECONCILE_INTERVAL || "1800"),
   };
 }
 
