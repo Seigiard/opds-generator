@@ -20,6 +20,7 @@ services:
       # Uncomment to test /resync endpoint:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret
+      # - RECONCILE_INTERVAL=1800
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
       interval: 10s

@@ -16,6 +16,7 @@ services:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret
       # - RATE_LIMIT_MB=5
+      # - RECONCILE_INTERVAL=1800
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
       interval: 30s
