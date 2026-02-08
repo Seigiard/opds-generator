@@ -1,5 +1,6 @@
 FROM oven/bun:1-alpine AS base
-RUN apk add --no-cache unzip 7zip imagemagick imagemagick-jpeg poppler-utils djvulibre inotify-tools nginx openssl
+RUN apk add --no-cache unzip 7zip imagemagick imagemagick-jpeg poppler-utils djvulibre inotify-tools nginx openssl \
+    && addgroup nginx bun
 WORKDIR /app
 
 FROM base AS development
