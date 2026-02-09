@@ -14,6 +14,7 @@ function generateEventId(event: EventType, path: string | undefined): string {
 function getEventPath(event: EventType): string | undefined {
   if ("path" in event && typeof event.path === "string") return event.path;
   if ("parent" in event && "name" in event) return `${event.parent}/${event.name}`;
+  if ("parent" in event && typeof event.parent === "string") return event.parent;
   return undefined;
 }
 
