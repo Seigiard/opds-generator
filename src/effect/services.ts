@@ -177,10 +177,9 @@ const LiveDeduplicationService = Layer.succeed(DeduplicationService, {
       const lastSeen = deduplicationState.seen.get(key);
       if (lastSeen && now - lastSeen < 500) return false;
       deduplicationState.seen.set(key, now);
-      // Cleanup old entries periodically
-      if (deduplicationState.seen.size > 1000) {
+      if (deduplicationState.seen.size > 100) {
         for (const [k, t] of deduplicationState.seen) {
-          if (now - t > 5000) deduplicationState.seen.delete(k);
+          if (now - t > 2000) deduplicationState.seen.delete(k);
         }
       }
       return true;

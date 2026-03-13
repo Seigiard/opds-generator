@@ -11,6 +11,7 @@ export interface SpawnResult {
 }
 
 const DEFAULT_TIMEOUT = 15000;
+const EMPTY_BUFFER = new ArrayBuffer(0);
 
 export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promise<SpawnResult> {
   const { command, stdin = null, timeout = DEFAULT_TIMEOUT } = options;
@@ -22,41 +23,26 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
   });
 
   let timedOut = false;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      timedOut = true;
-      proc.kill("SIGTERM");
-      setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          // Process may already be dead
-        }
-      }, 1000);
-      reject(new Error(`Process timed out after ${timeout}ms`));
-    }, timeout);
-  });
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    proc.kill("SIGTERM");
+    setTimeout(() => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // Process may already be dead
+      }
+    }, 1000);
+  }, timeout);
 
   try {
-    const [stdout, exitCode] = await Promise.race([
-      Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]),
-      timeoutPromise,
-    ]);
-
-    if (timedOut) {
-      return { stdout: new ArrayBuffer(0), exitCode: -1, timedOut: true };
-    }
-
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
+    if (timedOut) return { stdout: EMPTY_BUFFER, exitCode: -1, timedOut: true };
     return { stdout, exitCode, timedOut: false };
   } catch {
-    if (timedOut) {
-      return { stdout: new ArrayBuffer(0), exitCode: -1, timedOut: true };
-    }
-    throw new Error(`Process failed: ${command.join(" ")}`);
+    return { stdout: EMPTY_BUFFER, exitCode: timedOut ? -1 : 1, timedOut };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
   }
 }
 
