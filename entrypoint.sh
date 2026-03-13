@@ -42,9 +42,9 @@ NGINX_PID=$!
 
 echo "[entrypoint] Starting Bun server on port $BUN_PORT..."
 if [ "$DEV_MODE" = "true" ]; then
-  bun run --watch /app/src/server.ts &
+  bun --smol run --watch /app/src/server.ts &
 else
-  bun run /app/src/server.ts &
+  bun --smol run /app/src/server.ts &
 fi
 BUN_PID=$!
 

@@ -92,7 +92,8 @@ const processEvent = (event: EventType) =>
     }
   });
 
-// Event loop - runs forever, processing events from queue
+let eventCounter = 0;
+
 export const startConsumer = Effect.gen(function* () {
   const queue = yield* EventQueueService;
   const logger = yield* LoggerService;
@@ -103,5 +104,18 @@ export const startConsumer = Effect.gen(function* () {
     const event = yield* queue.take();
     yield* processEvent(event);
     Bun.gc(true);
+    eventCounter++;
+
+    if (eventCounter % 50 === 0) {
+      const mem = process.memoryUsage();
+      log.info("Consumer", "Memory snapshot", {
+        event_type: "handler_complete",
+        events_processed: eventCounter,
+        heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        external_mb: Math.round((mem.external ?? 0) / 1024 / 1024),
+      } as any);
+    }
   }
 });
