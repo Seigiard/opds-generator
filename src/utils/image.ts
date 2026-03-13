@@ -25,3 +25,50 @@ export async function saveBufferAsImage(buffer: Buffer, destPath: string, maxSiz
     return false;
   }
 }
+
+export async function saveCoverAndThumbnail(
+  buffer: Buffer,
+  coverPath: string,
+  coverMaxSize: number,
+  thumbPath: string,
+  thumbMaxSize: number,
+): Promise<boolean> {
+  try {
+    await Promise.all([mkdir(dirname(coverPath), { recursive: true }), mkdir(dirname(thumbPath), { recursive: true })]);
+
+    const coverResize = `${coverMaxSize}x${coverMaxSize}>`;
+    const thumbResize = `${thumbMaxSize}x${thumbMaxSize}>`;
+
+    const proc = Bun.spawn(
+      [
+        "magick",
+        "-",
+        "-resize",
+        coverResize,
+        "-colorspace",
+        "sRGB",
+        "-quality",
+        "90",
+        "-write",
+        coverPath,
+        "-resize",
+        thumbResize,
+        "-quality",
+        "90",
+        thumbPath,
+      ],
+      { stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+    );
+    proc.stdin.write(buffer);
+    const [, , , exitCode] = await Promise.all([
+      proc.stdin.end(),
+      new Response(proc.stdout).arrayBuffer(),
+      new Response(proc.stderr).arrayBuffer(),
+      proc.exited,
+    ]);
+    return exitCode === 0;
+  } catch (error) {
+    log.warn("Image", "Failed to save cover and thumbnail", { file: coverPath, error: String(error) });
+    return false;
+  }
+}

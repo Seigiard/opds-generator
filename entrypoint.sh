@@ -64,11 +64,12 @@ cleanup() {
 
 trap cleanup SIGTERM SIGINT
 
-echo "[entrypoint] All processes started. Waiting..."
+echo "[entrypoint] All processes started. Monitoring..."
 
-# Wait for any process to exit - if one dies, kill all
-wait -n
-EXIT_CODE=$?
+while true; do
+  kill -0 "$BUN_PID" 2>/dev/null || { echo "[entrypoint] Bun process died"; break; }
+  kill -0 "$NGINX_PID" 2>/dev/null || { echo "[entrypoint] nginx process died"; break; }
+  sleep 5
+done
 
-echo "[entrypoint] Process exited with code $EXIT_CODE, shutting down all..."
 cleanup

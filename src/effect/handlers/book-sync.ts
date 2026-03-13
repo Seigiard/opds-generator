@@ -4,7 +4,7 @@ import { Entry } from "opds-ts/v1.2";
 import { MIME_TYPES } from "../../types.ts";
 import { getHandlerFactory } from "../../formats/index.ts";
 import type { BookMetadata } from "../../formats/types.ts";
-import { saveBufferAsImage, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
+import { saveCoverAndThumbnail, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
 import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
@@ -65,18 +65,12 @@ export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], 
           const coverPath = join(bookDataDir, COVER_FILE);
           const thumbPath = join(bookDataDir, THUMB_FILE);
 
-          const coverOk = yield* Effect.tryPromise({
-            try: () => saveBufferAsImage(result.cover!, coverPath, COVER_MAX_SIZE),
+          hasCover = yield* Effect.tryPromise({
+            try: () => saveCoverAndThumbnail(result.cover!, coverPath, COVER_MAX_SIZE, thumbPath, THUMBNAIL_MAX_SIZE),
             catch: (e) => e as Error,
           }).pipe(Effect.catchAll(() => Effect.succeed(false)));
 
-          if (coverOk) {
-            yield* Effect.tryPromise({
-              try: () => saveBufferAsImage(result.cover!, thumbPath, THUMBNAIL_MAX_SIZE),
-              catch: (e) => e as Error,
-            }).pipe(Effect.catchAll(() => Effect.succeed(false)));
-            hasCover = true;
-          }
+          (result as { cover: Buffer | null }).cover = null;
         }
       }
     }

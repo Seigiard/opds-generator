@@ -102,5 +102,6 @@ export const startConsumer = Effect.gen(function* () {
   while (true) {
     const event = yield* queue.take();
     yield* processEvent(event);
+    Bun.gc(true);
   }
 });
