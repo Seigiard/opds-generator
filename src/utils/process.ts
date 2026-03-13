@@ -6,7 +6,6 @@ export interface SpawnWithTimeoutOptions {
 
 export interface SpawnResult {
   stdout: ArrayBuffer;
-  stderr: ArrayBuffer;
   exitCode: number;
   timedOut: boolean;
 }
@@ -19,7 +18,7 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
   const proc = Bun.spawn(command, {
     stdin,
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
   });
 
   let timedOut = false;
@@ -41,19 +40,19 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
   });
 
   try {
-    const [stdout, stderr, exitCode] = await Promise.race([
-      Promise.all([new Response(proc.stdout).arrayBuffer(), new Response(proc.stderr).arrayBuffer(), proc.exited]),
+    const [stdout, exitCode] = await Promise.race([
+      Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]),
       timeoutPromise,
     ]);
 
     if (timedOut) {
-      return { stdout: new ArrayBuffer(0), stderr: new ArrayBuffer(0), exitCode: -1, timedOut: true };
+      return { stdout: new ArrayBuffer(0), exitCode: -1, timedOut: true };
     }
 
-    return { stdout, stderr, exitCode, timedOut: false };
+    return { stdout, exitCode, timedOut: false };
   } catch {
     if (timedOut) {
-      return { stdout: new ArrayBuffer(0), stderr: new ArrayBuffer(0), exitCode: -1, timedOut: true };
+      return { stdout: new ArrayBuffer(0), exitCode: -1, timedOut: true };
     }
     throw new Error(`Process failed: ${command.join(" ")}`);
   } finally {

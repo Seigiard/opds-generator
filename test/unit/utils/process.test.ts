@@ -49,13 +49,12 @@ describe("spawnWithTimeout", () => {
     expect(result.stdout).toBe("test");
   });
 
-  test("captures stderr", async () => {
+  test("returns non-zero exit code for failed command with ignored stderr", async () => {
     const result = await spawnWithTimeout({
       command: ["ls", "/nonexistent-path-12345"],
     });
 
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.byteLength).toBeGreaterThan(0);
   });
 });
 
