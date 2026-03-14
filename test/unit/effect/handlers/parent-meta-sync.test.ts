@@ -1,45 +1,23 @@
-import { describe, test, expect, beforeEach } from "bun:test";
-import { Effect, Layer } from "effect";
-import { ConfigService, LoggerService, FileSystemService } from "../../../../src/effect/services.ts";
+import { describe, test, expect } from "bun:test";
 import { parentMetaSync } from "../../../../src/effect/handlers/parent-meta-sync.ts";
+import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
 
-const mockLogger = {
-  infoCalls: [] as Array<{ tag: string; msg: string }>,
-  reset() {
-    this.infoCalls = [];
+const deps: HandlerDeps = {
+  config: { filesPath: "/files", dataPath: "/data", port: 3000, reconcileInterval: 1800 },
+  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+  fs: {
+    mkdir: async () => {},
+    rm: async () => {},
+    readdir: async () => [],
+    stat: async () => ({ isDirectory: () => false, size: 0 }),
+    exists: async () => false,
+    writeFile: async () => {},
+    atomicWrite: async () => {},
+    symlink: async () => {},
+    unlink: async () => {},
   },
 };
-
-const TestConfigService = Layer.succeed(ConfigService, {
-  filesPath: "/files",
-  dataPath: "/data",
-  port: 3000,
-});
-
-const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg });
-    }),
-  warn: () => Effect.void,
-  error: () => Effect.void,
-  debug: () => Effect.void,
-});
-
-const TestFileSystemService = Layer.succeed(FileSystemService, {
-  mkdir: () => Effect.void,
-  rm: () => Effect.void,
-  readdir: () => Effect.succeed([]),
-  stat: () => Effect.succeed({ isDirectory: () => false, size: 0 }),
-  exists: () => Effect.succeed(false),
-  writeFile: () => Effect.void,
-  atomicWrite: () => Effect.void,
-  symlink: () => Effect.void,
-  unlink: () => Effect.void,
-});
-
-const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, TestFileSystemService);
 
 const entryXmlChangedEvent = (parent: string): EventType => ({
   _tag: "EntryXmlChanged",
@@ -47,42 +25,52 @@ const entryXmlChangedEvent = (parent: string): EventType => ({
 });
 
 describe("parentMetaSync handler", () => {
-  beforeEach(() => {
-    mockLogger.reset();
-  });
-
   test("returns empty array for non-EntryXmlChanged events", async () => {
+    // #given
     const event: EventType = { _tag: "BookCreated", parent: "/files", name: "book.epub" };
-    const cascades = await Effect.runPromise(Effect.provide(parentMetaSync(event), TestLayer));
 
-    expect(cascades).toEqual([]);
+    // #when
+    const result = await parentMetaSync(event, deps);
+
+    // #then
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual([]);
   });
 
   test("returns FolderMetaSyncRequested for parent directory", async () => {
-    const cascades = await Effect.runPromise(Effect.provide(parentMetaSync(entryXmlChangedEvent("/data/Fiction/Author")), TestLayer));
+    // #when
+    const result = await parentMetaSync(entryXmlChangedEvent("/data/Fiction/Author"), deps);
 
-    expect(cascades).toHaveLength(1);
-    expect(cascades[0]).toEqual({
+    // #then
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toHaveLength(1);
+    expect(result._unsafeUnwrap()[0]).toEqual({
       _tag: "FolderMetaSyncRequested",
       path: "/data/Fiction",
     });
   });
 
   test("returns FolderMetaSyncRequested for root when parent is root", async () => {
-    const cascades = await Effect.runPromise(Effect.provide(parentMetaSync(entryXmlChangedEvent("/data/Fiction")), TestLayer));
+    // #when
+    const result = await parentMetaSync(entryXmlChangedEvent("/data/Fiction"), deps);
 
-    expect(cascades).toHaveLength(1);
-    expect(cascades[0]).toEqual({
+    // #then
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toHaveLength(1);
+    expect(result._unsafeUnwrap()[0]).toEqual({
       _tag: "FolderMetaSyncRequested",
       path: "/data",
     });
   });
 
   test("handles trailing slash in path", async () => {
-    const cascades = await Effect.runPromise(Effect.provide(parentMetaSync(entryXmlChangedEvent("/data/Fiction/Author/")), TestLayer));
+    // #when
+    const result = await parentMetaSync(entryXmlChangedEvent("/data/Fiction/Author/"), deps);
 
-    expect(cascades).toHaveLength(1);
-    expect(cascades[0]).toEqual({
+    // #then
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toHaveLength(1);
+    expect(result._unsafeUnwrap()[0]).toEqual({
       _tag: "FolderMetaSyncRequested",
       path: "/data/Fiction",
     });
