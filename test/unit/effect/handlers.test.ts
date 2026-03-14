@@ -162,20 +162,16 @@ describe("Effect Handlers", () => {
 
   describe("folderCleanup", () => {
     test("removes data directory for deleted folder", async () => {
-      const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/Author");
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
     });
 
     test("handles nested folder paths correctly", async () => {
-      const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/SciFi/Isaac Asimov");
     });
   });
@@ -246,23 +242,17 @@ describe("Effect Handlers", () => {
 
   describe("folderCleanup cascade", () => {
     test("returns cascade event to regenerate parent feed for nested folders", async () => {
-      const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"));
-
-      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
+      expect(result.isOk()).toBe(true);
+      const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({
-        _tag: "FolderMetaSyncRequested",
-        path: "/test/data/Fiction",
-      });
+      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
 
     test("returns empty cascades for top-level folder deletion", async () => {
-      const effect = folderCleanup(folderDeletedEvent("/test/books/", "Fiction"));
-
-      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
-
-      expect(cascades).toHaveLength(0);
+      const result = await folderCleanup(folderDeletedEvent("/test/books/", "Fiction"), asyncDeps);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toHaveLength(0);
     });
   });
 });

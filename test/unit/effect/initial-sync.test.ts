@@ -143,7 +143,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
   describe("folderCleanup during initial sync", () => {
     test("removes orphan folder directory", async () => {
-      await Effect.runPromise(Effect.provide(folderCleanup(folderDeletedEvent("/test/books/", "OldFolder")), TestLayer));
+      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"), asyncDeps);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/OldFolder");
     });
@@ -168,7 +168,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
     });
 
     test("cleanup then create for folder replacement", async () => {
-      await Effect.runPromise(Effect.provide(folderCleanup(folderDeletedEvent("/test/books/", "OldFolder")), TestLayer));
+      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"), asyncDeps);
       await folderSync(folderCreatedEvent("/test/books/", "NewFolder"), asyncDeps);
 
       expect(mockFs.rmCalls.some((c) => c.path.includes("OldFolder"))).toBe(true);
