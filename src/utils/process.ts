@@ -1,4 +1,5 @@
-import { open, unlink } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import { openSync, closeSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,6 +17,7 @@ export interface SpawnResult {
 
 const DEFAULT_TIMEOUT = 15000;
 const EMPTY_BUFFER = new ArrayBuffer(0);
+const textDecoder = new TextDecoder();
 
 let spawnCounter = 0;
 
@@ -23,10 +25,11 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
   const { command, stdin = null, timeout = DEFAULT_TIMEOUT } = options;
 
   const tmpFile = join(tmpdir(), `opds-spawn-${process.pid}-${spawnCounter++}.tmp`);
+  const stdoutFd = openSync(tmpFile, "w");
 
   const proc = Bun.spawn(command, {
     stdin,
-    stdout: Bun.file(tmpFile),
+    stdout: stdoutFd,
     stderr: "ignore",
   });
 
@@ -45,6 +48,7 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
 
   try {
     const exitCode = await proc.exited;
+    closeSync(stdoutFd);
     if (timedOut) return { stdout: EMPTY_BUFFER, exitCode: -1, timedOut: true };
 
     const fh = await open(tmpFile, "r");
@@ -61,7 +65,9 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
     return { stdout: EMPTY_BUFFER, exitCode: timedOut ? -1 : 1, timedOut };
   } finally {
     clearTimeout(timeoutId);
-    unlink(tmpFile).catch(() => {});
+    try {
+      unlinkSync(tmpFile);
+    } catch {}
   }
 }
 
@@ -70,7 +76,7 @@ export async function spawnWithTimeoutText(
 ): Promise<{ stdout: string; exitCode: number; timedOut: boolean }> {
   const result = await spawnWithTimeout(options);
   return {
-    stdout: new TextDecoder().decode(result.stdout),
+    stdout: textDecoder.decode(result.stdout),
     exitCode: result.exitCode,
     timedOut: result.timedOut,
   };

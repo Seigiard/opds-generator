@@ -16,205 +16,146 @@ const VALID_PNG = Buffer.from([
   0xe2, 0x21, 0xbc, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
 
-const ITERATIONS = 200;
-const MAX_LEAK_PER_ITER_KB = 15;
-const BUN_BUG_LEAK_KB = 250;
+const ITERATIONS = 300;
+const MAX_LEAK_KB = 2;
+const MAX_CHAIN_LEAK_KB = 1;
 
 function getRssMb(): number {
   return process.memoryUsage().rss / 1024 / 1024;
 }
 
-function stabilizeMemory(): void {
+function stabilize(): void {
+  Bun.gc(true);
   Bun.gc(true);
   Bun.gc(true);
 }
 
-interface LeakResult {
-  totalMb: number;
-  perIterKb: number;
-}
-
-function measureLeak(label: string, rssBefore: number, rssAfter: number, iterations: number): LeakResult {
+function measureLeak(label: string, rssBefore: number, rssAfter: number, iterations: number): number {
   const totalMb = rssAfter - rssBefore;
   const perIterKb = (totalMb * 1024) / iterations;
-  console.log(`  ${label}: ${totalMb.toFixed(1)} MB total, ${perIterKb.toFixed(1)} KB/iter (${iterations} iterations)`);
-  return { totalMb, perIterKb };
+  console.log(`  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iterations} iters)`);
+  return perIterKb;
 }
 
-describe("Memory leak detection", () => {
-  test("raw Bun.spawn (echo, stdout ignore)", async () => {
-    stabilizeMemory();
-    const before = getRssMb();
+async function warmup(fn: () => Promise<void>, count = 150): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await fn();
+    if (i % 10 === 0) Bun.gc(true);
+  }
+  stabilize();
+}
 
-    for (let i = 0; i < ITERATIONS; i++) {
-      const proc = Bun.spawn(["echo", "hello"], { stdout: "ignore", stderr: "ignore" });
-      await proc.exited;
-    }
-
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("Bun.spawn(echo, ignore)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
-
-  test("raw Bun.spawn (echo, stdout pipe, NO read)", async () => {
-    stabilizeMemory();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      const proc = Bun.spawn(["echo", "hello"], { stdout: "pipe", stderr: "ignore" });
-      await proc.exited;
-    }
-
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("Bun.spawn(echo, pipe, no read)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
-
-  test("raw Bun.spawn (echo, stdout pipe + read) — known Bun leak", async () => {
-    stabilizeMemory();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      const proc = Bun.spawn(["echo", "hello"], { stdout: "pipe", stderr: "ignore" });
-      await new Response(proc.stdout).arrayBuffer();
-      await proc.exited;
-    }
-
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("Bun.spawn(echo, pipe+read)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(BUN_BUG_LEAK_KB);
-  });
-
-  test("raw Bun.spawn (magick, stdin pipe + stdout ignore)", async () => {
-    const tmpDir = join(tmpdir(), `mem-magick-${Date.now()}`);
-    stabilizeMemory();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      const dest = join(tmpDir, `img-${i}.jpg`);
-      const proc = Bun.spawn(["magick", "-", "-resize", "100x100>", "-quality", "90", dest], {
-        stdin: "pipe",
-        stdout: "ignore",
-        stderr: "ignore",
-      });
-      proc.stdin.write(VALID_PNG);
-      await proc.stdin.end();
-      await proc.exited;
-    }
-
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("Bun.spawn(magick, stdin pipe)", before, getRssMb(), ITERATIONS);
-    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
-
+describe("Memory leak detection (target: 0 KB/iter)", () => {
   test("spawnWithTimeout (echo)", async () => {
-    stabilizeMemory();
+    const op = () => spawnWithTimeoutText({ command: ["echo", "hello"] }).then(() => {});
+    await warmup(op);
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
-      await spawnWithTimeoutText({ command: ["echo", "hello"] });
-      if (i % 20 === 0) Bun.gc(true);
+      await op();
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("spawnWithTimeout(echo)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
+    stabilize();
+    const perIterKb = measureLeak("spawnWithTimeout(echo)", before, getRssMb(), ITERATIONS);
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
-  test("spawnWithTimeout (large stdout — zipinfo)", async () => {
-    stabilizeMemory();
+  test("spawnWithTimeout (zipinfo — real data)", async () => {
+    const op = () => spawnWithTimeoutText({ command: ["zipinfo", "-1", EPUB_PATH] }).then(() => {});
+    await warmup(op);
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
-      await spawnWithTimeoutText({ command: ["zipinfo", "-1", EPUB_PATH] });
+      await op();
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("spawnWithTimeout(zipinfo)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
+    stabilize();
+    const perIterKb = measureLeak("spawnWithTimeout(zipinfo)", before, getRssMb(), ITERATIONS);
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
   test("listEntries (archive)", async () => {
-    stabilizeMemory();
+    await warmup(() => listEntries(CBZ_PATH).then(() => {}));
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
       await listEntries(CBZ_PATH);
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("listEntries(cbz)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
+    stabilize();
+    const perIterKb = measureLeak("listEntries(cbz)", before, getRssMb(), ITERATIONS);
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
   test("readEntry (cover from archive)", async () => {
     const entries = await listEntries(CBZ_PATH);
     const image = entries.find((e) => /\.(jpg|jpeg|png)$/i.test(e));
     if (!image) throw new Error("No image in test CBZ");
 
-    stabilizeMemory();
+    await warmup(() => readEntry(CBZ_PATH, image).then(() => {}));
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
-      const buf = await readEntry(CBZ_PATH, image);
-      if (!buf) throw new Error("Failed to read entry");
-      if (i % 20 === 0) Bun.gc(true);
+      await readEntry(CBZ_PATH, image);
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("readEntry(cbz cover)", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
+    stabilize();
+    const perIterKb = measureLeak("readEntry(cbz cover)", before, getRssMb(), ITERATIONS);
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
-  test("saveBufferAsImage (magick wrapper)", async () => {
+  test("saveBufferAsImage (magick)", async () => {
     const tmpDir = join(tmpdir(), `mem-save-${Date.now()}`);
-    stabilizeMemory();
+    await warmup(async () => {
+      await saveBufferAsImage(VALID_PNG, join(tmpDir, `warmup-${Math.random()}.jpg`), 100);
+    });
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
       await saveBufferAsImage(VALID_PNG, join(tmpDir, `img-${i}.jpg`), 100);
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("saveBufferAsImage", before, getRssMb(), ITERATIONS);
+    stabilize();
+    const perIterKb = measureLeak("saveBufferAsImage", before, getRssMb(), ITERATIONS);
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
   test("saveCoverAndThumbnail (combined magick)", async () => {
     const tmpDir = join(tmpdir(), `mem-cover-${Date.now()}`);
-    stabilizeMemory();
+    await warmup(async () => {
+      const n = Math.random().toString(36).slice(2);
+      await saveCoverAndThumbnail(VALID_PNG, join(tmpDir, `w-c-${n}.jpg`), 600, join(tmpDir, `w-t-${n}.jpg`), 200);
+    });
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
       await saveCoverAndThumbnail(VALID_PNG, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("saveCoverAndThumbnail", before, getRssMb(), ITERATIONS);
+    stabilize();
+    const perIterKb = measureLeak("saveCoverAndThumbnail", before, getRssMb(), ITERATIONS);
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB);
-  });
-
-  test("new Response(ReadableStream).arrayBuffer() — known Bun leak", async () => {
-    stabilizeMemory();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode("hello world ".repeat(100)));
-          controller.close();
-        },
-      });
-      await new Response(stream).arrayBuffer();
-    }
-
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("Response(stream).arrayBuffer()", before, getRssMb(), ITERATIONS);
-    expect(perIterKb).toBeLessThan(BUN_BUG_LEAK_KB);
-  });
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
   test("full chain: readEntry + saveCoverAndThumbnail", async () => {
     const entries = await listEntries(CBZ_PATH);
@@ -222,7 +163,15 @@ describe("Memory leak detection", () => {
     if (!image) throw new Error("No image in test CBZ");
 
     const tmpDir = join(tmpdir(), `mem-chain-${Date.now()}`);
-    stabilizeMemory();
+    await warmup(async () => {
+      const buf = await readEntry(CBZ_PATH, image);
+      if (buf) {
+        const n = Math.random().toString(36).slice(2);
+        await saveCoverAndThumbnail(buf, join(tmpDir, `w-c-${n}.jpg`), 600, join(tmpDir, `w-t-${n}.jpg`), 200);
+      }
+    });
+
+    stabilize();
     const before = getRssMb();
 
     for (let i = 0; i < ITERATIONS; i++) {
@@ -230,12 +179,12 @@ describe("Memory leak detection", () => {
       if (buf) {
         await saveCoverAndThumbnail(buf, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
       }
-      if (i % 20 === 0) Bun.gc(true);
+      Bun.gc(true);
     }
 
-    stabilizeMemory();
-    const { perIterKb } = measureLeak("readEntry+saveCoverAndThumbnail", before, getRssMb(), ITERATIONS);
+    stabilize();
+    const perIterKb = measureLeak("readEntry+saveCoverAndThumbnail", before, getRssMb(), ITERATIONS);
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    expect(perIterKb).toBeLessThan(MAX_LEAK_PER_ITER_KB * 3);
-  }, 30000);
+    expect(perIterKb).toBeLessThan(MAX_CHAIN_LEAK_KB);
+  }, 60000);
 });
