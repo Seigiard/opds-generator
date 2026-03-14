@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { heapStats } from "bun:jsc";
 import { log } from "../logging/index.ts";
 import type { EventType } from "./types.ts";
 import { EventQueueService, HandlerRegistry, LoggerService } from "./services.ts";
@@ -108,6 +109,7 @@ export const startConsumer = Effect.gen(function* () {
 
     if (eventCounter % 50 === 0) {
       const mem = process.memoryUsage();
+      const jsc = heapStats();
       log.info("Consumer", "Memory snapshot", {
         event_type: "handler_complete",
         events_processed: eventCounter,
@@ -115,6 +117,17 @@ export const startConsumer = Effect.gen(function* () {
         heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
         rss_mb: Math.round(mem.rss / 1024 / 1024),
         external_mb: Math.round((mem.external ?? 0) / 1024 / 1024),
+        jsc_object_count: jsc.objectCount,
+        jsc_protected_object_count: jsc.protectedObjectCount,
+        jsc_global_object_count: jsc.globalObjectCount,
+        jsc_protected_global_object_count: jsc.protectedGlobalObjectCount,
+        jsc_object_type_counts: JSON.stringify(
+          Object.fromEntries(
+            Object.entries(jsc.objectTypeCounts as Record<string, number>)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 10),
+          ),
+        ),
       } as any);
     }
   }
