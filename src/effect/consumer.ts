@@ -22,9 +22,9 @@ function logMemorySnapshot(): void {
   eventCounter++;
   Bun.gc(true);
 
-  if (eventCounter === 100 || eventCounter === 5000) {
+  if (eventCounter === 100 || eventCounter === 3000) {
     const snapshotPath = `/data/heap-snapshot-${eventCounter}.json`;
-    Bun.write(snapshotPath, JSON.stringify(Bun.generateHeapSnapshot()));
+    void Bun.write(snapshotPath, JSON.stringify(Bun.generateHeapSnapshot()));
     log.info("Consumer", `Heap snapshot saved to ${snapshotPath}`, {
       event_type: "handler_complete",
       events_processed: eventCounter,
@@ -45,13 +45,6 @@ function logMemorySnapshot(): void {
       jsc_protected_object_count: jsc.protectedObjectCount,
       jsc_global_object_count: jsc.globalObjectCount,
       jsc_protected_global_object_count: jsc.protectedGlobalObjectCount,
-      jsc_object_type_counts: JSON.stringify(
-        Object.fromEntries(
-          Object.entries(jsc.objectTypeCounts as Record<string, number>)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 10),
-        ),
-      ),
     } as any);
   }
 }
@@ -130,4 +123,7 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
 
     if (eventCounter % 100 === 0) Bun.gc(true);
   }
+}
+function heapStats() {
+  throw new Error("Function not implemented.");
 }
