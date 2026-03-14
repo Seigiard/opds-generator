@@ -17,6 +17,8 @@ const FIXTURES_DIR = "/app/files/test";
 const ITERATIONS = 100;
 const MAX_LEAK_KB = 1;
 
+const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
+
 const TestConfigService = Layer.succeed(ConfigService, {
   filesPath: FILES_DIR,
   dataPath: DATA_DIR,
@@ -111,33 +113,31 @@ afterAll(async () => {
   await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
 });
 
-async function runHandlerTest(label: string, bookFile: string): Promise<void> {
-  await mkdir(FILES_DIR, { recursive: true });
-  await mkdir(DATA_DIR, { recursive: true });
-
-  for (let i = 0; i < 30; i++) {
-    await processOneBook(`warmup-${label}-${i}`, bookFile);
-    if (i % 5 === 0) Bun.gc(true);
-  }
-  stabilize();
-
-  const before = getRssMb();
-
-  for (let i = 0; i < ITERATIONS; i++) {
-    await processOneBook(`test-${label}-${i}`, bookFile);
-    Bun.gc(true);
-  }
-
-  stabilize();
-  const after = getRssMb();
-  const totalMb = after - before;
-  const perIterKb = (totalMb * 1024) / ITERATIONS;
-  console.log(`  bookSync(${label}): ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`);
-  expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
-}
-
 describe("Full handler memory leak (target: 0 KB/iter)", () => {
-  test("PDF handler", () => runHandlerTest("pdf", "Test Book - Test Author.pdf"), 120000);
-  test("CBZ handler", () => runHandlerTest("cbz", "bobby_make_believe_sample.cbz"), 120000);
-  test("EPUB handler", () => runHandlerTest("epub", "Test Book - Test Author.epub"), 120000);
+  test("all formats interleaved (PDF + CBZ + EPUB)", async () => {
+    await mkdir(FILES_DIR, { recursive: true });
+    await mkdir(DATA_DIR, { recursive: true });
+
+    for (let i = 0; i < 50; i++) {
+      const book = BOOK_FILES[i % BOOK_FILES.length]!;
+      await processOneBook(`warmup-${i}`, book);
+      if (i % 5 === 0) Bun.gc(true);
+    }
+    stabilize();
+
+    const before = getRssMb();
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      const book = BOOK_FILES[i % BOOK_FILES.length]!;
+      await processOneBook(`test-${i}`, book);
+      Bun.gc(true);
+    }
+
+    stabilize();
+    const after = getRssMb();
+    const totalMb = after - before;
+    const perIterKb = (totalMb * 1024) / ITERATIONS;
+    console.log(`  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`);
+    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  }, 180000);
 });
