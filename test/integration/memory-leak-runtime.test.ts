@@ -130,7 +130,7 @@ describe("Effect runtime memory leak isolation", () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const registry = yield* HandlerRegistry;
-        registry.register("FolderMetaSyncRequested", () =>
+        registry.registerEffect("FolderMetaSyncRequested", () =>
           Effect.sync(() => {
             processed++;
             return [] as readonly EventType[];

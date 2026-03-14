@@ -4,6 +4,7 @@ import { config } from "../config.ts";
 import { log } from "../logging/index.ts";
 import type { LogContext } from "../logging/types.ts";
 import type { EventType } from "./types.ts";
+import type { UnifiedHandler } from "./handlers/types.ts";
 
 // Config Service
 export class ConfigService extends Context.Tag("ConfigService")<
@@ -61,17 +62,18 @@ export class EventQueueService extends Context.Tag("EventQueueService")<
   }
 >() {}
 
-// Handler type for registry
+// Handler type for registry (legacy — use UnifiedHandler for new code)
 export type EventHandler = (
   event: EventType,
 ) => Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService>;
 
-// Handler Registry Service
+// Handler Registry Service — stores UnifiedHandler during migration
 export class HandlerRegistry extends Context.Tag("HandlerRegistry")<
   HandlerRegistry,
   {
-    readonly get: (tag: string) => EventHandler | undefined;
-    readonly register: (tag: string, handler: EventHandler) => void;
+    readonly get: (tag: string) => UnifiedHandler | undefined;
+    readonly registerEffect: (tag: string, handler: EventHandler) => void;
+    readonly registerAsync: (tag: string, handler: import("./handlers/types.ts").AsyncHandler) => void;
   }
 >() {}
 
@@ -202,13 +204,16 @@ const LiveEventQueueService = Layer.effect(
 
 // Handler Registry - mutable map for handler registration
 const handlerRegistryState = {
-  handlers: new Map<string, EventHandler>(),
+  handlers: new Map<string, UnifiedHandler>(),
 };
 
 const LiveHandlerRegistry = Layer.succeed(HandlerRegistry, {
   get: (tag: string) => handlerRegistryState.handlers.get(tag),
-  register: (tag: string, handler: EventHandler) => {
-    handlerRegistryState.handlers.set(tag, handler);
+  registerEffect: (tag: string, handler: EventHandler) => {
+    handlerRegistryState.handlers.set(tag, { kind: "effect", handler });
+  },
+  registerAsync: (tag: string, handler: import("./handlers/types.ts").AsyncHandler) => {
+    handlerRegistryState.handlers.set(tag, { kind: "async", handler });
   },
 });
 

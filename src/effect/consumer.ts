@@ -3,6 +3,7 @@ import { heapStats } from "bun:jsc";
 import { log } from "../logging/index.ts";
 import type { EventType } from "./types.ts";
 import { EventQueueService, HandlerRegistry, LoggerService } from "./services.ts";
+import { buildHandlerDeps } from "./handler-deps.ts";
 
 function generateEventId(event: EventType, path: string | undefined): string {
   const timestamp = Date.now();
@@ -32,12 +33,24 @@ const processEvent = (event: EventType) =>
           path,
         });
 
-        const handler = registry.get(event._tag);
-        if (!handler) {
+        const unified = registry.get(event._tag);
+        if (!unified) {
           return logger.warn("Consumer", "No handler found", { event_tag: event._tag });
         }
 
-        return handler(event).pipe(
+        const handlerEffect =
+          unified.kind === "effect"
+            ? unified.handler(event)
+            : Effect.tryPromise({
+                try: () => unified.handler(event, buildHandlerDeps()),
+                catch: (e) => e as Error,
+              }).pipe(
+                Effect.flatMap((result) =>
+                  result.isOk() ? Effect.succeed(result.value) : Effect.fail(result.error),
+                ),
+              );
+
+        return handlerEffect.pipe(
           Effect.map((cascades) => ({ ok: true as const, cascades })),
           Effect.catchAll((error) => {
             const duration = Date.now() - startTime;
