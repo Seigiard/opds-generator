@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { Effect, Layer } from "effect";
-import { ConfigService, LoggerService, FileSystemService } from "../../../src/effect/services.ts";
 import { bookSync } from "../../../src/effect/handlers/book-sync.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { folderMetaSync } from "../../../src/effect/handlers/folder-meta-sync.ts";
@@ -8,7 +6,7 @@ import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, stat, readFile, rename, symlink, unlink } from "node:fs/promises";
+import { mkdir, rm, stat, readFile, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-cascade-test-${Date.now()}`);
 const FILES_DIR = join(TEST_DIR, "files");
@@ -21,69 +19,6 @@ const mockLogger = {
     this.calls = [];
   },
 };
-
-const TestConfigService = Layer.succeed(ConfigService, {
-  filesPath: FILES_DIR,
-  dataPath: DATA_DIR,
-  port: 3000,
-});
-
-const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.calls.push({ level: "info", tag, msg });
-    }),
-  warn: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.calls.push({ level: "warn", tag, msg });
-    }),
-  error: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.calls.push({ level: "error", tag, msg });
-    }),
-  debug: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.calls.push({ level: "debug", tag, msg });
-    }),
-});
-
-const RealFileSystemService = Layer.succeed(FileSystemService, {
-  mkdir: (path, options) => Effect.promise(() => mkdir(path, options)),
-  rm: (path, options) => Effect.promise(() => rm(path, options)),
-  readdir: (path) =>
-    Effect.promise(async () => {
-      const fs = await import("node:fs/promises");
-      return fs.readdir(path);
-    }),
-  stat: (path) =>
-    Effect.promise(async () => {
-      const s = await stat(path);
-      return { isDirectory: () => s.isDirectory(), size: s.size };
-    }),
-  exists: (path) =>
-    Effect.promise(async () => {
-      try {
-        await stat(path);
-        return true;
-      } catch {
-        return false;
-      }
-    }),
-  writeFile: (path, content) => Effect.promise(() => Bun.write(path, content)),
-  atomicWrite: (path, content) => Effect.promise(() => Bun.write(path, content)),
-  symlink: (target, path) =>
-    Effect.promise(async () => {
-      const fs = await import("node:fs/promises");
-      await fs.symlink(target, path);
-    }),
-  unlink: (path) =>
-    Effect.promise(async () => {
-      const fs = await import("node:fs/promises");
-      await fs.unlink(path);
-    }),
-});
-
-const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, RealFileSystemService);
 
 const asyncDeps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },

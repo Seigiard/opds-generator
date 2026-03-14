@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { Effect, Layer } from "effect";
-import { ConfigService, LoggerService, FileSystemService } from "../../../src/effect/services.ts";
 import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
@@ -56,63 +54,6 @@ const createMockLogger = (): MockLogger => ({
 
 const mockFs = createMockFs();
 const mockLogger = createMockLogger();
-
-const TestConfigService = Layer.succeed(ConfigService, {
-  filesPath: "/test/books",
-  dataPath: "/test/data",
-  port: 8080,
-});
-
-const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg, ctx) =>
-    Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg, ctx });
-    }),
-  warn: (tag, msg, ctx) =>
-    Effect.sync(() => {
-      mockLogger.warnCalls.push({ tag, msg, ctx });
-    }),
-  error: (tag, msg, error) =>
-    Effect.sync(() => {
-      mockLogger.errorCalls.push({ tag, msg, error });
-    }),
-  debug: (tag, msg, ctx) =>
-    Effect.sync(() => {
-      mockLogger.debugCalls.push({ tag, msg, ctx });
-    }),
-});
-
-const TestFileSystemService = Layer.succeed(FileSystemService, {
-  mkdir: (path, options) =>
-    Effect.sync(() => {
-      mockFs.mkdirCalls.push({ path, options });
-    }),
-  rm: (path, options) =>
-    Effect.sync(() => {
-      mockFs.rmCalls.push({ path, options });
-    }),
-  readdir: (_path) => Effect.succeed([]),
-  stat: (_path) => Effect.succeed({ isDirectory: () => false, size: 0 }),
-  exists: (_path) => Effect.succeed(false),
-  writeFile: (path, content) =>
-    Effect.sync(() => {
-      mockFs.writeCalls.push({ path, content });
-    }),
-  atomicWrite: (path, content) =>
-    Effect.sync(() => {
-      mockFs.writeCalls.push({ path, content });
-    }),
-  symlink: (target, path) =>
-    Effect.sync(() => {
-      mockFs.symlinkCalls.push({ target, path });
-    }),
-  unlink: (path) =>
-    Effect.sync(() => {
-      mockFs.unlinkCalls.push(path);
-    }),
-});
-
-const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, TestFileSystemService);
 
 // Helper to create events
 const folderDeletedEvent = (parent: string, name: string): EventType => ({

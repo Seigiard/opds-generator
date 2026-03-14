@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, ManagedRuntime } from "effect";
 import { SimpleQueue } from "../../src/queue.ts";
-import { EventQueueService, LiveLayer } from "../../src/effect/services.ts";
 import type { EventType } from "../../src/effect/types.ts";
 
 const ITERATIONS = 21_000;
@@ -29,7 +27,7 @@ const makeEvent = (i: number): EventType => ({
   path: `/test/${i}`,
 });
 
-describe("SimpleQueue vs Effect Queue — RSS benchmark (go/no-go gate)", () => {
+describe("SimpleQueue — RSS benchmark (go/no-go gate)", () => {
   test("SimpleQueue: 21K enqueue/take cycles", async () => {
     const queue = new SimpleQueue<EventType>();
 
@@ -82,35 +80,4 @@ describe("SimpleQueue vs Effect Queue — RSS benchmark (go/no-go gate)", () => 
     expect(kb).toBeLessThan(MAX_SIMPLE_QUEUE_KB);
   }, 120_000);
 
-  test("Effect Queue: 21K enqueue/take cycles (baseline comparison)", async () => {
-    const rt = ManagedRuntime.make(LiveLayer);
-
-    // #given — warmup
-    for (let i = 0; i < 500; i++) {
-      await rt.runPromise(
-        Effect.flatMap(EventQueueService, (queue) =>
-          Effect.flatMap(queue.enqueue(makeEvent(i)), () => queue.take()),
-        ),
-      );
-      if (i % 50 === 0) Bun.gc(true);
-    }
-    stabilize();
-
-    // #when — measure RSS growth
-    const before = getRssMb();
-    for (let i = 0; i < ITERATIONS; i++) {
-      await rt.runPromise(
-        Effect.flatMap(EventQueueService, (queue) =>
-          Effect.flatMap(queue.enqueue(makeEvent(i)), () => queue.take()),
-        ),
-      );
-      if (i % 100 === 0) Bun.gc(true);
-    }
-    stabilize();
-
-    // #then — just measure, don't assert (this is the baseline we're trying to beat)
-    const kb = measureLeak("Effect Queue", before, getRssMb(), ITERATIONS);
-    console.log(`  Effect Queue baseline: ${kb.toFixed(2)} KB/iter (expected ~3.4 KB/iter)`);
-    await rt.dispose();
-  }, 300_000);
 });

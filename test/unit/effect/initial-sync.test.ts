@@ -1,6 +1,4 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { Effect, Layer } from "effect";
-import { ConfigService, LoggerService, FileSystemService } from "../../../src/effect/services.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
@@ -39,48 +37,6 @@ const createMockLogger = (): MockLogger => ({
 
 const mockFs = createMockFs();
 const mockLogger = createMockLogger();
-
-const TestConfigService = Layer.succeed(ConfigService, {
-  filesPath: "/test/books",
-  dataPath: "/test/data",
-  port: 8080,
-});
-
-const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg });
-    }),
-  warn: () => Effect.void,
-  error: () => Effect.void,
-  debug: () => Effect.void,
-});
-
-const TestFileSystemService = Layer.succeed(FileSystemService, {
-  mkdir: (path, options) =>
-    Effect.sync(() => {
-      mockFs.mkdirCalls.push({ path, options });
-    }),
-  rm: (path, options) =>
-    Effect.sync(() => {
-      mockFs.rmCalls.push({ path, options });
-    }),
-  readdir: () => Effect.succeed([]),
-  stat: () => Effect.succeed({ isDirectory: () => false, size: 0 }),
-  exists: () => Effect.succeed(false),
-  writeFile: (path, content) =>
-    Effect.sync(() => {
-      mockFs.writeCalls.push({ path, content });
-    }),
-  atomicWrite: (path, content) =>
-    Effect.sync(() => {
-      mockFs.writeCalls.push({ path, content });
-    }),
-  symlink: () => Effect.void,
-  unlink: () => Effect.void,
-});
-
-const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, TestFileSystemService);
 
 const asyncDeps: HandlerDeps = {
   config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
