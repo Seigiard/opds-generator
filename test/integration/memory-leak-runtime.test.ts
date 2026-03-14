@@ -71,7 +71,7 @@ describe("Effect runtime memory leak isolation", () => {
     expect(kb).toBeLessThan(MAX_LEAK_KB);
   }, 30000);
 
-  test("ManagedRuntime.runPromise with Effect.gen", async () => {
+  test.skip("ManagedRuntime.runPromise with Effect.gen (mimalloc page retention — oven-sh/bun#21560)", async () => {
     const rt = ManagedRuntime.make(LiveLayer);
     const op = async () => {
       await rt.runPromise(
