@@ -26,6 +26,7 @@
     "effect": "^3.19.19",
     "fast-xml-parser": "^5.5.5",
     "knip": "^5.86.0",
+    "neverthrow": "^8.2.0",
     "node-unrar-js": "^2.0.2",
     "opds-ts": "^2.1.0"
   },
