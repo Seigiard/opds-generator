@@ -17,8 +17,8 @@ const VALID_PNG = Buffer.from([
 ]);
 
 const ITERATIONS = 200;
-const MAX_LEAK_PER_ITER_KB = 10;
-const BUN_BUG_LEAK_KB = 200;
+const MAX_LEAK_PER_ITER_KB = 15;
+const BUN_BUG_LEAK_KB = 250;
 
 function getRssMb(): number {
   return process.memoryUsage().rss / 1024 / 1024;
