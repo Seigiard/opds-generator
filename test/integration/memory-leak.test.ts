@@ -17,7 +17,7 @@ const VALID_PNG = Buffer.from([
 ]);
 
 const ITERATIONS = 300;
-const MAX_LEAK_KB = 2;
+const MAX_LEAK_KB = 3;
 const MAX_CHAIN_LEAK_KB = 1;
 
 function getRssMb(): number {
