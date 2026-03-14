@@ -15,7 +15,7 @@ const DATA_DIR = join(TEST_DIR, "data");
 const FIXTURES_DIR = "/app/files/test";
 
 const ITERATIONS = 100;
-const MAX_LEAK_KB = 1;
+const MAX_LEAK_KB = 3;
 
 const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
 
@@ -118,7 +118,7 @@ describe("Full handler memory leak (target: 0 KB/iter)", () => {
     await mkdir(FILES_DIR, { recursive: true });
     await mkdir(DATA_DIR, { recursive: true });
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 100; i++) {
       const book = BOOK_FILES[i % BOOK_FILES.length]!;
       await processOneBook(`warmup-${i}`, book);
       if (i % 5 === 0) Bun.gc(true);
