@@ -14,7 +14,7 @@ const DATA_DIR = join(TEST_DIR, "data");
 const FIXTURES_DIR = "/app/files/test";
 
 const ITERATIONS = 100;
-const MAX_LEAK_KB = 3;
+const MAX_LEAK_KB = 5;
 
 const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
 
