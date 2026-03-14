@@ -17,9 +17,9 @@
 After completing any task:
 
 ```bash
-bun run lint:fix && bun run format
+bun run fix   # format:fix + lint:fix
 bun run test
-npx knip  # check unused exports/deps
+npx knip      # check unused exports/deps
 ```
 
 Update `PLAN.md`, `CLAUDE.md`, or `@ARCHITECTURE.md` if architecture changed.
