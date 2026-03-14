@@ -6,10 +6,7 @@ import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
-export const folderSync = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const folderSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderCreated") return ok([]);
 
   const { parent, name } = event;

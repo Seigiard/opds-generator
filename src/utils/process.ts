@@ -3,13 +3,13 @@ import { openSync, closeSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export interface SpawnWithTimeoutOptions {
+interface SpawnWithTimeoutOptions {
   command: string[];
   stdin?: "pipe" | "inherit" | null;
   timeout?: number;
 }
 
-export interface SpawnResult {
+interface SpawnResult {
   stdout: ArrayBuffer;
   exitCode: number;
   timedOut: boolean;

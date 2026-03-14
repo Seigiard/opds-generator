@@ -35,10 +35,7 @@ export interface DeduplicationService {
   shouldProcess(key: string): boolean;
 }
 
-export type AsyncHandler = (
-  event: EventType,
-  deps: HandlerDeps,
-) => Promise<import("neverthrow").Result<readonly EventType[], Error>>;
+type AsyncHandler = (event: EventType, deps: HandlerDeps) => Promise<import("neverthrow").Result<readonly EventType[], Error>>;
 
 export interface HandlerRegistryService {
   get(tag: string): AsyncHandler | undefined;

@@ -42,13 +42,21 @@ const asyncDeps: HandlerDeps = {
   config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
   logger: { info: (tag, msg) => mockLogger.infoCalls.push({ tag, msg }), warn: () => {}, error: () => {}, debug: () => {} },
   fs: {
-    mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
-    rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
+    mkdir: async (path, options) => {
+      mockFs.mkdirCalls.push({ path, options });
+    },
+    rm: async (path, options) => {
+      mockFs.rmCalls.push({ path, options });
+    },
     readdir: async () => [],
     stat: async () => ({ isDirectory: () => false, size: 0 }),
     exists: async () => false,
-    writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
-    atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+    writeFile: async (path, content) => {
+      mockFs.writeCalls.push({ path, content });
+    },
+    atomicWrite: async (path, content) => {
+      mockFs.writeCalls.push({ path, content });
+    },
     symlink: async () => {},
     unlink: async () => {},
   },

@@ -22,14 +22,38 @@ const asyncDeps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
   logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
   fs: {
-    mkdir: async (path, options) => { await mkdir(path, options); },
+    mkdir: async (path, options) => {
+      await mkdir(path, options);
+    },
     rm: (path, options) => rm(path, options),
-    readdir: async (path) => { const fs = await import("node:fs/promises"); return fs.readdir(path); },
-    stat: async (path) => { const s = await stat(path); return { isDirectory: () => s.isDirectory(), size: s.size }; },
-    exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
-    writeFile: async (path, content) => { await Bun.write(path, content); },
-    atomicWrite: async (path, content) => { await Bun.write(path, content); },
-    symlink: async (target, path) => { try { await unlink(path); } catch {} await symlink(target, path); },
+    readdir: async (path) => {
+      const fs = await import("node:fs/promises");
+      return fs.readdir(path);
+    },
+    stat: async (path) => {
+      const s = await stat(path);
+      return { isDirectory: () => s.isDirectory(), size: s.size };
+    },
+    exists: async (path) => {
+      try {
+        await stat(path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writeFile: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    atomicWrite: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    symlink: async (target, path) => {
+      try {
+        await unlink(path);
+      } catch {}
+      await symlink(target, path);
+    },
     unlink: (path) => unlink(path),
   },
 };

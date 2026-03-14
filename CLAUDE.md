@@ -143,14 +143,14 @@ nginx:80 (external)          Bun:3000 (localhost only)
 
 ### DI via AppContext + Pick<>
 
-| Field in AppContext    | Purpose                                |
-| ---------------------- | -------------------------------------- |
-| `config`               | filesPath, dataPath, port, reconcileInterval |
-| `logger`               | info, warn, error, debug (void, fire-and-forget) |
-| `fs`                   | mkdir, rm, readdir, stat, atomicWrite (Promise-based) |
-| `dedup`                | TTL-based (500ms) event filtering (synchronous) |
-| `queue`                | SimpleQueue: enqueue, enqueueMany, take, size |
-| `handlers`             | Map<tag, AsyncHandler>                 |
+| Field in AppContext | Purpose                                               |
+| ------------------- | ----------------------------------------------------- |
+| `config`            | filesPath, dataPath, port, reconcileInterval          |
+| `logger`            | info, warn, error, debug (void, fire-and-forget)      |
+| `fs`                | mkdir, rm, readdir, stat, atomicWrite (Promise-based) |
+| `dedup`             | TTL-based (500ms) event filtering (synchronous)       |
+| `queue`             | SimpleQueue: enqueue, enqueueMany, take, size         |
+| `handlers`          | Map<tag, AsyncHandler>                                |
 
 Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">`.
 

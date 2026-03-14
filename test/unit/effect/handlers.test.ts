@@ -83,15 +83,27 @@ const asyncDeps: HandlerDeps = {
     debug: (tag, msg, ctx) => mockLogger.debugCalls.push({ tag, msg, ctx }),
   },
   fs: {
-    mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
-    rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
+    mkdir: async (path, options) => {
+      mockFs.mkdirCalls.push({ path, options });
+    },
+    rm: async (path, options) => {
+      mockFs.rmCalls.push({ path, options });
+    },
     readdir: async () => [],
     stat: async () => ({ isDirectory: () => false, size: 0 }),
     exists: async () => false,
-    writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
-    atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
-    symlink: async (target, path) => { mockFs.symlinkCalls.push({ target, path }); },
-    unlink: async (path) => { mockFs.unlinkCalls.push(path); },
+    writeFile: async (path, content) => {
+      mockFs.writeCalls.push({ path, content });
+    },
+    atomicWrite: async (path, content) => {
+      mockFs.writeCalls.push({ path, content });
+    },
+    symlink: async (target, path) => {
+      mockFs.symlinkCalls.push({ target, path });
+    },
+    unlink: async (path) => {
+      mockFs.unlinkCalls.push(path);
+    },
   },
 };
 

@@ -68,10 +68,7 @@ const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
 
-export const folderMetaSync = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderMetaSyncRequested") return ok([]);
 
   const folderDataDir = event.path;
@@ -95,11 +92,7 @@ export const folderMetaSync = async (
   return generateFeed(deps, normalizedDir, relativePath);
 };
 
-async function generateFeed(
-  deps: HandlerDeps,
-  normalizedDir: string,
-  relativePath: string,
-): Promise<Result<readonly EventType[], Error>> {
+async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePath: string): Promise<Result<readonly EventType[], Error>> {
   deps.logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
   let folderEntries: EntryWithTitle[];
@@ -128,10 +121,7 @@ async function generateFeed(
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
   const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-  const feed = new Feed(feedId, folderName)
-    .addSelfLink(selfHref, feedKind)
-    .addNavigationLink("start", `/${FEED_FILE}`)
-    .setKind(feedKind);
+  const feed = new Feed(feedId, folderName).addSelfLink(selfHref, feedKind).addNavigationLink("start", `/${FEED_FILE}`).setKind(feedKind);
 
   const feedXml = feed.toXml({ prettyPrint: true });
   const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';

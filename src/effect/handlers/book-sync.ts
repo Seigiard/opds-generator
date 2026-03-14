@@ -47,10 +47,7 @@ async function extractMetadataAndCover(
   }
 }
 
-export const bookSync = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "BookCreated") return ok([]);
 
   const { parent, name } = event;

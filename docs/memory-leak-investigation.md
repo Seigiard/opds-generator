@@ -20,11 +20,11 @@ Effect internal objects (`Type`, `ScheduleImpl`, `AsyncFromSyncIterator`) accumu
 
 Heap snapshot evidence (100 → 5000 events):
 
-| With Effect.gen | With flatMap chains |
-|---|---|
-| Generator: +12221 | Type: +12232 |
-| EmptySet: +1757 | ScheduleImpl: +1787 |
-| DOMImpl: +1718 | AsyncFromSyncIterator: +1764 |
+| With Effect.gen   | With flatMap chains          |
+| ----------------- | ---------------------------- |
+| Generator: +12221 | Type: +12232                 |
+| EmptySet: +1757   | ScheduleImpl: +1787          |
+| DOMImpl: +1718    | AsyncFromSyncIterator: +1764 |
 
 Both approaches leak ~12K objects per 5K events. The leak is in Effect runtime internals, not in the generator/flatMap choice.
 
@@ -32,23 +32,23 @@ Both approaches leak ~12K objects per 5K events. The leak is in Effect runtime i
 
 ## Fixes Applied (commits on main)
 
-| Fix | Impact |
-|---|---|
-| Single magick call for cover+thumbnail | 2x less subprocess spawns |
-| Cover buffer null + Bun.gc(true) after each event | Prevent heap bloat |
-| stdout/stderr: "ignore" for magick | No pipe buffers |
-| stdout/stderr: "ignore" for spawnWithTimeout | No pipe buffers |
-| Eliminate pending Promise in spawnWithTimeout | Remove closure retention |
-| stdout via temp file instead of pipe | **Key fix:** 180 KB/spawn → 0 |
-| fd instead of Bun.file() for stdout | Avoid BunFile object accumulation |
-| unlinkSync instead of async unlink | No floating promises |
-| Cached TextDecoder singleton | Avoid per-call allocation |
-| fs.open for detectArchiveType | Avoid Bun.file().slice().arrayBuffer() |
-| `--smol` flag | More aggressive JSC GC |
-| `MIMALLOC_PURGE_DELAY=0` | Force mimalloc page return |
-| Poll loop in entrypoint.sh | Detect Bun crash (wait -n unsupported in BusyBox) |
-| Consumer: Effect.forever + flatMap | Eliminated outer generator (no improvement in practice) |
-| Handlers: flatMap chains | Eliminated handler generators (no improvement — Type objects replace Generator objects) |
+| Fix                                               | Impact                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Single magick call for cover+thumbnail            | 2x less subprocess spawns                                                               |
+| Cover buffer null + Bun.gc(true) after each event | Prevent heap bloat                                                                      |
+| stdout/stderr: "ignore" for magick                | No pipe buffers                                                                         |
+| stdout/stderr: "ignore" for spawnWithTimeout      | No pipe buffers                                                                         |
+| Eliminate pending Promise in spawnWithTimeout     | Remove closure retention                                                                |
+| stdout via temp file instead of pipe              | **Key fix:** 180 KB/spawn → 0                                                           |
+| fd instead of Bun.file() for stdout               | Avoid BunFile object accumulation                                                       |
+| unlinkSync instead of async unlink                | No floating promises                                                                    |
+| Cached TextDecoder singleton                      | Avoid per-call allocation                                                               |
+| fs.open for detectArchiveType                     | Avoid Bun.file().slice().arrayBuffer()                                                  |
+| `--smol` flag                                     | More aggressive JSC GC                                                                  |
+| `MIMALLOC_PURGE_DELAY=0`                          | Force mimalloc page return                                                              |
+| Poll loop in entrypoint.sh                        | Detect Bun crash (wait -n unsupported in BusyBox)                                       |
+| Consumer: Effect.forever + flatMap                | Eliminated outer generator (no improvement in practice)                                 |
+| Handlers: flatMap chains                          | Eliminated handler generators (no improvement — Type objects replace Generator objects) |
 
 ## Current State (2026-03-14)
 
@@ -64,6 +64,7 @@ Full migration from Effect to neverthrow + vanilla TS async/await.
 Plan: `docs/superpowers/specs/2026-03-14-effect-to-neverthrow-migration-design.md`
 
 This eliminates:
+
 - Effect runtime Type/Primitive object accumulation
 - Effect Queue Deferred/LinkedListNode churn
 - Generator/flatMap overhead entirely
@@ -77,10 +78,10 @@ This eliminates:
 
 ## Key Measurements
 
-| Version | RSS at 5K events | Growth rate |
-|---|---|---|
-| Original (pipe stdout) | 270+ MB (6 books) → OOM | ~180 KB/event |
-| After pipe→file fix | 135 MB | ~5.1 KB/event |
-| After MIMALLOC_PURGE_DELAY=0 | 124 MB | ~3.4 KB/event |
-| After flatMap migration | 141 MB | ~5.4 KB/event |
-| **After neverthrow migration** | **TBD** | **target: 0** |
+| Version                        | RSS at 5K events        | Growth rate   |
+| ------------------------------ | ----------------------- | ------------- |
+| Original (pipe stdout)         | 270+ MB (6 books) → OOM | ~180 KB/event |
+| After pipe→file fix            | 135 MB                  | ~5.1 KB/event |
+| After MIMALLOC_PURGE_DELAY=0   | 124 MB                  | ~3.4 KB/event |
+| After flatMap migration        | 141 MB                  | ~5.4 KB/event |
+| **After neverthrow migration** | **TBD**                 | **target: 0** |
