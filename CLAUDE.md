@@ -1,3 +1,7 @@
+## What This Is
+
+OPDS catalog generator for locally stored ebooks. Watches `/books` directory, extracts metadata from epub/fb2/mobi/pdf/djvu/cbz/txt, generates OPDS 1.2 feeds with covers and thumbnails. Browse in any OPDS-compatible reader.
+
 ## Quick Reference
 
 | Instead of              | Use                         |
@@ -26,7 +30,7 @@ npx knip      # check unused exports/deps
 
 **MANDATORY:** Run `bun run test` and verify 0 failures BEFORE every commit. Never commit untested code. If tests fail — fix first, then commit.
 
-Update `PLAN.md`, `CLAUDE.md`, or `@ARCHITECTURE.md` if architecture changed.
+**MANDATORY:** Update `CLAUDE.md` when changes affect architecture, dependencies, commands, gotchas, or project structure. CLAUDE.md is the single source of truth for project context.
 
 ## Development Workflow
 
@@ -84,7 +88,7 @@ test/
 ├── unit/                # Pure logic, no external deps
 │   ├── utils/
 │   └── effect/handlers/
-├── integration/         # Requires docker (ImageMagick, poppler, etc.)
+├── integration/         # Requires docker (poppler, djvulibre, etc.)
 │   ├── formats/         # Format handler tests
 │   └── effect/          # Queue + cascade flow tests
 └── e2e/                 # Full system tests
@@ -235,11 +239,6 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 
 ## Troubleshooting
 
-### Queue Not Processing Events
-
-Check ManagedRuntime usage — each `Effect.provide()` creates NEW queue instance.
-Always use shared runtime: `const runtime = ManagedRuntime.make(LiveLayer)`
-
 ### Infinite Loop in Watchers
 
 - data watcher excludes `.jsonl` files
@@ -249,7 +248,8 @@ Always use shared runtime: `const runtime = ManagedRuntime.make(LiveLayer)`
 ### Tests Failing
 
 - Always run tests in Docker: `bun run test`
-- Integration tests require ImageMagick, poppler-utils, djvulibre
+- Rebuild Docker image after dependency changes: `bun run rebuild:test`
+- Integration tests require poppler-utils, djvulibre (in Docker image)
 - Check test fixtures exist in test/fixtures/
 
 ### Resync Not Working
