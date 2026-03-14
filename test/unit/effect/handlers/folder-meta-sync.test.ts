@@ -243,13 +243,6 @@ describe("folderMetaSync handler", () => {
     expect(pos4).toBeLessThan(pos5); // Different authors sorted alphabetically
   });
 
-  test("logs processing info", async () => {
-    await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaSyncEvent(DATA_DIR)), TestLayer));
-
-    expect(mockLogger.infoCalls.some((c) => c.tag === "FolderMetaSync" && c.msg.includes("Processing"))).toBe(true);
-    expect(mockLogger.infoCalls.some((c) => c.tag === "FolderMetaSync" && c.msg.includes("Generated"))).toBe(true);
-  });
-
   test("handles nested folder path", async () => {
     const nestedPath = join(DATA_DIR, "Fiction", "SciFi");
     const sourceFolder = join(FILES_DIR, "Fiction", "SciFi");

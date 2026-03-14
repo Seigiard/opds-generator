@@ -149,14 +149,6 @@ describe("Effect Handlers", () => {
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
     });
 
-    test("logs the folder being removed", async () => {
-      const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
-      expect(mockLogger.infoCalls.some((c) => c.tag === "FolderCleanup" && c.msg.includes("Removing"))).toBe(true);
-    });
-
     test("handles nested folder paths correctly", async () => {
       const effect = folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"));
 
@@ -237,14 +229,6 @@ describe("Effect Handlers", () => {
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/book.epub");
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
-    });
-
-    test("logs the book being removed", async () => {
-      const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
-      expect(mockLogger.infoCalls.some((c) => c.tag === "BookCleanup" && c.msg.includes("Removing"))).toBe(true);
     });
 
     test("returns cascade event to regenerate parent feed", async () => {

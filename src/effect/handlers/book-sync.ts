@@ -9,106 +9,110 @@ import { encodeUrlPath, formatFileSize, normalizeFilenameTitle } from "../../uti
 import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
 import type { EventType } from "../types.ts";
 import { ENTRY_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
+import { log } from "../../logging/index.ts";
 
-export const bookSync = (event: EventType): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> =>
-  Effect.gen(function* () {
-    if (event._tag !== "BookCreated") return [];
-    const { parent, name } = event;
-    const config = yield* ConfigService;
-    const logger = yield* LoggerService;
-    const fs = yield* FileSystemService;
+async function extractMetadataAndCover(
+  filePath: string,
+  ext: string,
+  bookDataDir: string,
+): Promise<{ meta: BookMetadata; hasCover: boolean }> {
+  const createHandler = getHandlerFactory(ext);
+  if (!createHandler) return { meta: { title: "" }, hasCover: false };
 
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    const filePath = join(parent, name);
-    const relativePath = relative(config.filesPath, filePath);
-    const bookDataDir = join(config.dataPath, relativePath);
+  try {
+    const handler = await createHandler(filePath);
+    if (!handler) return { meta: { title: "" }, hasCover: false };
 
-    yield* logger.info("BookSync", "Processing", { path: relativePath });
-
-    // Get file stats via DI
-    const fileStat = yield* fs.stat(filePath);
-
-    // Create data directory
-    yield* fs.mkdir(bookDataDir, { recursive: true });
-
-    // Extract metadata
-    const createHandler = getHandlerFactory(ext);
-    const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
-    let title = normalizeFilenameTitle(rawFilename);
-    let author: string | undefined;
-    let description: string | undefined;
+    const meta = handler.getMetadata();
+    let cover = await handler.getCover();
     let hasCover = false;
 
-    let meta: BookMetadata = { title: "" };
-
-    if (createHandler) {
-      const result = yield* Effect.tryPromise({
-        try: async () => {
-          const handler = await createHandler(filePath);
-          if (handler) {
-            const m = handler.getMetadata();
-            const cover = await handler.getCover();
-            return { metadata: m, cover };
-          }
-          return null;
-        },
-        catch: (e) => e as Error,
-      }).pipe(Effect.catchAll(() => Effect.succeed(null)));
-
-      if (result) {
-        meta = result.metadata;
-        if (meta.title) title = meta.title;
-        author = meta.author;
-        description = meta.description;
-
-        if (result.cover) {
-          const coverPath = join(bookDataDir, COVER_FILE);
-          const thumbPath = join(bookDataDir, THUMB_FILE);
-
-          hasCover = yield* Effect.tryPromise({
-            try: () => saveCoverAndThumbnail(result.cover!, coverPath, COVER_MAX_SIZE, thumbPath, THUMBNAIL_MAX_SIZE),
-            catch: (e) => e as Error,
-          }).pipe(Effect.catchAll(() => Effect.succeed(false)));
-
-          (result as { cover: Buffer | null }).cover = null;
-        }
+    if (cover) {
+      try {
+        hasCover = await saveCoverAndThumbnail(
+          cover,
+          join(bookDataDir, COVER_FILE),
+          COVER_MAX_SIZE,
+          join(bookDataDir, THUMB_FILE),
+          THUMBNAIL_MAX_SIZE,
+        );
+      } catch {
+        hasCover = false;
       }
+      cover = null;
     }
 
-    // Build OPDS entry
-    const encodedPath = encodeUrlPath(relativePath);
-    const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
+    return { meta, hasCover };
+  } catch {
+    return { meta: { title: "" }, hasCover: false };
+  }
+}
 
-    const entry = new Entry(`urn:opds:book:${relativePath}`, title);
-    if (author) entry.setAuthor(author);
-    if (description) entry.setSummary(description);
-    entry.setDcMetadataField("format", ext.toUpperCase());
-    entry.setContent({ type: "text", value: formatFileSize(fileStat.size) });
+export const bookSync = (
+  event: EventType,
+): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> => {
+  if (event._tag !== "BookCreated") return Effect.succeed([]);
 
-    if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
-    if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
-    if (meta.language) entry.setDcMetadataField("language", meta.language);
-    if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
-    if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
-    if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
-    if (meta.rights) entry.setRights(meta.rights);
+  return Effect.flatMap(ConfigService, (config) =>
+    Effect.flatMap(FileSystemService, (fs) => {
+      const { parent, name } = event;
+      const ext = name.split(".").pop()?.toLowerCase() ?? "";
+      const filePath = join(parent, name);
+      const relativePath = relative(config.filesPath, filePath);
+      const bookDataDir = join(config.dataPath, relativePath);
 
-    if (hasCover) {
-      entry.addImage(`/${encodedPath}/cover.jpg`);
-      entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
-    }
+      log.info("BookSync", "Processing", { path: relativePath });
 
-    const encodedFilename = encodeURIComponent(name);
-    entry.addAcquisition(`/${encodedPath}/${encodedFilename}`, mimeType, "open-access");
+      return fs.stat(filePath).pipe(
+        Effect.flatMap((fileStat) =>
+          fs.mkdir(bookDataDir, { recursive: true }).pipe(
+            Effect.flatMap(() =>
+              Effect.tryPromise({
+                try: () => extractMetadataAndCover(filePath, ext, bookDataDir),
+                catch: (e) => e as Error,
+              }).pipe(Effect.catchAll(() => Effect.succeed({ meta: { title: "" } as BookMetadata, hasCover: false }))),
+            ),
+            Effect.flatMap(({ meta, hasCover }) => {
+              const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
+              const title = meta.title || normalizeFilenameTitle(rawFilename);
+              const encodedPath = encodeUrlPath(relativePath);
+              const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
 
-    // Write entry.xml (atomic)
-    const entryXml = entry.toXml({ prettyPrint: true });
-    yield* fs.atomicWrite(join(bookDataDir, ENTRY_FILE), entryXml);
+              const entry = new Entry(`urn:opds:book:${relativePath}`, title);
+              if (meta.author) entry.setAuthor(meta.author);
+              if (meta.description) entry.setSummary(meta.description);
+              entry.setDcMetadataField("format", ext.toUpperCase());
+              entry.setContent({ type: "text", value: formatFileSize(fileStat.size) });
 
-    // Create symlink to original file (using original filename for correct download name)
-    yield* fs.symlink(filePath, join(bookDataDir, name));
+              if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
+              if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
+              if (meta.language) entry.setDcMetadataField("language", meta.language);
+              if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
+              if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
+              if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
+              if (meta.rights) entry.setRights(meta.rights);
 
-    yield* logger.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
+              if (hasCover) {
+                entry.addImage(`/${encodedPath}/cover.jpg`);
+                entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
+              }
 
-    return [];
-  });
+              const encodedFilename = encodeURIComponent(name);
+              entry.addAcquisition(`/${encodedPath}/${encodedFilename}`, mimeType, "open-access");
+
+              const entryXml = entry.toXml({ prettyPrint: true });
+
+              return fs.atomicWrite(join(bookDataDir, ENTRY_FILE), entryXml).pipe(
+                Effect.flatMap(() => fs.symlink(filePath, join(bookDataDir, name))),
+                Effect.map(() => {
+                  log.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
+                  return [] as const;
+                }),
+              );
+            }),
+          ),
+        ),
+      );
+    }),
+  );
+};

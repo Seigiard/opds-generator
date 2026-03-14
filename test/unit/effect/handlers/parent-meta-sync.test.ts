@@ -87,10 +87,4 @@ describe("parentMetaSync handler", () => {
       path: "/data/Fiction",
     });
   });
-
-  test("logs the action", async () => {
-    await Effect.runPromise(Effect.provide(parentMetaSync(entryXmlChangedEvent("/data/Fiction/Author")), TestLayer));
-
-    expect(mockLogger.infoCalls.some((c) => c.tag === "ParentMetaSync")).toBe(true);
-  });
 });

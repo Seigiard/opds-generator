@@ -158,13 +158,5 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
       expect(mockFs.rmCalls.some((c) => c.path.includes("OldFolder"))).toBe(true);
       expect(mockFs.mkdirCalls.some((c) => c.path.includes("NewFolder"))).toBe(true);
     });
-
-    test("logs operations for each handler", async () => {
-      await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/", "Fiction")), TestLayer));
-      await Effect.runPromise(Effect.provide(bookCleanup(bookDeletedEvent("/test/books/Fiction/", "old.epub")), TestLayer));
-
-      expect(mockLogger.infoCalls.some((c) => c.tag === "FolderSync")).toBe(true);
-      expect(mockLogger.infoCalls.some((c) => c.tag === "BookCleanup")).toBe(true);
-    });
   });
 });

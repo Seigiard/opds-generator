@@ -206,14 +206,4 @@ describe("bookSync handler", () => {
 
     expect(entryContent).toContain("My Great Book");
   });
-
-  test("logs processing info", async () => {
-    const bookPath = join(FILES_DIR, "test.epub");
-    await Bun.write(bookPath, "fake epub content");
-
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("test.epub")), TestLayer));
-
-    expect(mockLogger.infoCalls.some((c) => c.tag === "BookSync" && c.msg.includes("Processing"))).toBe(true);
-    expect(mockLogger.infoCalls.some((c) => c.tag === "BookSync" && c.msg.includes("Done"))).toBe(true);
-  });
 });

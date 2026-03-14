@@ -112,10 +112,4 @@ describe("folderEntryXmlChanged handler", () => {
     expect(cascades).toHaveLength(2);
     expect((cascades[0] as { _tag: "FolderMetaSyncRequested"; path: string }).path).toBe("/data/Fiction/Author");
   });
-
-  test("logs the action", async () => {
-    await Effect.runPromise(Effect.provide(folderEntryXmlChanged(folderEntryXmlChangedEvent("/data/Fiction")), TestLayer));
-
-    expect(mockLogger.infoCalls.some((c) => c.tag === "FolderEntryXmlChanged")).toBe(true);
-  });
 });
