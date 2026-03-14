@@ -102,10 +102,11 @@ src/
 ├── scanner.ts       # File scanning, sync planning
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS)
 ├── watcher.sh       # inotifywait → POST /events
-├── effect/          # EffectTS event handling
+├── context.ts       # AppContext, HandlerDeps, buildContext()
+├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
+├── effect/          # Event handling (neverthrow + async/await)
 │   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
-│   ├── services.ts  # DI services
-│   ├── consumer.ts  # Event loop
+│   ├── consumer.ts  # Event loop (AbortController-based)
 │   ├── adapters/    # Raw → typed event conversion
 │   │   ├── books-adapter.ts    # /books watcher events
 │   │   ├── data-adapter.ts     # /data watcher events
@@ -133,58 +134,53 @@ nginx:80 (external)          Bun:3000 (localhost only)
 └── /* → /data/*
 ```
 
-## Architecture: EffectTS Layers
+## Architecture: Event Processing
 
 1. **Adapters** (`adapters/*.ts`) — raw inotify → typed EventType
-2. **Queue** (`EventQueueService`) — typed events only
-3. **Consumer** (`consumer.ts`) — gets handler via `HandlerRegistry.get()`
-4. **Handlers** (`handlers/*.ts`) — return `EventType[]` for cascades
+2. **Queue** (`SimpleQueue<EventType>`) — plain array + Promise waiters
+3. **Consumer** (`consumer.ts`) — `while (!signal.aborted)` loop with `queue.take(signal)`
+4. **Handlers** (`handlers/*.ts`) — return `Result<EventType[], Error>` for cascades
 
-### DI Services
+### DI via AppContext + Pick<>
 
-| Service                | Purpose                                |
+| Field in AppContext    | Purpose                                |
 | ---------------------- | -------------------------------------- |
-| `ConfigService`        | filesPath, dataPath, baseUrl, port     |
-| `LoggerService`        | info, warn, error, debug (JSON stdout) |
-| `FileSystemService`    | mkdir, rm, readdir, stat, atomicWrite  |
-| `DeduplicationService` | TTL-based (500ms) event filtering      |
-| `EventQueueService`    | enqueue, enqueueMany, size, take       |
-| `HandlerRegistry`      | Map<tag, handler>                      |
+| `config`               | filesPath, dataPath, port, reconcileInterval |
+| `logger`               | info, warn, error, debug (void, fire-and-forget) |
+| `fs`                   | mkdir, rm, readdir, stat, atomicWrite (Promise-based) |
+| `dedup`                | TTL-based (500ms) event filtering (synchronous) |
+| `queue`                | SimpleQueue: enqueue, enqueueMany, take, size |
+| `handlers`             | Map<tag, AsyncHandler>                 |
+
+Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">`.
 
 ### Key Patterns
 
-**Cascade events** — handlers return events, don't call each other:
+**Cascade events** — handlers return events via neverthrow:
 
 ```typescript
-return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }];
+return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }]);
 ```
 
-**Flag cleanup** — use `Effect.ensuring`:
+**Flag cleanup** — use `try/finally`:
 
 ```typescript
-Effect.gen(function* () {
-  isSyncing = true;
-  yield* doWork;
-}).pipe(
-  Effect.ensuring(
-    Effect.sync(() => {
-      isSyncing = false;
-    }),
-  ),
-);
+isSyncing = true;
+try {
+  await doWork();
+} finally {
+  isSyncing = false;
+}
 ```
 
-**ManagedRuntime** — share single Layer instance across all Effect calls:
+**Graceful shutdown** — AbortController:
 
 ```typescript
-// ✅ Correct: single runtime, shared queue
-const runtime = ManagedRuntime.make(LiveLayer);
-await runtime.runPromise(effect1);
-await runtime.runPromise(effect2); // same queue instance
-
-// ❌ Wrong: each provide creates NEW queue instance
-await Effect.runPromise(Effect.provide(effect1, LiveLayer));
-await Effect.runPromise(Effect.provide(effect2, LiveLayer)); // different queue!
+const controller = new AbortController();
+const consumerTask = startConsumer(ctx, controller.signal);
+// ...
+controller.abort();
+await Promise.allSettled([consumerTask, reconcileTask]);
 ```
 
 **Mirror structure** — /data mirrors /books:
