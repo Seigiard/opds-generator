@@ -4,6 +4,7 @@ import { ConfigService, LoggerService, FileSystemService } from "../../../src/ef
 import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
+import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
 
@@ -159,64 +160,69 @@ describe("Effect Handlers", () => {
   });
 
   describe("folderSync", () => {
+    const asyncDeps: HandlerDeps = {
+      config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
+      logger: {
+        info: (tag, msg, ctx) => mockLogger.infoCalls.push({ tag, msg, ctx }),
+        warn: (tag, msg, ctx) => mockLogger.warnCalls.push({ tag, msg, ctx }),
+        error: (tag, msg, error) => mockLogger.errorCalls.push({ tag, msg, error }),
+        debug: (tag, msg, ctx) => mockLogger.debugCalls.push({ tag, msg, ctx }),
+      },
+      fs: {
+        mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
+        rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
+        readdir: async () => [],
+        stat: async () => ({ isDirectory: () => false, size: 0 }),
+        exists: async () => false,
+        writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+        atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+        symlink: async (target, path) => { mockFs.symlinkCalls.push({ target, path }); },
+        unlink: async (path) => { mockFs.unlinkCalls.push(path); },
+      },
+    };
+
     test("creates data directory for new folder", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction")).toBe(true);
     });
 
     test("creates _entry.xml for non-root folders", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeDefined();
       expect(entryWrite?.content).toContain("<entry");
     });
 
     test("does not create _entry.xml for root folder", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", ""));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", ""), asyncDeps);
+      expect(result.isOk()).toBe(true);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeUndefined();
     });
 
     test("includes subsection link in _entry.xml", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite?.content).toContain("Fiction/feed.xml");
     });
 
     test("returns cascade event to generate root feed.xml", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", ""));
-
-      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", ""), asyncDeps);
+      expect(result.isOk()).toBe(true);
+      const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({
-        _tag: "FolderMetaSyncRequested",
-        path: "/test/data",
-      });
+      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data" });
     });
 
     test("returns cascade event to generate folder feed.xml", async () => {
-      const effect = folderSync(folderCreatedEvent("/test/books/", "Fiction"));
-
-      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      expect(result.isOk()).toBe(true);
+      const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({
-        _tag: "FolderMetaSyncRequested",
-        path: "/test/data/Fiction",
-      });
+      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
   });
 

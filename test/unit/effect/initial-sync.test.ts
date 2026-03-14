@@ -4,6 +4,7 @@ import { ConfigService, LoggerService, FileSystemService } from "../../../src/ef
 import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
 import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
 import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
+import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
 
 interface MockFs {
@@ -81,7 +82,22 @@ const TestFileSystemService = Layer.succeed(FileSystemService, {
 
 const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, TestFileSystemService);
 
-// Helper to create events
+const asyncDeps: HandlerDeps = {
+  config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
+  logger: { info: (tag, msg) => mockLogger.infoCalls.push({ tag, msg }), warn: () => {}, error: () => {}, debug: () => {} },
+  fs: {
+    mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
+    rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
+    readdir: async () => [],
+    stat: async () => ({ isDirectory: () => false, size: 0 }),
+    exists: async () => false,
+    writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+    atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+    symlink: async () => {},
+    unlink: async () => {},
+  },
+};
+
 const folderCreatedEvent = (parent: string, name: string): EventType => ({
   _tag: "FolderCreated",
   parent,
@@ -108,19 +124,19 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
   describe("folderSync during initial sync", () => {
     test("creates folder data directory", async () => {
-      await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/", "Fiction")), TestLayer));
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction")).toBe(true);
     });
 
     test("generates _entry.xml for folder", async () => {
-      await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/", "Fiction")), TestLayer));
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeDefined();
       expect(entryWrite?.content).toContain("<entry");
     });
 
     test("processes nested folder paths correctly", async () => {
-      await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/Fiction/", "SciFi")), TestLayer));
+      await folderSync(folderCreatedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction/SciFi")).toBe(true);
     });
   });
@@ -145,7 +161,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
     test("processes multiple folders sequentially", async () => {
       const folders = ["Fiction", "NonFiction", "Comics"];
       for (const folder of folders) {
-        await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/", folder)), TestLayer));
+        await folderSync(folderCreatedEvent("/test/books/", folder), asyncDeps);
       }
       const entryWrites = mockFs.writeCalls.filter((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrites).toHaveLength(3);
@@ -153,7 +169,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
     test("cleanup then create for folder replacement", async () => {
       await Effect.runPromise(Effect.provide(folderCleanup(folderDeletedEvent("/test/books/", "OldFolder")), TestLayer));
-      await Effect.runPromise(Effect.provide(folderSync(folderCreatedEvent("/test/books/", "NewFolder")), TestLayer));
+      await folderSync(folderCreatedEvent("/test/books/", "NewFolder"), asyncDeps);
 
       expect(mockFs.rmCalls.some((c) => c.path.includes("OldFolder"))).toBe(true);
       expect(mockFs.mkdirCalls.some((c) => c.path.includes("NewFolder"))).toBe(true);

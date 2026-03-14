@@ -13,7 +13,7 @@ export const registerHandlers = Effect.gen(function* () {
 
   registry.registerEffect("BookCreated", bookSync);
   registry.registerEffect("BookDeleted", bookCleanup);
-  registry.registerEffect("FolderCreated", folderSync);
+  registry.registerAsync("FolderCreated", folderSync);
   registry.registerEffect("FolderDeleted", folderCleanup);
   registry.registerAsync("EntryXmlChanged", parentMetaSync);
   registry.registerAsync("FolderEntryXmlChanged", folderEntryXmlChanged);

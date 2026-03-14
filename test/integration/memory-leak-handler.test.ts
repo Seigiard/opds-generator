@@ -4,10 +4,11 @@ import { ConfigService, LoggerService, FileSystemService } from "../../src/effec
 import { bookSync } from "../../src/effect/handlers/book-sync.ts";
 import { folderSync } from "../../src/effect/handlers/folder-sync.ts";
 import { folderMetaSync } from "../../src/effect/handlers/folder-meta-sync.ts";
+import type { HandlerDeps } from "../../src/context.ts";
 import type { EventType } from "../../src/effect/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm, stat, rename, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-memleak-handler-${Date.now()}`);
 const FILES_DIR = join(TEST_DIR, "files");
@@ -73,6 +74,22 @@ const RealFileSystemService = Layer.succeed(FileSystemService, {
 
 const TestLayer = Layer.mergeAll(TestConfigService, SilentLoggerService, RealFileSystemService);
 
+const asyncDeps: HandlerDeps = {
+  config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
+  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+  fs: {
+    mkdir: async (path, options) => { await mkdir(path, options); },
+    rm: (path, options) => rm(path, options),
+    readdir: async (path) => { const fs = await import("node:fs/promises"); return fs.readdir(path); },
+    stat: async (path) => { const s = await stat(path); return { isDirectory: () => s.isDirectory(), size: s.size }; },
+    exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
+    writeFile: async (path, content) => { await Bun.write(path, content); },
+    atomicWrite: async (path, content) => { await Bun.write(path, content); },
+    symlink: async (target, path) => { try { await unlink(path); } catch {} await symlink(target, path); },
+    unlink: (path) => unlink(path),
+  },
+};
+
 function getRssMb(): number {
   return process.memoryUsage().rss / 1024 / 1024;
 }
@@ -93,7 +110,7 @@ async function processOneBook(folderName: string, bookFile: string): Promise<voi
   await Bun.write(destPath, content);
 
   const folderEvent: EventType = { _tag: "FolderCreated", parent: FILES_DIR, name: folderName };
-  await Effect.runPromise(Effect.provide(folderSync(folderEvent), TestLayer));
+  await folderSync(folderEvent, asyncDeps);
 
   const bookEvent: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
   await Effect.runPromise(Effect.provide(bookSync(bookEvent), TestLayer));

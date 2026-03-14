@@ -1,47 +1,42 @@
-import { Effect } from "effect";
+import { ok, err, type Result } from "neverthrow";
 import { join, relative, basename } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { encodeUrlPath, normalizeFilenameTitle } from "../../utils/processor.ts";
-import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
-import { log } from "../../logging/index.ts";
 
-export const folderSync = (
+export const folderSync = async (
   event: EventType,
-): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> => {
-  if (event._tag !== "FolderCreated") return Effect.succeed([]);
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
+  if (event._tag !== "FolderCreated") return ok([]);
 
-  return Effect.flatMap(ConfigService, (config) =>
-    Effect.flatMap(FileSystemService, (fs) => {
-      const { parent, name } = event;
-      const folderPath = join(parent, name);
-      const relativePath = relative(config.filesPath, folderPath);
-      const folderDataDir = join(config.dataPath, relativePath);
+  const { parent, name } = event;
+  const folderPath = join(parent, name);
+  const relativePath = relative(deps.config.filesPath, folderPath);
+  const folderDataDir = join(deps.config.dataPath, relativePath);
 
-      log.info("FolderSync", "Processing", { path: relativePath || "(root)" });
+  deps.logger.info("FolderSync", "Processing", { path: relativePath || "(root)" });
 
-      const createDir = fs.mkdir(folderDataDir, { recursive: true });
+  try {
+    await deps.fs.mkdir(folderDataDir, { recursive: true });
 
-      if (relativePath === "") {
-        return Effect.flatMap(createDir, () => {
-          log.info("FolderSync", "Root folder - no _entry.xml needed");
-          return Effect.succeed([{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const);
-        });
-      }
+    if (relativePath === "") {
+      deps.logger.info("FolderSync", "Root folder - no _entry.xml needed");
+      return ok([{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const);
+    }
 
-      const folderName = normalizeFilenameTitle(basename(relativePath));
-      const selfHref = `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
-      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
-      const entryXml = entry.toXml({ prettyPrint: true });
+    const folderName = normalizeFilenameTitle(basename(relativePath));
+    const selfHref = `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+    const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
+    const entryXml = entry.toXml({ prettyPrint: true });
 
-      return createDir.pipe(
-        Effect.flatMap(() => fs.atomicWrite(join(folderDataDir, FOLDER_ENTRY_FILE), entryXml)),
-        Effect.map(() => {
-          log.info("FolderSync", "Done", { path: relativePath });
-          return [{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const;
-        }),
-      );
-    }),
-  );
+    await deps.fs.atomicWrite(join(folderDataDir, FOLDER_ENTRY_FILE), entryXml);
+
+    deps.logger.info("FolderSync", "Done", { path: relativePath });
+    return ok([{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
 };
