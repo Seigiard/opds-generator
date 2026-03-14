@@ -1,5 +1,5 @@
 import { createExtractorFromFile } from "node-unrar-js";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnWithTimeout, spawnWithTimeoutText } from "./process.ts";
@@ -15,9 +15,11 @@ const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
 const USTAR_MAGIC = [0x75, 0x73, 0x74, 0x61, 0x72]; // "ustar"
 
 async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
+  let fh;
   try {
-    const file = Bun.file(filePath);
-    const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    fh = await open(filePath, "r");
+    const header = new Uint8Array(8);
+    await fh.read(header, 0, 8, 0);
 
     for (const [type, magic] of Object.entries(MAGIC_BYTES) as [Exclude<ArchiveType, "tar">, number[]][]) {
       if (magic.every((byte, i) => header[i] === byte)) {
@@ -25,7 +27,8 @@ async function detectArchiveType(filePath: string): Promise<ArchiveType | null> 
       }
     }
 
-    const tarHeader = new Uint8Array(await file.slice(257, 262).arrayBuffer());
+    const tarHeader = new Uint8Array(5);
+    await fh.read(tarHeader, 0, 5, 257);
     if (USTAR_MAGIC.every((byte, i) => tarHeader[i] === byte)) {
       return "tar";
     }
@@ -33,6 +36,8 @@ async function detectArchiveType(filePath: string): Promise<ArchiveType | null> 
     return null;
   } catch {
     return null;
+  } finally {
+    await fh?.close();
   }
 }
 
