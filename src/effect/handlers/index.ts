@@ -11,7 +11,7 @@ import { folderEntryXmlChanged } from "./folder-entry-xml-changed.ts";
 export const registerHandlers = Effect.gen(function* () {
   const registry = yield* HandlerRegistry;
 
-  registry.registerEffect("BookCreated", bookSync);
+  registry.registerAsync("BookCreated", bookSync);
   registry.registerAsync("BookDeleted", bookCleanup);
   registry.registerAsync("FolderCreated", folderSync);
   registry.registerAsync("FolderDeleted", folderCleanup);

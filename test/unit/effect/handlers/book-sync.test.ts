@@ -1,79 +1,31 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { Effect, Layer } from "effect";
-import { ConfigService, LoggerService, FileSystemService } from "../../../../src/effect/services.ts";
 import { bookSync } from "../../../../src/effect/handlers/book-sync.ts";
+import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
-import type { LogContext } from "../../../../src/logging/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, readdir, stat, readFile, lstat } from "node:fs/promises";
+import { mkdir, rm, readdir, stat, readFile, lstat, rename, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-book-sync-test-${Date.now()}`);
 const FILES_DIR = join(TEST_DIR, "files");
 const DATA_DIR = join(TEST_DIR, "data");
 const FIXTURES_DIR = join(import.meta.dir, "../../../../files/test");
 
-const mockLogger = {
-  infoCalls: [] as Array<{ tag: string; msg: string; ctx?: LogContext }>,
-  warnCalls: [] as Array<{ tag: string; msg: string }>,
-  reset() {
-    this.infoCalls = [];
-    this.warnCalls = [];
+const deps: HandlerDeps = {
+  config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
+  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+  fs: {
+    mkdir: async (path, options) => { await mkdir(path, options); },
+    rm: (path, options) => rm(path, options),
+    readdir: (path) => readdir(path),
+    stat: async (path) => { const s = await stat(path); return { isDirectory: () => s.isDirectory(), size: s.size }; },
+    exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
+    writeFile: async (path, content) => { await Bun.write(path, content); },
+    atomicWrite: async (path, content) => { await Bun.write(path, content); },
+    symlink: async (target, path) => { try { await unlink(path); } catch {} await symlink(target, path); },
+    unlink: (path) => unlink(path),
   },
 };
-
-const TestConfigService = Layer.succeed(ConfigService, {
-  filesPath: FILES_DIR,
-  dataPath: DATA_DIR,
-  port: 3000,
-});
-
-const TestLoggerService = Layer.succeed(LoggerService, {
-  info: (tag, msg, ctx) =>
-    Effect.sync(() => {
-      mockLogger.infoCalls.push({ tag, msg, ctx });
-    }),
-  warn: (tag, msg) =>
-    Effect.sync(() => {
-      mockLogger.warnCalls.push({ tag, msg });
-    }),
-  error: () => Effect.void,
-  debug: () => Effect.void,
-});
-
-const RealFileSystemService = Layer.succeed(FileSystemService, {
-  mkdir: (path, options) => Effect.promise(() => mkdir(path, options)),
-  rm: (path, options) => Effect.promise(() => rm(path, options)),
-  readdir: (path) => Effect.promise(() => readdir(path)),
-  stat: (path) =>
-    Effect.promise(async () => {
-      const s = await stat(path);
-      return { isDirectory: () => s.isDirectory(), size: s.size };
-    }),
-  exists: (path) =>
-    Effect.promise(async () => {
-      try {
-        await stat(path);
-        return true;
-      } catch {
-        return false;
-      }
-    }),
-  writeFile: (path, content) => Effect.promise(() => Bun.write(path, content)),
-  atomicWrite: (path, content) => Effect.promise(() => Bun.write(path, content)),
-  symlink: (target, path) =>
-    Effect.promise(async () => {
-      const fs = await import("node:fs/promises");
-      await fs.symlink(target, path);
-    }),
-  unlink: (path) =>
-    Effect.promise(async () => {
-      const fs = await import("node:fs/promises");
-      await fs.unlink(path);
-    }),
-});
-
-const TestLayer = Layer.mergeAll(TestConfigService, TestLoggerService, RealFileSystemService);
 
 const bookCreatedEvent = (relativePath: string): EventType => {
   const parts = relativePath.split("/");
@@ -84,7 +36,6 @@ const bookCreatedEvent = (relativePath: string): EventType => {
 
 describe("bookSync handler", () => {
   beforeEach(async () => {
-    mockLogger.reset();
     await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(FILES_DIR, { recursive: true });
     await mkdir(DATA_DIR, { recursive: true });
@@ -96,21 +47,19 @@ describe("bookSync handler", () => {
 
   test("returns empty array for non-BookCreated events", async () => {
     const event: EventType = { _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" };
-    const cascades = await Effect.runPromise(Effect.provide(bookSync(event), TestLayer));
-
-    expect(cascades).toEqual([]);
+    const result = await bookSync(event, deps);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual([]);
   });
 
   test("creates data directory for book", async () => {
     const bookPath = join(FILES_DIR, "test.epub");
     await Bun.write(bookPath, "fake epub content");
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("test.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("test.epub"), deps);
 
     const dataDir = join(DATA_DIR, "test.epub");
-    const exists = await stat(dataDir)
-      .then(() => true)
-      .catch(() => false);
+    const exists = await stat(dataDir).then(() => true).catch(() => false);
     expect(exists).toBe(true);
   });
 
@@ -118,11 +67,10 @@ describe("bookSync handler", () => {
     const bookPath = join(FILES_DIR, "test.epub");
     await Bun.write(bookPath, "fake epub content");
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("test.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("test.epub"), deps);
 
     const entryPath = join(DATA_DIR, "test.epub", "entry.xml");
     const entryContent = await readFile(entryPath, "utf-8");
-
     expect(entryContent).toContain("<entry");
     expect(entryContent).toContain("test");
     expect(entryContent).toContain("urn:opds:book:");
@@ -132,7 +80,7 @@ describe("bookSync handler", () => {
     const bookPath = join(FILES_DIR, "test.epub");
     await Bun.write(bookPath, "fake epub content");
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("test.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("test.epub"), deps);
 
     const symlinkPath = join(DATA_DIR, "test.epub", "test.epub");
     const linkStat = await lstat(symlinkPath);
@@ -142,16 +90,14 @@ describe("bookSync handler", () => {
   test("extracts metadata from real EPUB", async () => {
     const realEpubPath = join(FIXTURES_DIR, "Test Book - Test Author.epub");
     const testBookPath = join(FILES_DIR, "Test Book - Test Author.epub");
-
-    await mkdir(join(FILES_DIR), { recursive: true });
+    await mkdir(FILES_DIR, { recursive: true });
     const epubContent = await Bun.file(realEpubPath).arrayBuffer();
     await Bun.write(testBookPath, epubContent);
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("Test Book - Test Author.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("Test Book - Test Author.epub"), deps);
 
     const entryPath = join(DATA_DIR, "Test Book - Test Author.epub", "entry.xml");
     const entryContent = await readFile(entryPath, "utf-8");
-
     expect(entryContent).toContain("Test Book");
     expect(entryContent).toContain("Test Author");
   });
@@ -159,23 +105,16 @@ describe("bookSync handler", () => {
   test("extracts cover from real EPUB", async () => {
     const realEpubPath = join(FIXTURES_DIR, "Test Book - Test Author.epub");
     const testBookPath = join(FILES_DIR, "Test Book - Test Author.epub");
-
-    await mkdir(join(FILES_DIR), { recursive: true });
+    await mkdir(FILES_DIR, { recursive: true });
     const epubContent = await Bun.file(realEpubPath).arrayBuffer();
     await Bun.write(testBookPath, epubContent);
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("Test Book - Test Author.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("Test Book - Test Author.epub"), deps);
 
     const coverPath = join(DATA_DIR, "Test Book - Test Author.epub", "cover.jpg");
     const thumbPath = join(DATA_DIR, "Test Book - Test Author.epub", "thumb.jpg");
-
-    const coverExists = await stat(coverPath)
-      .then(() => true)
-      .catch(() => false);
-    const thumbExists = await stat(thumbPath)
-      .then(() => true)
-      .catch(() => false);
-
+    const coverExists = await stat(coverPath).then(() => true).catch(() => false);
+    const thumbExists = await stat(thumbPath).then(() => true).catch(() => false);
     expect(coverExists).toBe(true);
     expect(thumbExists).toBe(true);
   });
@@ -186,12 +125,10 @@ describe("bookSync handler", () => {
     const bookPath = join(nestedPath, "book.epub");
     await Bun.write(bookPath, "fake epub content");
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("Fiction/Author/book.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("Fiction/Author/book.epub"), deps);
 
     const dataDir = join(DATA_DIR, "Fiction", "Author", "book.epub");
-    const exists = await stat(dataDir)
-      .then(() => true)
-      .catch(() => false);
+    const exists = await stat(dataDir).then(() => true).catch(() => false);
     expect(exists).toBe(true);
   });
 
@@ -199,11 +136,10 @@ describe("bookSync handler", () => {
     const bookPath = join(FILES_DIR, "My_Great_Book.epub");
     await Bun.write(bookPath, "fake epub content");
 
-    await Effect.runPromise(Effect.provide(bookSync(bookCreatedEvent("My_Great_Book.epub")), TestLayer));
+    await bookSync(bookCreatedEvent("My_Great_Book.epub"), deps);
 
     const entryPath = join(DATA_DIR, "My_Great_Book.epub", "entry.xml");
     const entryContent = await readFile(entryPath, "utf-8");
-
     expect(entryContent).toContain("My Great Book");
   });
 });

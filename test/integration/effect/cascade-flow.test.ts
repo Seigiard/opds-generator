@@ -143,7 +143,7 @@ describe("Cascade Flow Integration", () => {
 
     // Step 4: Process book creation event
     const bookEvent: EventType = { _tag: "BookCreated", parent: fictionPath, name: "Test Book - Test Author.epub" };
-    await Effect.runPromise(Effect.provide(bookSync(bookEvent), TestLayer));
+    await bookSync(bookEvent, asyncDeps);
 
     // Verify book data directory created with entry.xml, cover, symlink
     const bookDataPath = join(DATA_DIR, "Fiction", "Test Book - Test Author.epub");
@@ -208,7 +208,7 @@ describe("Cascade Flow Integration", () => {
     await folderSync(folderEvent, asyncDeps);
 
     const bookEvent: EventType = { _tag: "BookCreated", parent: authorPath, name: "Test Book - Test Author.epub" };
-    await Effect.runPromise(Effect.provide(bookSync(bookEvent), TestLayer));
+    await bookSync(bookEvent, asyncDeps);
 
     const folderMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: join(DATA_DIR, "Author") };
     await folderMetaSync(folderMetaEvent, asyncDeps);

@@ -113,7 +113,7 @@ async function processOneBook(folderName: string, bookFile: string): Promise<voi
   await folderSync(folderEvent, asyncDeps);
 
   const bookEvent: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
-  await Effect.runPromise(Effect.provide(bookSync(bookEvent), TestLayer));
+  await bookSync(bookEvent, asyncDeps);
 
   const folderDataPath = join(DATA_DIR, folderName);
   const metaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: folderDataPath };
