@@ -1,9 +1,7 @@
-import { Effect } from "effect";
 import { heapStats } from "bun:jsc";
 import { log } from "../logging/index.ts";
+import type { AppContext } from "../context.ts";
 import type { EventType } from "./types.ts";
-import { EventQueueService, HandlerRegistry, LoggerService } from "./services.ts";
-import { buildHandlerDeps } from "./handler-deps.ts";
 
 function generateEventId(event: EventType, path: string | undefined): string {
   const timestamp = Date.now();
@@ -18,84 +16,9 @@ function getEventPath(event: EventType): string | undefined {
   return undefined;
 }
 
-const processEvent = (event: EventType) =>
-  Effect.flatMap(EventQueueService, (queue) =>
-    Effect.flatMap(HandlerRegistry, (registry) =>
-      Effect.flatMap(LoggerService, (logger) => {
-        const path = getEventPath(event);
-        const eventId = generateEventId(event, path);
-        const startTime = Date.now();
-
-        log.info("Consumer", "Handler started", {
-          event_type: "handler_start",
-          event_id: eventId,
-          event_tag: event._tag,
-          path,
-        });
-
-        const unified = registry.get(event._tag);
-        if (!unified) {
-          return logger.warn("Consumer", "No handler found", { event_tag: event._tag });
-        }
-
-        const handlerEffect =
-          unified.kind === "effect"
-            ? unified.handler(event)
-            : Effect.tryPromise({
-                try: () => unified.handler(event, buildHandlerDeps()),
-                catch: (e) => e as Error,
-              }).pipe(
-                Effect.flatMap((result) =>
-                  result.isOk() ? Effect.succeed(result.value) : Effect.fail(result.error),
-                ),
-              );
-
-        return handlerEffect.pipe(
-          Effect.map((cascades) => ({ ok: true as const, cascades })),
-          Effect.catchAll((error) => {
-            const duration = Date.now() - startTime;
-            log.error("Consumer", "Handler failed", error, {
-              event_type: "handler_error",
-              event_id: eventId,
-              event_tag: event._tag,
-              path,
-              duration_ms: duration,
-            });
-            return Effect.succeed({ ok: false as const, cascades: [] as readonly EventType[] });
-          }),
-          Effect.flatMap((result) => {
-            const duration = Date.now() - startTime;
-
-            log.info("Consumer", "Handler completed", {
-              event_type: "handler_complete",
-              event_id: eventId,
-              event_tag: event._tag,
-              path,
-              duration_ms: duration,
-              cascade_count: result.cascades.length,
-            });
-
-            if (result.ok && result.cascades.length > 0) {
-              log.info("Consumer", "Cascades generated", {
-                event_type: "cascades_generated",
-                event_id: eventId,
-                event_tag: event._tag,
-                path,
-                cascade_count: result.cascades.length,
-                cascade_tags: result.cascades.map((e) => e._tag),
-              });
-              return queue.enqueueMany(result.cascades);
-            }
-            return Effect.void;
-          }),
-        );
-      }),
-    ),
-  );
-
 let eventCounter = 0;
 
-const logMemorySnapshot = Effect.sync(() => {
+function logMemorySnapshot(): void {
   eventCounter++;
   Bun.gc(true);
 
@@ -131,16 +54,80 @@ const logMemorySnapshot = Effect.sync(() => {
       ),
     } as any);
   }
-});
+}
 
-export const startConsumer = Effect.flatMap(LoggerService, (logger) =>
-  Effect.flatMap(logger.info("Consumer", "Started processing events"), () =>
-    Effect.flatMap(EventQueueService, (queue) =>
-      queue.take().pipe(
-        Effect.flatMap(processEvent),
-        Effect.flatMap(() => logMemorySnapshot),
-        Effect.forever,
-      ),
-    ),
-  ),
-);
+export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promise<void> {
+  ctx.logger.info("Consumer", "Started processing events");
+
+  while (!signal.aborted) {
+    let event: EventType;
+    try {
+      event = await ctx.queue.take(signal);
+    } catch {
+      if (signal.aborted) break;
+      throw new Error("Queue take failed unexpectedly");
+    }
+
+    const path = getEventPath(event);
+    const eventId = generateEventId(event, path);
+    const startTime = Date.now();
+
+    log.info("Consumer", "Handler started", {
+      event_type: "handler_start",
+      event_id: eventId,
+      event_tag: event._tag,
+      path,
+    });
+
+    const handler = ctx.handlers.get(event._tag);
+    if (!handler) {
+      ctx.logger.warn("Consumer", "No handler found", { event_tag: event._tag });
+      logMemorySnapshot();
+      continue;
+    }
+
+    const deps = { config: ctx.config, logger: ctx.logger, fs: ctx.fs };
+
+    try {
+      const result = await handler(event, deps);
+      const duration = Date.now() - startTime;
+
+      if (result.isOk()) {
+        log.info("Consumer", "Handler completed", {
+          event_type: "handler_complete",
+          event_id: eventId,
+          event_tag: event._tag,
+          path,
+          duration_ms: duration,
+          cascade_count: result.value.length,
+        });
+
+        if (result.value.length > 0) {
+          log.info("Consumer", "Cascades generated", {
+            event_type: "cascades_generated",
+            event_id: eventId,
+            event_tag: event._tag,
+            path,
+            cascade_count: result.value.length,
+            cascade_tags: result.value.map((e) => e._tag),
+          });
+          ctx.queue.enqueueMany(result.value);
+        }
+      } else {
+        log.error("Consumer", "Handler failed", result.error, {
+          event_type: "handler_error",
+          event_id: eventId,
+          event_tag: event._tag,
+          path,
+          duration_ms: duration,
+        });
+      }
+    } catch (err) {
+      ctx.logger.error("Consumer", "Unexpected handler throw", err, { event_tag: event._tag });
+    }
+
+    logMemorySnapshot();
+
+    if (eventCounter % 100 === 0) Bun.gc(true);
+  }
+}

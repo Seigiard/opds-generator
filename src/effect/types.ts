@@ -1,24 +1,41 @@
-import { Schema } from "@effect/schema";
+export interface RawBooksEvent {
+  parent: string;
+  name: string;
+  events: string;
+}
 
-// Raw event from books watcher (events string parsed in adapter)
-export const RawBooksEvent = Schema.Struct({
-  parent: Schema.String,
-  name: Schema.String,
-  events: Schema.String, // "CREATE,ISDIR" or "CLOSE_WRITE"
-});
+export interface RawDataEvent {
+  parent: string;
+  name: string;
+  events: string;
+}
 
-export type RawBooksEvent = typeof RawBooksEvent.Type;
+export function isRawBooksEvent(u: unknown): u is RawBooksEvent {
+  return (
+    typeof u === "object" &&
+    u !== null &&
+    "parent" in u &&
+    typeof (u as Record<string, unknown>).parent === "string" &&
+    "name" in u &&
+    typeof (u as Record<string, unknown>).name === "string" &&
+    "events" in u &&
+    typeof (u as Record<string, unknown>).events === "string"
+  );
+}
 
-// Raw event from data watcher
-export const RawDataEvent = Schema.Struct({
-  parent: Schema.String,
-  name: Schema.String,
-  events: Schema.String, // "CLOSE_WRITE" or "MOVED_TO"
-});
+export function isRawDataEvent(u: unknown): u is RawDataEvent {
+  return (
+    typeof u === "object" &&
+    u !== null &&
+    "parent" in u &&
+    typeof (u as Record<string, unknown>).parent === "string" &&
+    "name" in u &&
+    typeof (u as Record<string, unknown>).name === "string" &&
+    "events" in u &&
+    typeof (u as Record<string, unknown>).events === "string"
+  );
+}
 
-export type RawDataEvent = typeof RawDataEvent.Type;
-
-// Classified event types for handlers
 export type EventType =
   | { _tag: "BookCreated"; parent: string; name: string }
   | { _tag: "BookDeleted"; parent: string; name: string }

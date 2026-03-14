@@ -1,291 +1,232 @@
-import { Effect, Fiber, ManagedRuntime, Schedule } from "effect";
-import { Schema } from "@effect/schema";
 import { mkdir, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Feed } from "opds-ts/v1.2";
 import { config } from "./config.ts";
 import { FEED_FILE } from "./constants.ts";
 import { log } from "./logging/index.ts";
-import { RawBooksEvent, RawDataEvent } from "./effect/types.ts";
+import { isRawBooksEvent, isRawDataEvent } from "./effect/types.ts";
 import { adaptBooksEvent } from "./effect/adapters/books-adapter.ts";
 import { adaptDataEvent } from "./effect/adapters/data-adapter.ts";
 import { adaptSyncPlan } from "./effect/adapters/sync-plan-adapter.ts";
 import { startConsumer } from "./effect/consumer.ts";
-import { registerHandlers } from "./effect/handlers/index.ts";
-import { EventQueueService, LiveLayer } from "./effect/services.ts";
+import { bookSync } from "./effect/handlers/book-sync.ts";
+import { bookCleanup } from "./effect/handlers/book-cleanup.ts";
+import { folderSync } from "./effect/handlers/folder-sync.ts";
+import { folderCleanup } from "./effect/handlers/folder-cleanup.ts";
+import { parentMetaSync } from "./effect/handlers/parent-meta-sync.ts";
+import { folderEntryXmlChanged } from "./effect/handlers/folder-entry-xml-changed.ts";
+import { folderMetaSync } from "./effect/handlers/folder-meta-sync.ts";
+import { buildContext, type AppContext } from "./context.ts";
 import { scanFiles, createSyncPlan } from "./scanner.ts";
 
-// Shared runtime - single instance of all services
-const runtime = ManagedRuntime.make(LiveLayer);
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8_000;
 
-// Runtime state
 let isReady = false;
 let isSyncing = false;
-let consumerFiber: Fiber.RuntimeFiber<never, Error> | null = null;
-let reconcileFiber: Fiber.RuntimeFiber<void, never> | null = null;
 
-// Internal sync logic (no flag management)
-const doSync = Effect.gen(function* () {
-  const queue = yield* EventQueueService;
+function registerHandlers(ctx: AppContext): void {
+  ctx.handlers.register("BookCreated", bookSync);
+  ctx.handlers.register("BookDeleted", bookCleanup);
+  ctx.handlers.register("FolderCreated", folderSync);
+  ctx.handlers.register("FolderDeleted", folderCleanup);
+  ctx.handlers.register("EntryXmlChanged", parentMetaSync);
+  ctx.handlers.register("FolderEntryXmlChanged", folderEntryXmlChanged);
+  ctx.handlers.register("FolderMetaSyncRequested", folderMetaSync);
+}
 
+async function doSync(ctx: AppContext): Promise<void> {
   log.info("InitialSync", "Starting");
   const startTime = Date.now();
 
-  yield* Effect.tryPromise({
-    try: () => mkdir(config.dataPath, { recursive: true }),
-    catch: (e) => e as Error,
-  });
+  await mkdir(config.dataPath, { recursive: true });
 
-  // Seed feed.xml so nginx serves 200 while books are processing
-  yield* Effect.tryPromise({
-    try: async () => {
-      const feedPath = join(config.dataPath, FEED_FILE);
-      if (!(await Bun.file(feedPath).exists())) {
-        const seed = new Feed("urn:opds:catalog:root", "Catalog")
-          .addSelfLink(`/${FEED_FILE}`, "navigation")
-          .addNavigationLink("start", `/${FEED_FILE}`)
-          .setKind("navigation");
-        const xml = seed
-          .toXml({ prettyPrint: true })
-          .replace(
-            '<?xml version="1.0" encoding="utf-8"?>',
-            `<?xml version="1.0" encoding="utf-8"?>\n<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>`,
-          );
-        await Bun.write(feedPath, xml);
-        log.info("InitialSync", "Seed feed.xml created");
-      }
-    },
-    catch: (e) => e as Error,
-  });
+  const feedPath = join(config.dataPath, FEED_FILE);
+  if (!(await Bun.file(feedPath).exists())) {
+    const seed = new Feed("urn:opds:catalog:root", "Catalog")
+      .addSelfLink(`/${FEED_FILE}`, "navigation")
+      .addNavigationLink("start", `/${FEED_FILE}`)
+      .setKind("navigation");
+    const xml = seed
+      .toXml({ prettyPrint: true })
+      .replace(
+        '<?xml version="1.0" encoding="utf-8"?>',
+        `<?xml version="1.0" encoding="utf-8"?>\n<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>`,
+      );
+    await Bun.write(feedPath, xml);
+    log.info("InitialSync", "Seed feed.xml created");
+  }
 
-  const files = yield* Effect.tryPromise({
-    try: () => scanFiles(config.filesPath),
-    catch: (e) => e as Error,
-  });
+  const files = await scanFiles(config.filesPath);
   log.info("InitialSync", "Books found", { books_found: files.length });
 
-  const plan = yield* Effect.tryPromise({
-    try: () => createSyncPlan(files, config.dataPath),
-    catch: (e) => e as Error,
-  });
+  const plan = await createSyncPlan(files, config.dataPath);
   log.info("InitialSync", "Sync plan created", {
     books_process: plan.toProcess.length,
     books_delete: plan.toDelete.length,
     folders_count: plan.folders.length,
   });
 
-  // Convert sync plan to events
   const events = adaptSyncPlan(plan, config.filesPath);
-
-  // Enqueue all events
-  yield* queue.enqueueMany(events);
+  ctx.queue.enqueueMany(events);
 
   const duration = Date.now() - startTime;
   log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: duration });
-});
+}
 
-// Initial sync: manages isSyncing flag with guaranteed cleanup
-const initialSync = Effect.gen(function* () {
+async function initialSync(ctx: AppContext): Promise<void> {
   isSyncing = true;
-  yield* doSync;
-}).pipe(
-  Effect.ensuring(
-    Effect.sync(() => {
-      isSyncing = false;
-    }),
-  ),
-);
+  try {
+    await doSync(ctx);
+  } finally {
+    isSyncing = false;
+  }
+}
 
-// Resync: clear data, run sync (manages own flag)
-const resync = Effect.gen(function* () {
+async function resync(ctx: AppContext): Promise<void> {
   isSyncing = true;
-  log.info("Resync", "Starting full resync");
+  try {
+    log.info("Resync", "Starting full resync");
+    const entries = await readdir(config.dataPath);
+    await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
+    log.info("Resync", "Cleared data directory");
+    await doSync(ctx);
+  } finally {
+    isSyncing = false;
+  }
+}
 
-  // Clear data directory contents (not the directory itself - nginx holds it open)
-  yield* Effect.tryPromise({
-    try: async () => {
-      const entries = await readdir(config.dataPath);
-      await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
-    },
-    catch: (e) => e as Error,
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
   });
-  log.info("Resync", "Cleared data directory");
+}
 
-  // Run sync logic (doSync, not initialSync to avoid double flag management)
-  yield* doSync;
-}).pipe(
-  Effect.ensuring(
-    Effect.sync(() => {
-      isSyncing = false;
-    }),
-  ),
-);
+async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promise<void> {
+  const intervalMs = config.reconcileInterval * 1000;
+  while (!signal.aborted) {
+    await sleep(intervalMs, signal).catch(() => {});
+    if (signal.aborted) break;
 
-// Periodic reconciliation: scan for missed events on interval
-const periodicReconciliation = Effect.gen(function* () {
-  const queue = yield* EventQueueService;
-
-  yield* Effect.gen(function* () {
     if (isSyncing) {
       log.debug("Reconciliation", "Skipped: sync in progress");
-      return;
+      continue;
     }
 
-    const pending = yield* queue.size();
-    if (pending > 0) {
-      log.debug("Reconciliation", `Skipped: queue has ${pending} pending events`);
-      return;
+    if (ctx.queue.size > 0) {
+      log.debug("Reconciliation", `Skipped: queue has ${ctx.queue.size} pending events`);
+      continue;
     }
 
-    log.info("Reconciliation", "Starting periodic reconciliation");
-    isSyncing = true;
-    yield* doSync.pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          isSyncing = false;
-        }),
-      ),
-    );
-    log.info("Reconciliation", "Completed");
-  }).pipe(
-    Effect.catchAll((error) =>
-      Effect.sync(() => {
-        log.error("Reconciliation", "Failed", error);
-      }),
-    ),
-    Effect.repeat(Schedule.spaced(`${config.reconcileInterval} seconds`)),
-  );
-});
-
-// Handle incoming books watcher event
-const handleBooksEvent = (body: unknown) =>
-  Effect.gen(function* () {
-    const queue = yield* EventQueueService;
-
-    const parseResult = Schema.decodeUnknownEither(RawBooksEvent)(body);
-    if (parseResult._tag === "Left") {
-      log.warn("Server", "Invalid books event schema", { body });
-      return { status: 400, message: "Invalid event" };
+    try {
+      log.info("Reconciliation", "Starting periodic reconciliation");
+      isSyncing = true;
+      try {
+        await doSync(ctx);
+      } finally {
+        isSyncing = false;
+      }
+      log.info("Reconciliation", "Completed");
+    } catch (error) {
+      log.error("Reconciliation", "Failed", error);
     }
+  }
+}
 
-    const raw = parseResult.right;
-    const event = yield* adaptBooksEvent(raw);
-    if (event === null) {
-      return { status: 202, message: "Deduplicated" };
-    }
-
-    yield* queue.enqueue(event);
-    return { status: 202, message: "OK" };
-  });
-
-// Handle incoming data watcher event
-const handleDataEvent = (body: unknown) =>
-  Effect.gen(function* () {
-    const queue = yield* EventQueueService;
-
-    const parseResult = Schema.decodeUnknownEither(RawDataEvent)(body);
-    if (parseResult._tag === "Left") {
-      log.warn("Server", "Invalid data event schema", { body });
-      return { status: 400, message: "Invalid event" };
-    }
-
-    const raw = parseResult.right;
-    const event = yield* adaptDataEvent(raw);
-    if (event === null) {
-      return { status: 202, message: "Deduplicated" };
-    }
-
-    yield* queue.enqueue(event);
-    return { status: 202, message: "OK" };
-  });
-
-// Initialize handlers only
-const initHandlers = Effect.gen(function* () {
-  yield* registerHandlers;
-  log.info("Server", "Handlers registered");
-});
-
-// Main entry point
 async function main(): Promise<void> {
-  try {
-    // 1. Register handlers
-    await runtime.runPromise(initHandlers);
+  const controller = new AbortController();
 
-    // 2. Start consumer in background (using runFork for proper fiber execution)
-    consumerFiber = runtime.runFork(startConsumer);
+  try {
+    const ctx = await buildContext();
+
+    registerHandlers(ctx);
+    log.info("Server", "Handlers registered");
+
+    const consumerTask = startConsumer(ctx, controller.signal);
     log.info("Server", "Consumer started");
     isReady = true;
 
-    // 3. Start HTTP server
     const server = Bun.serve({
       port: config.port,
       hostname: "127.0.0.1",
       async fetch(req) {
         const url = new URL(req.url);
 
-        // POST /events/books — receive events from books watcher
         if (req.method === "POST" && url.pathname === "/events/books") {
-          if (!isReady) {
-            return new Response("Queue not ready", { status: 503 });
-          }
-
+          if (!isReady) return new Response("Queue not ready", { status: 503 });
           try {
             const body = await req.json();
-            const result = await runtime.runPromise(handleBooksEvent(body));
-            return new Response(result.message, { status: result.status });
+            if (!isRawBooksEvent(body)) {
+              log.warn("Server", "Invalid books event schema", { body });
+              return new Response("Invalid event", { status: 400 });
+            }
+            const event = adaptBooksEvent(body, ctx.dedup);
+            if (event === null) return new Response("Deduplicated", { status: 202 });
+            ctx.queue.enqueue(event);
+            return new Response("OK", { status: 202 });
           } catch (error) {
             log.error("Server", "Failed to process books event", error);
             return new Response("Error", { status: 500 });
           }
         }
 
-        // POST /events/data — receive events from data watcher
         if (req.method === "POST" && url.pathname === "/events/data") {
-          if (!isReady) {
-            return new Response("Queue not ready", { status: 503 });
-          }
-
+          if (!isReady) return new Response("Queue not ready", { status: 503 });
           try {
             const body = await req.json();
-            const result = await runtime.runPromise(handleDataEvent(body));
-            return new Response(result.message, { status: result.status });
+            if (!isRawDataEvent(body)) {
+              log.warn("Server", "Invalid data event schema", { body });
+              return new Response("Invalid event", { status: 400 });
+            }
+            const event = adaptDataEvent(body, ctx.dedup);
+            if (event === null) return new Response("Deduplicated", { status: 202 });
+            ctx.queue.enqueue(event);
+            return new Response("OK", { status: 202 });
           } catch (error) {
             log.error("Server", "Failed to process data event", error);
             return new Response("Error", { status: 500 });
           }
         }
 
-        // POST /resync — full resync
         if (req.method === "POST" && url.pathname === "/resync") {
-          if (!isReady) {
-            return new Response("Queue not ready", { status: 503 });
-          }
-
-          if (isSyncing) {
-            return new Response("Sync already in progress", { status: 409 });
-          }
-
-          runtime.runPromise(resync).catch((error) => {
-            log.error("Server", "Resync failed", error);
-          });
+          if (!isReady) return new Response("Queue not ready", { status: 503 });
+          if (isSyncing) return new Response("Sync already in progress", { status: 409 });
+          resync(ctx).catch((error) => log.error("Server", "Resync failed", error));
           return new Response("Resync started", { status: 202 });
         }
 
-        // All other routes are handled by nginx
         return new Response("Not found", { status: 404 });
       },
     });
 
     log.info("Server", "Listening", { port: server.port });
 
-    // 4. Run initial sync
-    await runtime.runPromise(initialSync);
+    await initialSync(ctx);
 
-    // 5. Start periodic reconciliation (if enabled)
+    let reconcileTask: Promise<void> | null = null;
     if (config.reconcileInterval > 0) {
-      reconcileFiber = runtime.runFork(periodicReconciliation);
+      reconcileTask = startReconciliation(ctx, controller.signal);
       log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
     }
+
+    const shutdown = async () => {
+      log.info("Server", "Shutting down");
+      server.stop();
+      controller.abort();
+      const timeout = new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS));
+      await Promise.race([Promise.allSettled([consumerTask, reconcileTask].filter(Boolean)), timeout]);
+      process.exit(0);
+    };
+
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
   } catch (error) {
     log.error("Server", "Startup failed", error);
     process.exit(1);
@@ -293,16 +234,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  log.info("Server", "Shutting down");
-  if (reconcileFiber) {
-    await runtime.runPromise(Fiber.interrupt(reconcileFiber));
-  }
-  if (consumerFiber) {
-    await runtime.runPromise(Fiber.interrupt(consumerFiber));
-  }
-  await runtime.dispose();
-  process.exit(0);
-});

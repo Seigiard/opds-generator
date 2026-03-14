@@ -1,103 +1,73 @@
 /**
  * Queue and Consumer integration tests.
  *
- * Historical context (see git history for full documentation tests):
- * - ManagedRuntime vs Effect.provide bug: each provide() creates new queue
- * - Effect.ensuring guarantees cleanup even on error
- * - EBUSY race conditions on directory deletion when nginx holds it open
+ * Verifies that:
+ * - Consumer processes events from the shared SimpleQueue
+ * - Queue is shared (single instance) across the AppContext
+ * - AbortController-based shutdown works correctly
  */
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { Effect, Fiber, ManagedRuntime } from "effect";
-import { LiveLayer, EventQueueService, HandlerRegistry } from "../../../src/effect/services.ts";
+import { describe, test, expect } from "bun:test";
+import { ok } from "neverthrow";
+import { SimpleQueue } from "../../../src/queue.ts";
 import { startConsumer } from "../../../src/effect/consumer.ts";
+import type { AppContext } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
 
+function createTestContext(): AppContext {
+  return {
+    config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    fs: {
+      mkdir: async () => {},
+      rm: async () => {},
+      readdir: async () => [],
+      stat: async () => ({ isDirectory: () => false, size: 0 }),
+      exists: async () => false,
+      writeFile: async () => {},
+      atomicWrite: async () => {},
+      symlink: async () => {},
+      unlink: async () => {},
+    },
+    dedup: { shouldProcess: () => true },
+    queue: new SimpleQueue<EventType>(),
+    handlers: (() => {
+      const map = new Map<string, any>();
+      return { get: (tag: string) => map.get(tag), register: (tag: string, handler: any) => map.set(tag, handler) };
+    })(),
+  };
+}
+
 describe("Queue and Consumer Integration", () => {
-  let runtime: ManagedRuntime.ManagedRuntime<
-    typeof LiveLayer extends import("effect").Layer.Layer<infer R, infer _E, infer _A> ? R : never,
-    never
-  >;
-  let consumerFiber: Fiber.RuntimeFiber<never, Error>;
-
-  beforeAll(async () => {
-    runtime = ManagedRuntime.make(LiveLayer);
-  });
-
-  afterAll(async () => {
-    if (consumerFiber) {
-      await runtime.runPromise(Fiber.interrupt(consumerFiber));
-    }
-    await runtime.dispose();
-  });
-
   test("consumer processes events from shared queue", async () => {
     const processedEvents: string[] = [];
+    const controller = new AbortController();
+    const ctx = createTestContext();
 
-    // Register a test handler that tracks processed events
-    await runtime.runPromise(
-      Effect.gen(function* () {
-        const registry = yield* HandlerRegistry;
-        registry.registerEffect("FolderMetaSyncRequested", (event: EventType) =>
-          Effect.sync(() => {
-            processedEvents.push((event as { path: string }).path);
-            return [] as readonly EventType[];
-          }),
-        );
-      }),
-    );
+    ctx.handlers.register("FolderMetaSyncRequested", async (event) => {
+      processedEvents.push((event as { path: string }).path);
+      return ok([]);
+    });
 
-    // Start consumer in background
-    consumerFiber = runtime.runFork(startConsumer);
-
-    // Give consumer time to start
+    const consumerTask = startConsumer(ctx, controller.signal);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Queue a test event
-    await runtime.runPromise(
-      Effect.gen(function* () {
-        const queue = yield* EventQueueService;
-        yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test/book.epub" });
-      }),
-    );
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test/book.epub" });
 
-    // Wait for processing
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Verify event was processed
     expect(processedEvents).toContain("/test/book.epub");
+
+    controller.abort();
+    await consumerTask;
   });
 
-  test("multiple Effect.provide calls with same runtime share queue", async () => {
-    // This test verifies that we don't have the bug where each Effect.provide
-    // creates a new queue instance
-    // We use a separate runtime without consumer to isolate this test
+  test("SimpleQueue is shared — single instance across context", () => {
+    const ctx = createTestContext();
 
-    const isolatedRuntime = ManagedRuntime.make(LiveLayer);
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test1.epub" });
+    expect(ctx.queue.size).toBe(1);
 
-    let queueSize1 = -1;
-    let queueSize2 = -1;
-
-    // First call - enqueue an event
-    await isolatedRuntime.runPromise(
-      Effect.gen(function* () {
-        const queue = yield* EventQueueService;
-        yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test1.epub" });
-        queueSize1 = yield* queue.size();
-      }),
-    );
-
-    // Second call - check queue size (should include the event from first call)
-    await isolatedRuntime.runPromise(
-      Effect.gen(function* () {
-        const queue = yield* EventQueueService;
-        queueSize2 = yield* queue.size();
-      }),
-    );
-
-    // Both calls should see the same queue - size should be identical
-    expect(queueSize1).toBe(1);
-    expect(queueSize2).toBe(1); // Same queue = same size
-
-    await isolatedRuntime.dispose();
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test2.epub" });
+    expect(ctx.queue.size).toBe(2);
   });
 });
