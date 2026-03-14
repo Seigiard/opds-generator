@@ -46,6 +46,53 @@ async function warmup(fn: () => Promise<void>, count = 150): Promise<void> {
 }
 
 describe("Memory leak detection (target: 0 KB/iter)", () => {
+  test(
+    "Bun.file().arrayBuffer()",
+    async () => {
+      const filePath = EPUB_PATH;
+      await warmup(async () => {
+        await Bun.file(filePath).arrayBuffer();
+      });
+
+      stabilize();
+      const before = getRssMb();
+
+      for (let i = 0; i < ITERATIONS; i++) {
+        await Bun.file(filePath).arrayBuffer();
+        Bun.gc(true);
+      }
+
+      stabilize();
+      const perIterKb = measureLeak("Bun.file().arrayBuffer()", before, getRssMb(), ITERATIONS);
+      expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+    },
+    30000,
+  );
+
+  test(
+    "fs.readFile (Node API)",
+    async () => {
+      const { readFile } = await import("node:fs/promises");
+      const filePath = EPUB_PATH;
+      await warmup(async () => {
+        await readFile(filePath);
+      });
+
+      stabilize();
+      const before = getRssMb();
+
+      for (let i = 0; i < ITERATIONS; i++) {
+        await readFile(filePath);
+        Bun.gc(true);
+      }
+
+      stabilize();
+      const perIterKb = measureLeak("fs.readFile()", before, getRssMb(), ITERATIONS);
+      expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+    },
+    30000,
+  );
+
   test("spawnWithTimeout (echo)", async () => {
     const op = () => spawnWithTimeoutText({ command: ["echo", "hello"] }).then(() => {});
     await warmup(op);
