@@ -107,6 +107,15 @@ export const startConsumer = Effect.gen(function* () {
     Bun.gc(true);
     eventCounter++;
 
+    if (eventCounter === 100 || eventCounter === 5000) {
+      const snapshotPath = `/data/heap-snapshot-${eventCounter}.json`;
+      Bun.write(snapshotPath, JSON.stringify(Bun.generateHeapSnapshot()));
+      log.info("Consumer", `Heap snapshot saved to ${snapshotPath}`, {
+        event_type: "handler_complete",
+        events_processed: eventCounter,
+      } as any);
+    }
+
     if (eventCounter % 50 === 0) {
       const mem = process.memoryUsage();
       const jsc = heapStats();
