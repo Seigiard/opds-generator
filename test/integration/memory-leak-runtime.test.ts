@@ -1,7 +1,7 @@
-import { describe, test, expect, afterAll } from "bun:test";
-import { Effect, Fiber, ManagedRuntime, Queue } from "effect";
-import { LiveLayer, EventQueueService, HandlerRegistry } from "../../src/effect/services.ts";
+import { describe, expect, test } from "bun:test";
+import { Effect, Fiber, ManagedRuntime } from "effect";
 import { startConsumer } from "../../src/effect/consumer.ts";
+import { EventQueueService, HandlerRegistry, LiveLayer } from "../../src/effect/services.ts";
 import type { EventType } from "../../src/effect/types.ts";
 
 const ITERATIONS = 500;
@@ -33,161 +33,147 @@ function measureLeak(label: string, before: number, after: number, iters: number
 }
 
 describe("Effect runtime memory leak isolation", () => {
-  test(
-    "bare Effect.runPromise (no runtime, no queue)",
-    async () => {
-      const op = () => Effect.runPromise(Effect.sync(() => 42));
-      await warmup(op);
+  test("bare Effect.runPromise (no runtime, no queue)", async () => {
+    const op = async () => {
+      await Effect.runPromise(Effect.sync(() => 42));
+    };
+    await warmup(op);
 
-      stabilize();
-      const before = getRssMb();
-      for (let i = 0; i < ITERATIONS; i++) {
-        await op();
-        Bun.gc(true);
-      }
-      stabilize();
+    stabilize();
+    const before = getRssMb();
+    for (let i = 0; i < ITERATIONS; i++) {
+      await op();
+      Bun.gc(true);
+    }
+    stabilize();
 
-      const kb = measureLeak("Effect.runPromise(sync)", before, getRssMb(), ITERATIONS);
-      expect(kb).toBeLessThan(MAX_LEAK_KB);
-    },
-    30000,
-  );
+    const kb = measureLeak("Effect.runPromise(sync)", before, getRssMb(), ITERATIONS);
+    expect(kb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
-  test(
-    "ManagedRuntime.runPromise (no queue)",
-    async () => {
-      const rt = ManagedRuntime.make(LiveLayer);
-      const op = () => rt.runPromise(Effect.sync(() => 42));
-      await warmup(op);
+  test("ManagedRuntime.runPromise (no queue)", async () => {
+    const rt = ManagedRuntime.make(LiveLayer);
+    const op = async () => {
+      await rt.runPromise(Effect.sync(() => 42));
+    };
+    await warmup(op);
 
-      stabilize();
-      const before = getRssMb();
-      for (let i = 0; i < ITERATIONS; i++) {
-        await op();
-        Bun.gc(true);
-      }
-      stabilize();
+    stabilize();
+    const before = getRssMb();
+    for (let i = 0; i < ITERATIONS; i++) {
+      await op();
+      Bun.gc(true);
+    }
+    stabilize();
 
-      const kb = measureLeak("runtime.runPromise(sync)", before, getRssMb(), ITERATIONS);
-      await rt.dispose();
-      expect(kb).toBeLessThan(MAX_LEAK_KB);
-    },
-    30000,
-  );
+    const kb = measureLeak("runtime.runPromise(sync)", before, getRssMb(), ITERATIONS);
+    await rt.dispose();
+    expect(kb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 
-  test(
-    "ManagedRuntime.runPromise with Effect.gen",
-    async () => {
-      const rt = ManagedRuntime.make(LiveLayer);
-      const op = () =>
-        rt.runPromise(
-          Effect.gen(function* () {
-            return 42;
-          }),
-        );
-      await warmup(op);
-
-      stabilize();
-      const before = getRssMb();
-      for (let i = 0; i < ITERATIONS; i++) {
-        await op();
-        Bun.gc(true);
-      }
-      stabilize();
-
-      const kb = measureLeak("runtime.runPromise(gen)", before, getRssMb(), ITERATIONS);
-      await rt.dispose();
-      expect(kb).toBeLessThan(MAX_LEAK_KB);
-    },
-    30000,
-  );
-
-  test(
-    "ManagedRuntime + Queue.offer/take",
-    async () => {
-      const rt = ManagedRuntime.make(LiveLayer);
-
-      const enqueueAndConsume = () =>
-        rt.runPromise(
-          Effect.gen(function* () {
-            const queue = yield* EventQueueService;
-            yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
-            yield* queue.take();
-          }),
-        );
-
-      await warmup(enqueueAndConsume);
-
-      stabilize();
-      const before = getRssMb();
-      for (let i = 0; i < ITERATIONS; i++) {
-        await enqueueAndConsume();
-        Bun.gc(true);
-      }
-      stabilize();
-
-      const kb = measureLeak("runtime+queue(offer+take)", before, getRssMb(), ITERATIONS);
-      await rt.dispose();
-      expect(kb).toBeLessThan(MAX_LEAK_KB);
-    },
-    30000,
-  );
-
-  test(
-    "ManagedRuntime + Consumer fiber + enqueue",
-    async () => {
-      const rt = ManagedRuntime.make(LiveLayer);
-      let processed = 0;
-
+  test("ManagedRuntime.runPromise with Effect.gen", async () => {
+    const rt = ManagedRuntime.make(LiveLayer);
+    const op = async () => {
       await rt.runPromise(
         Effect.gen(function* () {
-          const registry = yield* HandlerRegistry;
-          registry.register("FolderMetaSyncRequested", () =>
-            Effect.sync(() => {
-              processed++;
-              return [] as readonly EventType[];
-            }),
-          );
+          yield* Effect.void;
+          return 42;
+        }),
+      );
+    };
+    await warmup(op);
+
+    stabilize();
+    const before = getRssMb();
+    for (let i = 0; i < ITERATIONS; i++) {
+      await op();
+      Bun.gc(true);
+    }
+    stabilize();
+
+    const kb = measureLeak("runtime.runPromise(gen)", before, getRssMb(), ITERATIONS);
+    await rt.dispose();
+    expect(kb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
+
+  test("ManagedRuntime + Queue.offer/take", async () => {
+    const rt = ManagedRuntime.make(LiveLayer);
+
+    const enqueueAndConsume = () =>
+      rt.runPromise(
+        Effect.gen(function* () {
+          const queue = yield* EventQueueService;
+          yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
+          yield* queue.take();
         }),
       );
 
-      const fiber = rt.runFork(startConsumer);
-      await new Promise((r) => setTimeout(r, 50));
+    await warmup(enqueueAndConsume);
 
-      const enqueue = (i: number) =>
-        rt.runPromise(
-          Effect.gen(function* () {
-            const queue = yield* EventQueueService;
-            yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: `/test/${i}` });
+    stabilize();
+    const before = getRssMb();
+    for (let i = 0; i < ITERATIONS; i++) {
+      await enqueueAndConsume();
+      Bun.gc(true);
+    }
+    stabilize();
+
+    const kb = measureLeak("runtime+queue(offer+take)", before, getRssMb(), ITERATIONS);
+    await rt.dispose();
+    expect(kb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
+
+  test("ManagedRuntime + Consumer fiber + enqueue", async () => {
+    const rt = ManagedRuntime.make(LiveLayer);
+    let processed = 0;
+
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const registry = yield* HandlerRegistry;
+        registry.register("FolderMetaSyncRequested", () =>
+          Effect.sync(() => {
+            processed++;
+            return [] as readonly EventType[];
           }),
         );
+      }),
+    );
 
-      await warmup(async () => {
-        await enqueue(0);
-        await new Promise((r) => setTimeout(r, 5));
-      });
+    const fiber = rt.runFork(startConsumer);
+    await new Promise((r) => setTimeout(r, 50));
 
-      stabilize();
-      const before = getRssMb();
+    const enqueue = (i: number) =>
+      rt.runPromise(
+        Effect.gen(function* () {
+          const queue = yield* EventQueueService;
+          yield* queue.enqueue({ _tag: "FolderMetaSyncRequested", path: `/test/${i}` });
+        }),
+      );
 
-      for (let i = 0; i < ITERATIONS; i++) {
-        await enqueue(i);
-        if (i % 50 === 0) {
-          await new Promise((r) => setTimeout(r, 50));
-          Bun.gc(true);
-        }
+    await warmup(async () => {
+      await enqueue(0);
+      await new Promise((r) => setTimeout(r, 5));
+    });
+
+    stabilize();
+    const before = getRssMb();
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      await enqueue(i);
+      if (i % 50 === 0) {
+        await new Promise((r) => setTimeout(r, 50));
+        Bun.gc(true);
       }
+    }
 
-      await new Promise((r) => setTimeout(r, 500));
-      stabilize();
+    await new Promise((r) => setTimeout(r, 500));
+    stabilize();
 
-      const kb = measureLeak("runtime+consumer+enqueue", before, getRssMb(), ITERATIONS);
-      console.log(`  processed: ${processed}`);
+    const kb = measureLeak("runtime+consumer+enqueue", before, getRssMb(), ITERATIONS);
+    console.log(`  processed: ${processed}`);
 
-      await rt.runPromise(Fiber.interrupt(fiber));
-      await rt.dispose();
-      expect(kb).toBeLessThan(MAX_LEAK_KB);
-    },
-    30000,
-  );
+    await rt.runPromise(Fiber.interrupt(fiber));
+    await rt.dispose();
+    expect(kb).toBeLessThan(MAX_LEAK_KB);
+  }, 30000);
 });
