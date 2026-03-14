@@ -17,10 +17,14 @@
 After completing any task:
 
 ```bash
-bun run fix   # format:fix + lint:fix
+bun run fix   # format:fix + lint:fix — zero warnings, zero errors policy
 bun run test
 npx knip      # check unused exports/deps
 ```
+
+`bun run fix` must produce 0 warnings and 0 errors. Fix all lint/format issues before committing.
+
+**MANDATORY:** Run `bun run test` and verify 0 failures BEFORE every commit. Never commit untested code. If tests fail — fix first, then commit.
 
 Update `PLAN.md`, `CLAUDE.md`, or `@ARCHITECTURE.md` if architecture changed.
 
