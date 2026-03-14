@@ -1,37 +1,32 @@
-import { Effect } from "effect";
+import { ok, err, type Result } from "neverthrow";
 import { dirname, join, relative } from "node:path";
-import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
-import { log } from "../../logging/index.ts";
 
-export const bookCleanup = (
+export const bookCleanup = async (
   event: EventType,
-): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> => {
-  if (event._tag !== "BookDeleted") return Effect.succeed([]);
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
+  if (event._tag !== "BookDeleted") return ok([]);
 
-  return Effect.flatMap(ConfigService, (config) =>
-    Effect.flatMap(FileSystemService, (fs) => {
-      const { parent, name } = event;
-      const filePath = join(parent, name);
-      const relativePath = relative(config.filesPath, filePath);
-      const bookDataDir = join(config.dataPath, relativePath);
+  const { parent, name } = event;
+  const filePath = join(parent, name);
+  const relativePath = relative(deps.config.filesPath, filePath);
+  const bookDataDir = join(deps.config.dataPath, relativePath);
 
-      log.info("BookCleanup", "Removing", { path: relativePath });
+  deps.logger.info("BookCleanup", "Removing", { path: relativePath });
 
-      return fs.rm(bookDataDir, { recursive: true }).pipe(
-        Effect.catchAll((error) => {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-            log.debug("BookCleanup", "Already removed", { path: relativePath });
-            return Effect.void;
-          }
-          return Effect.fail(error);
-        }),
-        Effect.map(() => {
-          log.info("BookCleanup", "Done", { path: relativePath });
-          const parentDataDir = dirname(bookDataDir);
-          return [{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const;
-        }),
-      );
-    }),
-  );
+  try {
+    await deps.fs.rm(bookDataDir, { recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      deps.logger.debug("BookCleanup", "Already removed", { path: relativePath });
+    } else {
+      return err(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  deps.logger.info("BookCleanup", "Done", { path: relativePath });
+  const parentDataDir = dirname(bookDataDir);
+  return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const);
 };

@@ -151,7 +151,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
   describe("bookCleanup during initial sync", () => {
     test("removes orphan book directory", async () => {
-      await Effect.runPromise(Effect.provide(bookCleanup(bookDeletedEvent("/test/books/Fiction/", "deleted.epub")), TestLayer));
+      await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "deleted.epub"), asyncDeps);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/deleted.epub");
     });

@@ -133,6 +133,27 @@ const bookDeletedEvent = (parent: string, name: string): EventType => ({
   name,
 });
 
+const asyncDeps: HandlerDeps = {
+  config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
+  logger: {
+    info: (tag, msg, ctx) => mockLogger.infoCalls.push({ tag, msg, ctx }),
+    warn: (tag, msg, ctx) => mockLogger.warnCalls.push({ tag, msg, ctx }),
+    error: (tag, msg, error) => mockLogger.errorCalls.push({ tag, msg, error }),
+    debug: (tag, msg, ctx) => mockLogger.debugCalls.push({ tag, msg, ctx }),
+  },
+  fs: {
+    mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
+    rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
+    readdir: async () => [],
+    stat: async () => ({ isDirectory: () => false, size: 0 }),
+    exists: async () => false,
+    writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+    atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
+    symlink: async (target, path) => { mockFs.symlinkCalls.push({ target, path }); },
+    unlink: async (path) => { mockFs.unlinkCalls.push(path); },
+  },
+};
+
 describe("Effect Handlers", () => {
   beforeEach(() => {
     mockFs.reset();
@@ -160,27 +181,6 @@ describe("Effect Handlers", () => {
   });
 
   describe("folderSync", () => {
-    const asyncDeps: HandlerDeps = {
-      config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
-      logger: {
-        info: (tag, msg, ctx) => mockLogger.infoCalls.push({ tag, msg, ctx }),
-        warn: (tag, msg, ctx) => mockLogger.warnCalls.push({ tag, msg, ctx }),
-        error: (tag, msg, error) => mockLogger.errorCalls.push({ tag, msg, error }),
-        debug: (tag, msg, ctx) => mockLogger.debugCalls.push({ tag, msg, ctx }),
-      },
-      fs: {
-        mkdir: async (path, options) => { mockFs.mkdirCalls.push({ path, options }); },
-        rm: async (path, options) => { mockFs.rmCalls.push({ path, options }); },
-        readdir: async () => [],
-        stat: async () => ({ isDirectory: () => false, size: 0 }),
-        exists: async () => false,
-        writeFile: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
-        atomicWrite: async (path, content) => { mockFs.writeCalls.push({ path, content }); },
-        symlink: async (target, path) => { mockFs.symlinkCalls.push({ target, path }); },
-        unlink: async (path) => { mockFs.unlinkCalls.push(path); },
-      },
-    };
-
     test("creates data directory for new folder", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
@@ -228,25 +228,19 @@ describe("Effect Handlers", () => {
 
   describe("bookCleanup", () => {
     test("removes data directory for deleted book", async () => {
-      const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
-
-      await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
+      expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/book.epub");
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
     });
 
     test("returns cascade event to regenerate parent feed", async () => {
-      const effect = bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"));
-
-      const cascades = await Effect.runPromise(Effect.provide(effect, TestLayer));
-
+      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
+      expect(result.isOk()).toBe(true);
+      const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({
-        _tag: "FolderMetaSyncRequested",
-        path: "/test/data/Fiction",
-      });
+      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
   });
 
