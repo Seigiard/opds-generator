@@ -16,6 +16,6 @@ export const registerHandlers = Effect.gen(function* () {
   registry.registerEffect("FolderCreated", folderSync);
   registry.registerEffect("FolderDeleted", folderCleanup);
   registry.registerAsync("EntryXmlChanged", parentMetaSync);
-  registry.registerEffect("FolderEntryXmlChanged", folderEntryXmlChanged);
+  registry.registerAsync("FolderEntryXmlChanged", folderEntryXmlChanged);
   registry.registerEffect("FolderMetaSyncRequested", folderMetaSync);
 });
