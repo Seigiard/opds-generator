@@ -63,7 +63,7 @@ volumes:
 2. Run:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 3. Open http://localhost:8080/opds
@@ -84,7 +84,7 @@ docker run -d \
 ```bash
 git clone https://github.com/Seigiard/opds-generator.git
 cd opds-generator
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## Environment Variables
@@ -98,6 +98,7 @@ docker-compose up -d --build
 | `ADMIN_USER`    | -        | Username for /resync Basic Auth       |
 | `ADMIN_TOKEN`   | -        | Password for /resync Basic Auth       |
 | `RATE_LIMIT_MB` | `0`      | Download rate limit in MB/s (0 = off) |
+| `RECONCILE_INTERVAL` | `1800`   | Periodic reconciliation seconds (0 = off, min 60) |
 
 ## API
 
@@ -145,20 +146,17 @@ Note: nginx serves static files from `/data`. Returns 503 with `Retry-After: 5` 
 ## Development
 
 ```bash
-# Install dependencies
-bun install
-
-# Run dev server with hot reload
-bun run dev
+# Start dev server with hot reload
+docker compose -f docker-compose.dev.yml up
 
 # Run tests (in Docker)
 bun run test
 
-# Lint
-bun run lint:fix
+# Run e2e tests
+bun run test:e2e
 
-# Production
-FILES=/books DATA=/data bun run start
+# Lint + format
+bun run fix
 ```
 
 ## OPDS Specification
