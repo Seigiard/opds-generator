@@ -41,6 +41,7 @@ nginx &
 NGINX_PID=$!
 
 echo "[entrypoint] Starting Bun server on port $BUN_PORT..."
+export MIMALLOC_PURGE_DELAY=0
 if [ "$DEV_MODE" = "true" ]; then
   bun --smol run --watch /app/src/server.ts &
 else
