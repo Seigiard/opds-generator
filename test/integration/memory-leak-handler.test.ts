@@ -117,10 +117,10 @@ async function processOneBook(folderName: string, bookFile: string): Promise<voi
 
   const folderDataPath = join(DATA_DIR, folderName);
   const metaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: folderDataPath };
-  await Effect.runPromise(Effect.provide(folderMetaSync(metaEvent), TestLayer));
+  await folderMetaSync(metaEvent, asyncDeps);
 
   const rootEvent: EventType = { _tag: "FolderMetaSyncRequested", path: DATA_DIR };
-  await Effect.runPromise(Effect.provide(folderMetaSync(rootEvent), TestLayer));
+  await folderMetaSync(rootEvent, asyncDeps);
 
   await rm(join(DATA_DIR, folderName), { recursive: true, force: true });
   await rm(folderPath, { recursive: true, force: true });

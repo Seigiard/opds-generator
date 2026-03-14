@@ -169,7 +169,7 @@ describe("Cascade Flow Integration", () => {
 
     // Step 5: Process folder meta sync for Fiction folder
     const folderMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: fictionDataPath };
-    await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaEvent), TestLayer));
+    await folderMetaSync(folderMetaEvent, asyncDeps);
 
     // Verify feed.xml generated with book entry
     const feedPath = join(fictionDataPath, "feed.xml");
@@ -182,7 +182,7 @@ describe("Cascade Flow Integration", () => {
 
     // Step 6: Process root folder meta sync
     const rootMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: DATA_DIR };
-    await Effect.runPromise(Effect.provide(folderMetaSync(rootMetaEvent), TestLayer));
+    await folderMetaSync(rootMetaEvent, asyncDeps);
 
     // Verify root feed.xml generated with Fiction folder entry
     const rootFeedPath = join(DATA_DIR, "feed.xml");
@@ -211,10 +211,10 @@ describe("Cascade Flow Integration", () => {
     await Effect.runPromise(Effect.provide(bookSync(bookEvent), TestLayer));
 
     const folderMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: join(DATA_DIR, "Author") };
-    await Effect.runPromise(Effect.provide(folderMetaSync(folderMetaEvent), TestLayer));
+    await folderMetaSync(folderMetaEvent, asyncDeps);
 
     const rootMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: DATA_DIR };
-    await Effect.runPromise(Effect.provide(folderMetaSync(rootMetaEvent), TestLayer));
+    await folderMetaSync(rootMetaEvent, asyncDeps);
 
     // Verify complete OPDS structure
     const rootFeed = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");

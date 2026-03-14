@@ -1,13 +1,11 @@
-import { Effect } from "effect";
+import { ok, err, type Result } from "neverthrow";
 import { join, relative } from "node:path";
-import { readdir, stat } from "node:fs/promises";
 import { Feed, Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
-import { ConfigService, LoggerService, FileSystemService } from "../services.ts";
+import type { HandlerDeps, FileSystemService } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
-import { log } from "../../logging/index.ts";
 
 interface EntryWithTitle {
   xml: string;
@@ -16,36 +14,33 @@ interface EntryWithTitle {
   dirName: string;
 }
 
-async function readFolderEntries(normalizedDir: string): Promise<{
-  folderEntries: EntryWithTitle[];
-  bookEntries: EntryWithTitle[];
-}> {
+async function readFolderEntries(
+  normalizedDir: string,
+  fs: FileSystemService,
+): Promise<{ folderEntries: EntryWithTitle[]; bookEntries: EntryWithTitle[] }> {
   const folderEntries: EntryWithTitle[] = [];
   const bookEntries: EntryWithTitle[] = [];
 
-  const items = await readdir(normalizedDir);
+  const items = await fs.readdir(normalizedDir);
 
   for (const item of items) {
     if (item.startsWith("_")) continue;
     if (item === FEED_FILE || item.endsWith(".tmp")) continue;
 
     const itemPath = join(normalizedDir, item);
-    const itemStat = await stat(itemPath);
+    const itemStat = await fs.stat(itemPath);
 
     if (itemStat.isDirectory()) {
       const folderEntryPath = join(itemPath, FOLDER_ENTRY_FILE);
       const bookEntryPath = join(itemPath, ENTRY_FILE);
 
-      const folderEntryFile = Bun.file(folderEntryPath);
-      const bookEntryFile = Bun.file(bookEntryPath);
-
-      if (await folderEntryFile.exists()) {
-        const entryXml = await folderEntryFile.text();
+      if (await fs.exists(folderEntryPath)) {
+        const entryXml = await Bun.file(folderEntryPath).text();
         const xml = stripXmlDeclaration(entryXml);
         const title = extractTitle(xml) || item;
         folderEntries.push({ xml, title, dirName: item });
-      } else if (await bookEntryFile.exists()) {
-        const entryXml = await bookEntryFile.text();
+      } else if (await fs.exists(bookEntryPath)) {
+        const entryXml = await Bun.file(bookEntryPath).text();
         const xml = stripXmlDeclaration(entryXml);
         const title = extractTitle(xml) || item;
         const author = extractAuthor(xml);
@@ -73,106 +68,100 @@ const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
 
-export const folderMetaSync = (
+export const folderMetaSync = async (
   event: EventType,
-): Effect.Effect<readonly EventType[], Error, ConfigService | LoggerService | FileSystemService> => {
-  if (event._tag !== "FolderMetaSyncRequested") return Effect.succeed([]);
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
+  if (event._tag !== "FolderMetaSyncRequested") return ok([]);
 
-  return Effect.flatMap(ConfigService, (config) =>
-    Effect.flatMap(FileSystemService, (fs) => {
-      const folderDataDir = event.path;
-      const normalizedDir = folderDataDir.endsWith("/") ? folderDataDir.slice(0, -1) : folderDataDir;
-      const relativePath = relative(config.dataPath, normalizedDir);
+  const folderDataDir = event.path;
+  const normalizedDir = folderDataDir.endsWith("/") ? folderDataDir.slice(0, -1) : folderDataDir;
+  const relativePath = relative(deps.config.dataPath, normalizedDir);
 
-      if (relativePath !== "") {
-        const sourceFolder = join(config.filesPath, relativePath);
-        return fs.stat(sourceFolder).pipe(
-          Effect.map((s) => s.isDirectory()),
-          Effect.catchAll(() => Effect.succeed(false)),
-          Effect.flatMap((exists) => {
-            if (!exists) {
-              log.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
-              return Effect.succeed([] as readonly EventType[]);
-            }
-            return generateFeed(fs, normalizedDir, relativePath);
-          }),
-        );
+  if (relativePath !== "") {
+    const sourceFolder = join(deps.config.filesPath, relativePath);
+    try {
+      const s = await deps.fs.stat(sourceFolder);
+      if (!s.isDirectory()) {
+        deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
+        return ok([]);
       }
+    } catch {
+      deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
+      return ok([]);
+    }
+  }
 
-      return generateFeed(fs, normalizedDir, relativePath);
-    }),
-  );
+  return generateFeed(deps, normalizedDir, relativePath);
 };
 
-function generateFeed(
-  fs: {
-    atomicWrite: (path: string, content: string) => Effect.Effect<void, Error>;
-  },
+async function generateFeed(
+  deps: HandlerDeps,
   normalizedDir: string,
   relativePath: string,
-): Effect.Effect<readonly EventType[], Error> {
-  log.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
+): Promise<Result<readonly EventType[], Error>> {
+  deps.logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
-  return Effect.tryPromise({
-    try: () => readFolderEntries(normalizedDir),
-    catch: (e) => e as Error,
-  }).pipe(
-    Effect.catchAll((error) => {
-      log.warn("FolderMetaSync", "Error reading folder", { path: relativePath, error: String(error) });
-      return Effect.succeed({ folderEntries: [] as EntryWithTitle[], bookEntries: [] as EntryWithTitle[] });
-    }),
-    Effect.flatMap(({ folderEntries, bookEntries }) => {
-      folderEntries.sort(sortByTitle);
-      bookEntries.sort(sortByAuthorTitle);
+  let folderEntries: EntryWithTitle[];
+  let bookEntries: EntryWithTitle[];
 
-      const entries = [...folderEntries.map((e) => e.xml), ...bookEntries.map((e) => e.xml)];
-      const hasBooks = bookEntries.length > 0;
-      const feedKind = hasBooks ? "acquisition" : "navigation";
+  try {
+    const result = await readFolderEntries(normalizedDir, deps.fs);
+    folderEntries = result.folderEntries;
+    bookEntries = result.bookEntries;
+  } catch (error) {
+    deps.logger.warn("FolderMetaSync", "Error reading folder", { path: relativePath, error: String(error) });
+    folderEntries = [];
+    bookEntries = [];
+  }
 
-      const feedOutputPath = join(normalizedDir, FEED_FILE);
-      const rawFolderName = relativePath.split("/").pop() || "Catalog";
-      const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
-      const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
-      const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+  folderEntries.sort(sortByTitle);
+  bookEntries.sort(sortByAuthorTitle);
 
-      const feed = new Feed(feedId, folderName)
-        .addSelfLink(selfHref, feedKind)
-        .addNavigationLink("start", `/${FEED_FILE}`)
-        .setKind(feedKind);
+  const entries = [...folderEntries.map((e) => e.xml), ...bookEntries.map((e) => e.xml)];
+  const hasBooks = bookEntries.length > 0;
+  const feedKind = hasBooks ? "acquisition" : "navigation";
 
-      const feedXml = feed.toXml({ prettyPrint: true });
-      const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';
-      const completeFeed = feedXml
-        .replace('<?xml version="1.0" encoding="utf-8"?>', `<?xml version="1.0" encoding="utf-8"?>\n${stylesheet}`)
-        .replace("</feed>", entries.join("\n") + "\n</feed>");
+  const feedOutputPath = join(normalizedDir, FEED_FILE);
+  const rawFolderName = relativePath.split("/").pop() || "Catalog";
+  const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
+  const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
+  const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-      const writeFeed = fs.atomicWrite(feedOutputPath, completeFeed);
+  const feed = new Feed(feedId, folderName)
+    .addSelfLink(selfHref, feedKind)
+    .addNavigationLink("start", `/${FEED_FILE}`)
+    .setKind(feedKind);
 
-      log.info("FolderMetaSync", "Generated feed.xml", {
-        path: relativePath || "/",
-        subfolders: folderEntries.length,
-        books: bookEntries.length,
-      });
+  const feedXml = feed.toXml({ prettyPrint: true });
+  const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';
+  const completeFeed = feedXml
+    .replace('<?xml version="1.0" encoding="utf-8"?>', `<?xml version="1.0" encoding="utf-8"?>\n${stylesheet}`)
+    .replace("</feed>", entries.join("\n") + "\n</feed>");
 
-      if (relativePath !== "") {
-        const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);
-        const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
+  try {
+    await deps.fs.atomicWrite(feedOutputPath, completeFeed);
 
-        const description = formatFolderDescription(folderEntries.length, bookEntries.length);
-        if (description) entry.setSummary(description);
+    deps.logger.info("FolderMetaSync", "Generated feed.xml", {
+      path: relativePath || "/",
+      subfolders: folderEntries.length,
+      books: bookEntries.length,
+    });
 
-        const entryXml = entry.toXml({ prettyPrint: true });
+    if (relativePath !== "") {
+      const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);
+      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
 
-        return writeFeed.pipe(
-          Effect.flatMap(() => fs.atomicWrite(entryOutputPath, entryXml)),
-          Effect.map(() => {
-            log.debug("FolderMetaSync", "Updated _entry.xml count", { path: relativePath });
-            return [] as const;
-          }),
-        );
-      }
+      const description = formatFolderDescription(folderEntries.length, bookEntries.length);
+      if (description) entry.setSummary(description);
 
-      return Effect.map(writeFeed, () => [] as const);
-    }),
-  );
+      const entryXml = entry.toXml({ prettyPrint: true });
+      await deps.fs.atomicWrite(entryOutputPath, entryXml);
+      deps.logger.debug("FolderMetaSync", "Updated _entry.xml count", { path: relativePath });
+    }
+
+    return ok([]);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
 }
