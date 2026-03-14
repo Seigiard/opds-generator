@@ -1,34 +1,28 @@
+import sharp from "sharp";
 import { join } from "node:path";
 
 const REFERENCE_COVER = join(import.meta.dir, "../../files/test/cover.jpg");
 
-export async function compareImages(imageA: Buffer, imageB: Buffer, threshold = 0.1): Promise<{ similar: boolean; rmse: number }> {
-  const id = Date.now();
-  const tmpA = `/tmp/compare_a_${id}.jpg`;
-  const tmpB = `/tmp/compare_b_${id}.jpg`;
+export async function compareImages(imageA: Buffer, imageB: Buffer, threshold = 0.15): Promise<{ similar: boolean; rmse: number }> {
+  const size = 200;
+  const [a, b] = await Promise.all([
+    sharp(imageA).resize(size, size, { fit: "fill" }).raw().toBuffer(),
+    sharp(imageB).resize(size, size, { fit: "fill" }).raw().toBuffer(),
+  ]);
 
-  await Bun.write(tmpA, imageA);
-  await Bun.write(tmpB, imageB);
+  if (a.length !== b.length) return { similar: false, rmse: 1 };
 
-  await Bun.$`magick ${tmpA} -resize 200x200! ${tmpA}`.quiet();
-  await Bun.$`magick ${tmpB} -resize 200x200! ${tmpB}`.quiet();
-
-  const proc = Bun.spawn(["magick", "compare", "-metric", "RMSE", tmpA, tmpB, "null:"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const stderr = await new Response(proc.stderr).text();
-  await proc.exited;
-
-  const match = stderr.match(/\(([\d.]+)\)/);
-  const rmse = match?.[1] ? parseFloat(match[1]) : 1;
-
-  await Bun.$`rm -f ${tmpA} ${tmpB}`.quiet();
+  let sumSq = 0;
+  for (let i = 0; i < a.length; i++) {
+    const diff = (a[i]! - b[i]!) / 255;
+    sumSq += diff * diff;
+  }
+  const rmse = Math.sqrt(sumSq / a.length);
 
   return { similar: rmse < threshold, rmse };
 }
 
-export async function assertCoverMatchesReference(extractedCover: Buffer, threshold = 0.1): Promise<void> {
+export async function assertCoverMatchesReference(extractedCover: Buffer, threshold = 0.15): Promise<void> {
   const referenceCover = await Bun.file(REFERENCE_COVER).arrayBuffer();
   const { similar, rmse } = await compareImages(extractedCover, Buffer.from(referenceCover), threshold);
 

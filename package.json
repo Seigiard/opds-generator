@@ -22,11 +22,13 @@
     "test:all": "bun run test && bun run test:e2e"
   },
   "dependencies": {
+    "detect-libc": "^2.1.2",
     "fast-xml-parser": "^5.5.5",
     "knip": "^5.86.0",
     "neverthrow": "^8.2.0",
     "node-unrar-js": "^2.0.2",
-    "opds-ts": "^2.1.0"
+    "opds-ts": "^2.1.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/bun": "latest",

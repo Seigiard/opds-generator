@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
@@ -95,26 +96,24 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
 
   try {
     tempDir = await mkdtemp(join(tmpdir(), "djvu-"));
-    const ppmPath = join(tempDir, "page.ppm");
+    const tiffPath = join(tempDir, "page.tiff");
 
-    const ddjvu = Bun.spawn(["ddjvu", "-format=ppm", "-page=1", filePath, ppmPath], {
-      stdout: "pipe",
-      stderr: "pipe",
+    const ddjvu = Bun.spawn(["ddjvu", "-format=tiff", "-page=1", filePath, tiffPath], {
+      stdout: "ignore",
+      stderr: "ignore",
     });
 
     const ddjvuExitCode = await ddjvu.exited;
     if (ddjvuExitCode !== 0) return null;
 
-    const convert = Bun.spawn(["convert", ppmPath, "-resize", `${COVER_MAX_SIZE}x${COVER_MAX_SIZE}>`, "jpeg:-"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const data = await sharp(tiffPath)
+      .resize(COVER_MAX_SIZE, COVER_MAX_SIZE, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
 
-    const [data, convertExitCode] = await Promise.all([new Response(convert.stdout).arrayBuffer(), convert.exited]);
+    if (data.byteLength === 0) return null;
 
-    if (convertExitCode !== 0 || data.byteLength === 0) return null;
-
-    return Buffer.from(data);
+    return data;
   } catch {
     return null;
   } finally {
