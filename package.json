@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/sharp": "^0.32.0",
     "oxfmt": "^0.21.0",
     "oxlint": "latest",
     "oxlint-tsgolint": "latest"

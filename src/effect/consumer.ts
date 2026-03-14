@@ -124,6 +124,3 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
     if (eventCounter % 100 === 0) Bun.gc(true);
   }
 }
-function heapStats() {
-  throw new Error("Function not implemented.");
-}
