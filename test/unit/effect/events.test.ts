@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { adaptBooksEvent } from "../../../src/effect/adapters/books-adapter.ts";
 import { adaptDataEvent } from "../../../src/effect/adapters/data-adapter.ts";
-import type { RawBooksEvent, RawDataEvent } from "../../../src/effect/types.ts";
+import type { RawBooksEvent } from "../../../src/effect/types.ts";
 import type { DeduplicationService } from "../../../src/context.ts";
 
 const alwaysProcessDedup: DeduplicationService = {

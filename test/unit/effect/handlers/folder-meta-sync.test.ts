@@ -4,7 +4,7 @@ import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, stat, readFile, rename, symlink, unlink, readdir } from "node:fs/promises";
+import { mkdir, rm, stat, readFile, symlink, unlink, readdir } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-folder-meta-test-${Date.now()}`);
 const DATA_DIR = join(TEST_DIR, "data");
@@ -14,14 +14,35 @@ const deps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
   logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
   fs: {
-    mkdir: async (path, options) => { await mkdir(path, options); },
+    mkdir: async (path, options) => {
+      await mkdir(path, options);
+    },
     rm: (path, options) => rm(path, options),
     readdir: (path) => readdir(path),
-    stat: async (path) => { const s = await stat(path); return { isDirectory: () => s.isDirectory(), size: s.size }; },
-    exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
-    writeFile: async (path, content) => { await Bun.write(path, content); },
-    atomicWrite: async (path, content) => { await Bun.write(path, content); },
-    symlink: async (target, path) => { try { await unlink(path); } catch {} await symlink(target, path); },
+    stat: async (path) => {
+      const s = await stat(path);
+      return { isDirectory: () => s.isDirectory(), size: s.size };
+    },
+    exists: async (path) => {
+      try {
+        await stat(path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writeFile: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    atomicWrite: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    symlink: async (target, path) => {
+      try {
+        await unlink(path);
+      } catch {}
+      await symlink(target, path);
+    },
     unlink: (path) => unlink(path),
   },
 };
@@ -51,7 +72,9 @@ describe("folderMetaSync handler", () => {
   test("creates feed.xml in empty folder", async () => {
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const feedPath = join(DATA_DIR, "feed.xml");
-    const exists = await stat(feedPath).then(() => true).catch(() => false);
+    const exists = await stat(feedPath)
+      .then(() => true)
+      .catch(() => false);
     expect(exists).toBe(true);
   });
 
@@ -244,7 +267,9 @@ describe("folderMetaSync handler", () => {
     test("does not create _entry.xml for root folder", async () => {
       await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
       const entryPath = join(DATA_DIR, "_entry.xml");
-      const exists = await stat(entryPath).then(() => true).catch(() => false);
+      const exists = await stat(entryPath)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(false);
     });
   });

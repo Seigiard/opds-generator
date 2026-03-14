@@ -4,7 +4,7 @@ import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, readdir, stat, readFile, lstat, rename, symlink, unlink } from "node:fs/promises";
+import { mkdir, rm, readdir, stat, readFile, lstat, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-book-sync-test-${Date.now()}`);
 const FILES_DIR = join(TEST_DIR, "files");
@@ -15,14 +15,35 @@ const deps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
   logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
   fs: {
-    mkdir: async (path, options) => { await mkdir(path, options); },
+    mkdir: async (path, options) => {
+      await mkdir(path, options);
+    },
     rm: (path, options) => rm(path, options),
     readdir: (path) => readdir(path),
-    stat: async (path) => { const s = await stat(path); return { isDirectory: () => s.isDirectory(), size: s.size }; },
-    exists: async (path) => { try { await stat(path); return true; } catch { return false; } },
-    writeFile: async (path, content) => { await Bun.write(path, content); },
-    atomicWrite: async (path, content) => { await Bun.write(path, content); },
-    symlink: async (target, path) => { try { await unlink(path); } catch {} await symlink(target, path); },
+    stat: async (path) => {
+      const s = await stat(path);
+      return { isDirectory: () => s.isDirectory(), size: s.size };
+    },
+    exists: async (path) => {
+      try {
+        await stat(path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writeFile: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    atomicWrite: async (path, content) => {
+      await Bun.write(path, content);
+    },
+    symlink: async (target, path) => {
+      try {
+        await unlink(path);
+      } catch {}
+      await symlink(target, path);
+    },
     unlink: (path) => unlink(path),
   },
 };
@@ -59,7 +80,9 @@ describe("bookSync handler", () => {
     await bookSync(bookCreatedEvent("test.epub"), deps);
 
     const dataDir = join(DATA_DIR, "test.epub");
-    const exists = await stat(dataDir).then(() => true).catch(() => false);
+    const exists = await stat(dataDir)
+      .then(() => true)
+      .catch(() => false);
     expect(exists).toBe(true);
   });
 
@@ -113,8 +136,12 @@ describe("bookSync handler", () => {
 
     const coverPath = join(DATA_DIR, "Test Book - Test Author.epub", "cover.jpg");
     const thumbPath = join(DATA_DIR, "Test Book - Test Author.epub", "thumb.jpg");
-    const coverExists = await stat(coverPath).then(() => true).catch(() => false);
-    const thumbExists = await stat(thumbPath).then(() => true).catch(() => false);
+    const coverExists = await stat(coverPath)
+      .then(() => true)
+      .catch(() => false);
+    const thumbExists = await stat(thumbPath)
+      .then(() => true)
+      .catch(() => false);
     expect(coverExists).toBe(true);
     expect(thumbExists).toBe(true);
   });
@@ -128,7 +155,9 @@ describe("bookSync handler", () => {
     await bookSync(bookCreatedEvent("Fiction/Author/book.epub"), deps);
 
     const dataDir = join(DATA_DIR, "Fiction", "Author", "book.epub");
-    const exists = await stat(dataDir).then(() => true).catch(() => false);
+    const exists = await stat(dataDir)
+      .then(() => true)
+      .catch(() => false);
     expect(exists).toBe(true);
   });
 
