@@ -89,15 +89,15 @@ docker compose up -d --build
 
 ## Environment Variables
 
-| Variable        | Default  | Description                           |
-| --------------- | -------- | ------------------------------------- |
-| `FILES`         | `/books` | Path to your books directory          |
-| `DATA`          | `/data`  | Path for cache and metadata           |
-| `PORT`          | `3000`   | Internal Bun server port              |
-| `DEV_MODE`      | `false`  | Enable hot reload for Bun             |
-| `ADMIN_USER`    | -        | Username for /resync Basic Auth       |
-| `ADMIN_TOKEN`   | -        | Password for /resync Basic Auth       |
-| `RATE_LIMIT_MB` | `0`      | Download rate limit in MB/s (0 = off) |
+| Variable             | Default  | Description                                       |
+| -------------------- | -------- | ------------------------------------------------- |
+| `FILES`              | `/books` | Path to your books directory                      |
+| `DATA`               | `/data`  | Path for cache and metadata                       |
+| `PORT`               | `3000`   | Internal Bun server port                          |
+| `DEV_MODE`           | `false`  | Enable hot reload for Bun                         |
+| `ADMIN_USER`         | -        | Username for /resync Basic Auth                   |
+| `ADMIN_TOKEN`        | -        | Password for /resync Basic Auth                   |
+| `RATE_LIMIT_MB`      | `0`      | Download rate limit in MB/s (0 = off)             |
 | `RECONCILE_INTERVAL` | `1800`   | Periodic reconciliation seconds (0 = off, min 60) |
 
 ## API
