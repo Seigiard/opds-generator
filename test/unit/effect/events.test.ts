@@ -101,6 +101,28 @@ describe("adaptBooksEvent (books watcher classification)", () => {
     }
   });
 
+  describe("dot-prefixed entries", () => {
+    test("ignores dot-prefixed file", () => {
+      const result = adaptBooksEvent({ parent: "/books/Fiction/", name: ".DS_Store", events: "CLOSE_WRITE" }, alwaysProcessDedup);
+      expect(result).toBeNull();
+    });
+
+    test("ignores dot-prefixed directory", () => {
+      const result = adaptBooksEvent({ parent: "/books/", name: ".hidden", events: "CREATE,ISDIR" }, alwaysProcessDedup);
+      expect(result).toBeNull();
+    });
+
+    test("ignores dot-prefixed book file", () => {
+      const result = adaptBooksEvent({ parent: "/books/Fiction/", name: ".book.epub", events: "CLOSE_WRITE" }, alwaysProcessDedup);
+      expect(result).toBeNull();
+    });
+
+    test("ignores delete of dot-prefixed directory", () => {
+      const result = adaptBooksEvent({ parent: "/books/", name: ".trash", events: "DELETE,ISDIR" }, alwaysProcessDedup);
+      expect(result).toBeNull();
+    });
+  });
+
   describe("deduplication", () => {
     test("filters duplicate events", () => {
       let callCount = 0;

@@ -19,6 +19,8 @@ function classifyBooksEvent(raw: RawBooksEvent): EventType {
   const { event, isDir } = parseEvents(raw.events);
   const { parent, name } = raw;
 
+  if (name.startsWith(".")) return { _tag: "Ignored" };
+
   if (event === "CREATE" && isDir) return { _tag: "FolderCreated", parent, name };
   if (event === "CREATE" && !isDir) return { _tag: "Ignored" };
   if (event === "CLOSE_WRITE") return isValidBookExtension(name) ? { _tag: "BookCreated", parent, name } : { _tag: "Ignored" };

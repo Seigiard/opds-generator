@@ -11,6 +11,7 @@ export async function scanFiles(rootPath: string): Promise<FileInfo[]> {
     const entries = await readdir(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
       const fullPath = join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
@@ -91,7 +92,7 @@ async function scanDataMirror(dataPath: string): Promise<Set<string>> {
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        if (entry.name.startsWith("_")) continue;
+        if (entry.name.startsWith(".") || entry.name.startsWith("_")) continue;
 
         const entryPath = join(dirPath, entry.name);
         const entryRelPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
