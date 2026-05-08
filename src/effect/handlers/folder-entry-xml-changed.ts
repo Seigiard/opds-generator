@@ -11,15 +11,11 @@ export const folderEntryXmlChanged = async (event: EventType, deps: HandlerDeps)
   const parentDataDir = dirname(normalizedDir);
   const parentRelativePath = relative(deps.config.dataPath, parentDataDir);
 
-  deps.logger.info("FolderEntryXmlChanged", "Triggering folder-meta-sync for current and parent");
-
-  const events: EventType[] = [{ _tag: "FolderMetaSyncRequested", path: normalizedDir }];
+  deps.logger.info("FolderEntryXmlChanged", "Triggering folder-meta-sync for parent");
 
   if (parentDataDir === deps.config.dataPath || parentRelativePath === ".") {
-    events.push({ _tag: "FolderMetaSyncRequested", path: deps.config.dataPath });
+    return ok([{ _tag: "FolderMetaSyncRequested", path: deps.config.dataPath }] as const);
   } else {
-    events.push({ _tag: "FolderMetaSyncRequested", path: parentDataDir });
+    return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const);
   }
-
-  return ok(events);
 };

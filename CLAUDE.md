@@ -239,6 +239,11 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 
 ## Troubleshooting
 
+### Dependency Notes
+
+- `sharp` includes its own TypeScript definitions; do not add `@types/sharp`.
+- `detect-libc` is pulled transitively by `sharp`; do not add it as a direct dependency unless app code imports it.
+
 ### Infinite Loop in Watchers
 
 - data watcher excludes `.jsonl` files
