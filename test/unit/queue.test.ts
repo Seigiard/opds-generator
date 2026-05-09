@@ -262,7 +262,7 @@ describe("SimpleQueue", () => {
     expect(q.take(controller.signal)).rejects.toThrow("pre-aborted");
   });
 
-  test("deduplicates pending items by configured key", async () => {
+  test("coalesces pending items by configured key behind later work", async () => {
     // #given
     const q = new SimpleQueue<{ path: string; value: number }>((item) => item.path);
 
@@ -273,8 +273,8 @@ describe("SimpleQueue", () => {
 
     // #then
     expect(q.size).toBe(2);
-    expect(await q.take()).toEqual({ path: "/data/comics", value: 1 });
     expect(await q.take()).toEqual({ path: "/data/books", value: 3 });
+    expect(await q.take()).toEqual({ path: "/data/comics", value: 1 });
   });
 
   test("does not deduplicate items delivered directly to waiters", async () => {

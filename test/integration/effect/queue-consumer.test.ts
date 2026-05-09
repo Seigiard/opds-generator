@@ -78,7 +78,7 @@ describe("Queue and Consumer Integration", () => {
     expect(ctx.queue.size).toBe(2);
   });
 
-  test("buildContext queue deduplicates pending folder meta-sync requests", async () => {
+  test("buildContext queue coalesces pending folder meta-sync requests behind later work", async () => {
     const ctx = await buildContext();
 
     ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
@@ -86,7 +86,7 @@ describe("Queue and Consumer Integration", () => {
     ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
 
     expect(ctx.queue.size).toBe(2);
-    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
     expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
+    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
   });
 });

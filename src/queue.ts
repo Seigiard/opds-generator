@@ -93,6 +93,7 @@ export class UnrolledQueue<T> {
 export class SimpleQueue<T> {
   private buffer = new UnrolledQueue<T>();
   private pendingKeys = new Set<string>();
+  private dirtyKeys = new Set<string>();
   private waiters: Array<{
     resolve: (item: T) => void;
     reject: (reason: unknown) => void;
@@ -107,7 +108,10 @@ export class SimpleQueue<T> {
     } else {
       const key = this.getKey?.(item);
       if (key) {
-        if (this.pendingKeys.has(key)) return;
+        if (this.pendingKeys.has(key)) {
+          this.dirtyKeys.add(key);
+          return;
+        }
         this.pendingKeys.add(key);
       }
       this.buffer.push(item);
@@ -120,10 +124,16 @@ export class SimpleQueue<T> {
 
   async take(signal?: AbortSignal): Promise<T> {
     if (this.buffer.length > 0) {
-      const item = this.buffer.shift()!;
-      const key = this.getKey?.(item);
-      if (key) this.pendingKeys.delete(key);
-      return item;
+      while (this.buffer.length > 0) {
+        const item = this.buffer.shift()!;
+        const key = this.getKey?.(item);
+        if (key && this.dirtyKeys.delete(key)) {
+          this.buffer.push(item);
+          continue;
+        }
+        if (key) this.pendingKeys.delete(key);
+        return item;
+      }
     }
     if (signal?.aborted) throw signal.reason;
     return new Promise((resolve, reject) => {
