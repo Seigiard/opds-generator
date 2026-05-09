@@ -9,7 +9,7 @@
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
 import { SimpleQueue } from "../../../src/queue.ts";
-import { startConsumer } from "../../../src/effect/consumer.ts";
+import { getEventPath, startConsumer } from "../../../src/effect/consumer.ts";
 import type { AppContext } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
 
@@ -38,6 +38,12 @@ function createTestContext(): AppContext {
 }
 
 describe("Queue and Consumer Integration", () => {
+  test("formats parent/name event paths without duplicate slashes", () => {
+    const path = getEventPath({ _tag: "FolderCreated", parent: "/books/comics/", name: "Marvel" });
+
+    expect(path).toBe("/books/comics/Marvel");
+  });
+
   test("consumer processes events from shared queue", async () => {
     const processedEvents: string[] = [];
     const controller = new AbortController();

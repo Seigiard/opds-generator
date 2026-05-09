@@ -1,4 +1,5 @@
 import { heapStats } from "bun:jsc";
+import { join } from "node:path";
 import { log } from "../logging/index.ts";
 import type { AppContext } from "../context.ts";
 import type { EventType } from "./types.ts";
@@ -9,9 +10,9 @@ function generateEventId(event: EventType, path: string | undefined): string {
   return `${event._tag}:${path ?? "unknown"}:${timestamp}:${random}`;
 }
 
-function getEventPath(event: EventType): string | undefined {
+export function getEventPath(event: EventType): string | undefined {
   if ("path" in event && typeof event.path === "string") return event.path;
-  if ("parent" in event && "name" in event) return `${event.parent}/${event.name}`;
+  if ("parent" in event && "name" in event) return join(event.parent, event.name);
   if ("parent" in event && typeof event.parent === "string") return event.parent;
   return undefined;
 }
