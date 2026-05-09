@@ -261,4 +261,34 @@ describe("SimpleQueue", () => {
     controller.abort(new Error("pre-aborted"));
     expect(q.take(controller.signal)).rejects.toThrow("pre-aborted");
   });
+
+  test("deduplicates pending items by configured key", async () => {
+    // #given
+    const q = new SimpleQueue<{ path: string; value: number }>((item) => item.path);
+
+    // #when
+    q.enqueue({ path: "/data/comics", value: 1 });
+    q.enqueue({ path: "/data/comics", value: 2 });
+    q.enqueue({ path: "/data/books", value: 3 });
+
+    // #then
+    expect(q.size).toBe(2);
+    expect(await q.take()).toEqual({ path: "/data/comics", value: 1 });
+    expect(await q.take()).toEqual({ path: "/data/books", value: 3 });
+  });
+
+  test("does not deduplicate items delivered directly to waiters", async () => {
+    // #given
+    const q = new SimpleQueue<{ path: string; value: number }>((item) => item.path);
+    const first = q.take();
+
+    // #when
+    q.enqueue({ path: "/data/comics", value: 1 });
+    q.enqueue({ path: "/data/comics", value: 2 });
+
+    // #then
+    expect(await first).toEqual({ path: "/data/comics", value: 1 });
+    expect(q.size).toBe(1);
+    expect(await q.take()).toEqual({ path: "/data/comics", value: 2 });
+  });
 });

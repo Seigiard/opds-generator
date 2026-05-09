@@ -9,6 +9,7 @@
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
 import { SimpleQueue } from "../../../src/queue.ts";
+import { buildContext } from "../../../src/context.ts";
 import { getEventPath, startConsumer } from "../../../src/effect/consumer.ts";
 import type { AppContext } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
@@ -75,5 +76,17 @@ describe("Queue and Consumer Integration", () => {
 
     ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test2.epub" });
     expect(ctx.queue.size).toBe(2);
+  });
+
+  test("buildContext queue deduplicates pending folder meta-sync requests", async () => {
+    const ctx = await buildContext();
+
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
+
+    expect(ctx.queue.size).toBe(2);
+    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
   });
 });
