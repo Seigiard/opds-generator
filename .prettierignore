@@ -1,2 +1,3 @@
-# Generated browser bundle — formatted by build:ui (Bun.build minify), not oxfmt
+# Generated build artifacts — written by build:ui (cssnano / Bun.build minify), never oxfmt
 static/main.js
+static/style.css

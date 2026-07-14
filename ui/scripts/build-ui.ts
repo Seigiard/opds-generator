@@ -26,9 +26,10 @@ async function buildCss(): Promise<void> {
     source += (await Bun.file(join(stylesDir, file)).text()) + "\n";
   }
 
+  // No formatter pass: the artifact stays cssnano-minified. A formatter here made
+  // the build:ui:check freshness gate hostage to formatter version drift across machines.
   const result = await postcss(pipeline).process(source, { from: undefined });
   await Bun.write(outPath, result.css);
-  await Bun.$`bunx oxfmt --write ${outPath}`.quiet();
   console.log(`build:ui → ${outPath}`);
 }
 
