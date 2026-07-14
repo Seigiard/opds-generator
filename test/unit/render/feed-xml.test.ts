@@ -75,6 +75,18 @@ describe("renderXml", () => {
     expect(renderXml(model)).toBe(renderXml(model));
   });
 
+  test("fragment text with $-substitution sequences is spliced verbatim", () => {
+    // #given a title containing replace() substitution patterns
+    const fragment = `<entry>
+  <id>urn:opds:book:dollar</id>
+  <title>Price $&amp; Value $' $\`</title>
+</entry>`;
+    // #when rendered
+    const xml = renderXml(rootModel([fragment]));
+    // #then the fragment survives unmangled
+    expect(xml).toContain(fragment);
+  });
+
   test("acquisition kind reflected in self link when hasBooks", () => {
     const model = buildFeedModel({
       id: "urn:opds:catalog:pdf",

@@ -11,8 +11,21 @@ function popupIsOpen(): boolean {
 let activeTrap: FocusTrap | null = null;
 let lastTrigger: HTMLElement | null = null;
 
+// A #book-N hash present at page load (deep link, reload) has no in-page history
+// entry behind it — history.back() would leave the site. Stamp that entry so
+// closePopup clears the hash in place instead; card-click entries carry null state.
+function stampEntryPopup(): void {
+  if (popupIsOpen()) history.replaceState({ popupEntry: true }, "");
+}
+
 function closePopup(): void {
-  if (popupIsOpen()) history.back();
+  if (!popupIsOpen()) return;
+  if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
+    history.replaceState(null, "", location.pathname + location.search);
+    syncPopup();
+    return;
+  }
+  history.back();
 }
 
 function syncPopup(): void {
@@ -63,6 +76,7 @@ function init(): void {
     }
   });
 
+  stampEntryPopup();
   syncPopup();
 }
 

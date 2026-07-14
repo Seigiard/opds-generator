@@ -1,19 +1,8 @@
 import { createXmlParser, getString } from "../formats/utils.ts";
-import { entryFromFragment, type FeedModel } from "./feed-model.ts";
+import { entryFromFragment, toLinks, type FeedModel } from "./feed-model.ts";
 
 const feedParser = createXmlParser(["link"]);
 const ENTRY_RE = /<entry>[\s\S]*?<\/entry>/g;
-
-interface RawLink {
-  "@_rel"?: string;
-  "@_href"?: string;
-  "@_type"?: string;
-}
-
-function toLinks(value: unknown): RawLink[] {
-  if (!value) return [];
-  return (Array.isArray(value) ? value : [value]) as RawLink[];
-}
 
 export function parseFeed(xml: string): FeedModel {
   const fragments = xml.match(ENTRY_RE) ?? [];

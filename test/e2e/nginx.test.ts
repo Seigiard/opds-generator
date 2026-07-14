@@ -173,6 +173,18 @@ describe("nginx integration", () => {
         expect(htmlRes.status).toBe(200);
         expect((htmlRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
 
+        // the links a browser actually clicks (folder cards, home) must resolve to HTML, not XML
+        const html = await htmlRes.text();
+        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)]
+          .map((m) => m[1]!)
+          .filter((href) => !href.startsWith("#"));
+        for (const href of cardHrefs) {
+          expect(href).not.toMatch(/feed\.xml$/);
+          const cardRes = await fetch(`${BASE_URL}${href}`);
+          expect(cardRes.status).toBe(200);
+          expect((cardRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
+        }
+
         for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) queue.push(m[1]!);
         const image = xml.match(/opds-spec\.org\/image"\s+href="([^"]+)"/);
         if (image) assets.add(image[1]!);

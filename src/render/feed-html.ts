@@ -8,6 +8,12 @@ function escapeAttr(value: string): string {
   return escapeHtml(value).replace(/"/g, "&quot;");
 }
 
+/** Reader links point at feed.xml; browsers need the folder URL nginx resolves to index.html. */
+function browserHref(feedHref: string): string {
+  const folderUrl = feedHref.replace(/feed\.xml$/, "");
+  return folderUrl === "" ? "/" : folderUrl;
+}
+
 export function formatFromMime(type: string): string {
   const t = type.toLowerCase();
   if (t.includes("epub")) return "EPUB";
@@ -62,7 +68,7 @@ function renderHeader(model: FeedModel): string {
   const home = isRoot
     ? ""
     : `
-        <a class="header__home" href="${escapeAttr(model.startHref)}" aria-label="Home">
+        <a class="header__home" href="${escapeAttr(browserHref(model.startHref))}" aria-label="Home">
           <svg xmlns="http://www.w3.org/2000/svg" class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
           </svg>
@@ -87,7 +93,7 @@ function renderCover(entry: FeedEntry, src: string | undefined, lazy: boolean): 
 
 function renderFolder(entry: FeedEntry): string {
   const title = escapeHtml(entry.title);
-  const href = escapeAttr(entry.href ?? "#");
+  const href = escapeAttr(entry.href ? browserHref(entry.href) : "#");
   const stack = Array(3)
     .fill(`<div class="book" aria-hidden="true"><div class="book__cover"><span>${title}</span></div></div>`)
     .join("\n        ");

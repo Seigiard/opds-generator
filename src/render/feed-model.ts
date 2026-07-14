@@ -48,7 +48,7 @@ interface RawLink {
 
 const entryParser = createXmlParser(["link", "subject"]);
 
-function toLinks(value: unknown): RawLink[] {
+export function toLinks(value: unknown): RawLink[] {
   if (!value) return [];
   return (Array.isArray(value) ? value : [value]) as RawLink[];
 }

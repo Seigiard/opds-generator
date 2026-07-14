@@ -11,5 +11,6 @@ export function renderXml(model: FeedModel): string {
   const skeleton = feed.toXml({ prettyPrint: true });
   const fragments = model.entries.map((e) => e.xml).join("\n");
 
-  return skeleton.replace("</feed>", fragments + "\n</feed>");
+  // Function replacer: $&, $', $` in fragment text must not act as replace substitution patterns.
+  return skeleton.replace("</feed>", () => fragments + "\n</feed>");
 }

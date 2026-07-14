@@ -21,13 +21,14 @@ describe("renderHtml", () => {
     // #then the page title and heading are present
     expect(html).toContain("<title>Nonfiction</title>");
     expect(html).toContain('<h1 class="header__title">Nonfiction</h1>');
-    // and a home breadcrumb link appears for a non-root feed
-    expect(html).toContain('class="header__home"');
+    // and a home breadcrumb link appears for a non-root feed and targets the browser root
+    expect(html).toContain('<a class="header__home" href="/"');
     // and every entry becomes a card
     expect(countOccurrences(html, 'class="card card--folder"')).toBe(1);
     expect(countOccurrences(html, 'class="card card--book"')).toBe(5);
-    // and the folder card links to the folder URL
-    expect(html).toContain('<a href="/nonfiction/finance/feed.xml">');
+    // and the folder card links to the browser folder URL, never the reader feed.xml
+    expect(html).toContain('<a href="/nonfiction/finance/">');
+    expect(html).not.toContain('<a href="/nonfiction/finance/feed.xml">');
   });
 
   test("root feed omits the home breadcrumb link", async () => {
