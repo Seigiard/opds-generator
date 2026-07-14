@@ -100,9 +100,13 @@ describe("nginx integration", () => {
   });
 
   describe("static files", () => {
-    test("GET /static/style.css returns 200", async () => {
+    test("GET /static/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
       const response = await fetch(`${BASE_URL}/static/style.css`);
       expect(response.status).toBe(200);
+      // Unversioned asset URLs must revalidate: "immutable" left browsers on
+      // day-old CSS/JS mismatched with freshly regenerated index.html.
+      expect(response.headers.get("cache-control") || "").toContain("no-cache");
+      expect(response.headers.get("etag")).toBeTruthy();
     });
 
     test("GET /static/favicon/*.png served from /app/static, not captured by the /data image regex", async () => {

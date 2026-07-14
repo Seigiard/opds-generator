@@ -25,8 +25,12 @@ let closing = false;
 function closePopup(): void {
   if (!popupIsOpen() || closing) return;
   if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
-    history.replaceState(null, "", location.pathname + location.search);
-    syncPopup();
+    // :target only re-evaluates on real fragment navigation — replaceState hides the
+    // hash but leaves the popup visible. location.replace navigates without adding a
+    // history entry; empty-fragment navigation resets scroll, so restore it.
+    const { scrollX, scrollY } = window;
+    location.replace("#");
+    scrollTo(scrollX, scrollY);
     return;
   }
   closing = true;

@@ -47,10 +47,12 @@ http {
 
         # Static assets from /static folder
         # ^~ so the .xml/image regex locations below cannot capture /static/* into /data
+        # no-cache (ETag revalidation): style.css/main.js have unversioned URLs, and a
+        # deploy regenerates index.html against the NEW assets — "immutable" left
+        # browsers on day-old CSS/JS with mismatched markup (popup dead).
         location ^~ /static/ {
             alias /app/static/;
-            expires 1d;
-            add_header Cache-Control "public, immutable";
+            add_header Cache-Control "no-cache";
         }
 
         # Admin endpoint: /resync (only if auth configured)
