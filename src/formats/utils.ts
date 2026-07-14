@@ -70,6 +70,7 @@ export function decodeEntities(str: string): string {
 
 export function getString(val: unknown): string | undefined {
   if (typeof val === "string") return decodeEntities(val.trim());
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
   if (typeof val === "object" && val && "#text" in val) {
     return decodeEntities(String((val as { "#text": unknown })["#text"]).trim());
   }

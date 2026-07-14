@@ -149,6 +149,150 @@ describe("Cascade Flow Integration", () => {
     expect(rootFeedContent).toContain("kind=navigation");
   });
 
+  test("characterization: feed.xml is deterministic and splices fragments verbatim modulo <updated>", async () => {
+    // #given a data folder holding a book entry.xml and a subfolder _entry.xml
+    const libFiles = join(FILES_DIR, "lib");
+    await mkdir(libFiles, { recursive: true });
+    const libData = join(DATA_DIR, "lib");
+    const bookDir = join(libData, "book.epub");
+    const subDir = join(libData, "Sub");
+    await mkdir(bookDir, { recursive: true });
+    await mkdir(subDir, { recursive: true });
+
+    const bookEntry = `<?xml version="1.0"?>
+<entry>
+  <id>urn:opds:book:book.epub</id>
+  <title>Test Book</title>
+  <updated>2026-01-08T04:52:36.379Z</updated>
+  <dc:format>EPUB</dc:format>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/lib/book.epub/file" type="application/epub+zip"/>
+</entry>`;
+    const subEntry = `<?xml version="1.0"?>
+<entry>
+  <id>urn:opds:catalog:lib/Sub</id>
+  <title>Sub</title>
+  <updated>2026-01-08T04:52:36.379Z</updated>
+  <summary type="text">📚 1</summary>
+  <link rel="subsection" href="/lib/Sub/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>`;
+    await Bun.write(join(bookDir, "entry.xml"), bookEntry);
+    await Bun.write(join(subDir, "_entry.xml"), subEntry);
+
+    // #when folderMetaSync runs twice
+    const event: EventType = { _tag: "FolderMetaSyncRequested", path: libData };
+    await folderMetaSync(event, asyncDeps);
+    const first = await readFile(join(libData, "feed.xml"), "utf-8");
+    const subEntryAfter = await readFile(join(subDir, "_entry.xml"), "utf-8");
+    await folderMetaSync(event, asyncDeps);
+    const second = await readFile(join(libData, "feed.xml"), "utf-8");
+
+    // #then output is stable modulo volatile <updated> timestamps
+    const normalize = (xml: string) => xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+    expect(normalize(first)).toBe(normalize(second));
+    // and no XSLT stylesheet PI is emitted (post-flip); acquisition kind is present
+    expect(first).not.toContain("xml-stylesheet");
+    expect(first).toContain("kind=acquisition");
+    // and fragments are spliced verbatim (book after folder)
+    expect(first).toContain("urn:opds:book:book.epub");
+    expect(first).toContain('<link rel="subsection" href="/lib/Sub/feed.xml"');
+    expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(first.indexOf("urn:opds:book:book.epub"));
+    // and the subfolder's own _entry.xml is untouched by the parent sync
+    expect(subEntryAfter).toBe(subEntry);
+  });
+
+  test("AE4: cascade writes feed.xml and a consistent index.html", async () => {
+    // #given a data folder with a book entry
+    await mkdir(join(FILES_DIR, "lib"), { recursive: true });
+    const libData = join(DATA_DIR, "lib");
+    const bookDir = join(libData, "book.epub");
+    await mkdir(bookDir, { recursive: true });
+    await Bun.write(
+      join(bookDir, "entry.xml"),
+      `<?xml version="1.0"?>
+<entry>
+  <id>urn:opds:book:book.epub</id>
+  <title>Consistent Title</title>
+  <updated>2026-01-08T04:52:36.379Z</updated>
+  <dc:format>EPUB</dc:format>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/lib/book.epub/file" type="application/epub+zip"/>
+</entry>`,
+    );
+
+    // #when folderMetaSync runs
+    await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, asyncDeps);
+
+    // #then both artifacts exist and reflect the same book
+    const feed = await readFile(join(libData, "feed.xml"), "utf-8");
+    const html = await readFile(join(libData, "index.html"), "utf-8");
+    expect(feed).toContain("Consistent Title");
+    expect(html).toContain("<!DOCTYPE html>");
+    expect(html).toContain("Consistent Title");
+    expect(html).toContain('class="card card--book"');
+  });
+
+  test("R16: re-running the sync overwrites index.html", async () => {
+    await mkdir(join(FILES_DIR, "lib"), { recursive: true });
+    const libData = join(DATA_DIR, "lib");
+    await mkdir(libData, { recursive: true });
+    const event: EventType = { _tag: "FolderMetaSyncRequested", path: libData };
+
+    await folderMetaSync(event, asyncDeps);
+    const first = await stat(join(libData, "index.html"));
+    await folderMetaSync(event, asyncDeps);
+    const second = await stat(join(libData, "index.html"));
+
+    // #then index.html is regenerated (still present after a second unconditional sync)
+    expect(second.isFile()).toBe(true);
+    expect(second.size).toBeGreaterThan(0);
+    expect(first.isFile()).toBe(true);
+  });
+
+  test("index.html render failure is isolated: feed.xml still written, handler ok", async () => {
+    // #given a deps whose index.html write always fails
+    await mkdir(join(FILES_DIR, "lib"), { recursive: true });
+    const libData = join(DATA_DIR, "lib");
+    await mkdir(libData, { recursive: true });
+    const errors: string[] = [];
+    const failingDeps: HandlerDeps = {
+      ...asyncDeps,
+      logger: { ...asyncDeps.logger, error: (_tag, msg) => errors.push(msg) },
+      fs: {
+        ...asyncDeps.fs,
+        atomicWrite: async (path, content) => {
+          if (path.endsWith("index.html")) throw new Error("disk full");
+          await Bun.write(path, content);
+        },
+      },
+    };
+
+    // #when folderMetaSync runs
+    const result = await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, failingDeps);
+
+    // #then the feed is written, the failure is logged, and the handler still succeeds
+    expect(result.isOk()).toBe(true);
+    expect(await stat(join(libData, "feed.xml")).then(() => true)).toBe(true);
+    expect(errors.some((m) => m.includes("index.html"))).toBe(true);
+  });
+
+  test("characterization: empty folder yields a valid navigation feed", async () => {
+    // #given an empty data folder with a matching source folder
+    await mkdir(join(FILES_DIR, "empty"), { recursive: true });
+    const emptyData = join(DATA_DIR, "empty");
+    await mkdir(emptyData, { recursive: true });
+
+    // #when folderMetaSync runs
+    await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: emptyData }, asyncDeps);
+
+    // #then a navigation feed with no entries and no stylesheet PI is written
+    const feed = await readFile(join(emptyData, "feed.xml"), "utf-8");
+    expect(feed).toContain("kind=navigation");
+    expect(feed).not.toContain("xml-stylesheet");
+    expect(feed).not.toContain("<entry>");
+  });
+
   test("cascade produces correct OPDS structure", async () => {
     // Setup: folder with book
     const authorPath = join(FILES_DIR, "Author");

@@ -1,0 +1,49 @@
+.books-grid > div:nth-child(3n + 1) .book:nth-child(3n + 1) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(3n + 2) .book:nth-child(3n + 1) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(3n + 3) .book:nth-child(3n + 1) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+
+/* Book heights: 5n cycle */
+.books-grid > div:nth-child(5n + 1) .book:nth-child(3n + 2) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(5n + 2) .book:nth-child(3n + 2) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(5n + 3) .book:nth-child(3n + 2) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(5n + 4) .book:nth-child(3n + 2) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(5n + 5) .book:nth-child(3n + 2) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+
+/* White section: 7n cycle */
+.books-grid > div:nth-child(7n + 1) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 2) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 3) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 4) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 5) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 6) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}
+.books-grid > div:nth-child(7n + 7) .book:nth-child(3n + 3) {
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+}

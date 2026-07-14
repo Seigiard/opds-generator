@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:nonfiction</id>
+  <title>Nonfiction</title>
+  <updated>2026-07-14T05:25:47.584Z</updated>
+  <link rel="self" href="/nonfiction/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:catalog:nonfiction/finance</id>
+  <title>Finance</title>
+  <updated>2026-07-14T05:25:47.525Z</updated>
+  <link rel="subsection" href="/nonfiction/finance/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:book:nonfiction/Learning Patterns.epub</id>
+  <title>Learning Patterns</title>
+  <updated>2026-01-03T16:39:39.890Z</updated>
+  <dc:issued>2021-12</dc:issued>
+  <dc:language>en</dc:language>
+  <dc:format>EPUB</dc:format>
+  <dc:subject>Computers &amp; Technology</dc:subject>
+  <author>
+    <name>Adnan Osmani</name>
+  </author>
+  <content type="text">168.4 MB</content>
+  <link rel="http://opds-spec.org/image" href="/nonfiction/Learning%20Patterns.epub/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/nonfiction/Learning%20Patterns.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/nonfiction/Learning%20Patterns.epub/file" type="application/epub+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:nonfiction/Alex Scarrow-Time Riders-1-Time Riders.fb2</id>
+  <title>Time Riders</title>
+  <updated>2026-01-03T16:39:35.844Z</updated>
+  <dc:language>en</dc:language>
+  <dc:format>FB2</dc:format>
+  <dc:isPartOf>Time Riders</dc:isPartOf>
+  <dc:subject>sf</dc:subject>
+  <author>
+    <name>Alex Scarrow</name>
+  </author>
+  <content type="text">781.7 KB</content>
+  <link rel="http://opds-spec.org/image" href="/nonfiction/Alex%20Scarrow-Time%20Riders-1-Time%20Riders.fb2/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/nonfiction/Alex%20Scarrow-Time%20Riders-1-Time%20Riders.fb2/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/nonfiction/Alex%20Scarrow-Time%20Riders-1-Time%20Riders.fb2/file" type="application/x-fictionbook+xml"/>
+</entry>
+<entry>
+  <id>urn:opds:book:nonfiction/50-ts.epub</id>
+  <title>50 TypeScript F*ck Ups</title>
+  <updated>2026-01-03T16:39:39.815Z</updated>
+  <dc:language>en</dc:language>
+  <dc:format>EPUB</dc:format>
+  <author>
+    <name>Azat Mardan</name>
+  </author>
+  <content type="text">5.9 MB</content>
+  <link rel="http://opds-spec.org/image" href="/nonfiction/50-ts.epub/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/nonfiction/50-ts.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/nonfiction/50-ts.epub/file" type="application/epub+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:nonfiction/J. K. Rowling-Harry Potter-1.mobi</id>
+  <title>Harry Potter a Kameň mudrcov</title>
+  <updated>2026-01-03T16:39:35.856Z</updated>
+  <dc:publisher>Bloomsbury Publishing Plc</dc:publisher>
+  <dc:issued>0101-01-01 00:00:00+00:00</dc:issued>
+  <dc:format>MOBI</dc:format>
+  <dc:subject>Román; Sci-fi; Fantasy</dc:subject>
+  <author>
+    <name>J. K. Rowling</name>
+  </author>
+  <content type="text">834.0 KB</content>
+  <link rel="http://opds-spec.org/image" href="/nonfiction/J.%20K.%20Rowling-Harry%20Potter-1.mobi/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/nonfiction/J.%20K.%20Rowling-Harry%20Potter-1.mobi/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/nonfiction/J.%20K.%20Rowling-Harry%20Potter-1.mobi/file" type="application/x-mobipocket-ebook"/>
+</entry>
+<entry>
+  <id>urn:opds:book:nonfiction/Alieksiei Iur'ievich Piekhov-Khroniki Sialy-1-Khroniki Sialy.fb2</id>
+  <title>Хроники Сиалы</title>
+  <updated>2026-01-03T16:39:35.846Z</updated>
+  <dc:issued>01.09.2002</dc:issued>
+  <dc:language>ru</dc:language>
+  <dc:format>FB2</dc:format>
+  <dc:isPartOf>Хроники Сиалы</dc:isPartOf>
+  <dc:subject>sf_fantasy</dc:subject>
+  <author>
+    <name>Алексей Юрьевич Пехов</name>
+  </author>
+  <summary type="text">Крадущийся в тени, Джанга с тенями и Вьюга теней - трилогия с иллюстрациями.</summary>
+  <content type="text">10.0 MB</content>
+  <link rel="http://opds-spec.org/image" href="/nonfiction/Alieksiei%20Iur'ievich%20Piekhov-Khroniki%20Sialy-1-Khroniki%20Sialy.fb2/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/nonfiction/Alieksiei%20Iur'ievich%20Piekhov-Khroniki%20Sialy-1-Khroniki%20Sialy.fb2/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/nonfiction/Alieksiei%20Iur'ievich%20Piekhov-Khroniki%20Sialy-1-Khroniki%20Sialy.fb2/file" type="application/x-fictionbook+xml"/>
+</entry>
+</feed>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:root</id>
+  <title>Catalog</title>
+  <updated>2026-07-14T05:25:47.534Z</updated>
+  <link rel="self" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:catalog:comics</id>
+  <title>Comics</title>
+  <updated>2026-07-14T05:25:47.495Z</updated>
+  <link rel="subsection" href="/comics/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:catalog:nonfiction</id>
+  <title>Nonfiction</title>
+  <updated>2026-07-14T05:25:47.521Z</updated>
+  <link rel="subsection" href="/nonfiction/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:catalog:pdf</id>
+  <title>Pdf</title>
+  <updated>2026-07-14T05:25:47.516Z</updated>
+  <link rel="subsection" href="/pdf/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:catalog:test</id>
+  <title>Test</title>
+  <updated>2026-07-14T05:25:47.511Z</updated>
+  <link rel="subsection" href="/test/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:book:manual-test.pdf</id>
+  <title>Test Book</title>
+  <updated>2026-01-08T04:52:36.379Z</updated>
+  <dc:issued>2025</dc:issued>
+  <dc:format>PDF</dc:format>
+  <dc:extent>3 pages</dc:extent>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <content type="text">90.1 KB</content>
+  <link rel="http://opds-spec.org/image" href="/manual-test.pdf/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/manual-test.pdf/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/manual-test.pdf/file" type="application/pdf"/>
+</entry>
+</feed>

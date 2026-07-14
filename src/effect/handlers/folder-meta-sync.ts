@@ -1,11 +1,14 @@
 import { ok, err, type Result } from "neverthrow";
 import { join, relative } from "node:path";
-import { Feed, Entry } from "opds-ts/v1.2";
+import { Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
 import type { HandlerDeps, FileSystemService } from "../../context.ts";
 import type { EventType } from "../types.ts";
-import { FEED_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
+import { FEED_FILE, INDEX_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
+import { buildFeedModel } from "../../render/feed-model.ts";
+import { renderXml } from "../../render/feed-xml.ts";
+import { renderHtml } from "../../render/feed-html.ts";
 
 interface EntryWithTitle {
   xml: string;
@@ -121,13 +124,16 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
   const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
-  const feed = new Feed(feedId, folderName).addSelfLink(selfHref, feedKind).addNavigationLink("start", `/${FEED_FILE}`).setKind(feedKind);
-
-  const feedXml = feed.toXml({ prettyPrint: true });
-  const stylesheet = '<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>';
-  const completeFeed = feedXml
-    .replace('<?xml version="1.0" encoding="utf-8"?>', `<?xml version="1.0" encoding="utf-8"?>\n${stylesheet}`)
-    .replace("</feed>", entries.join("\n") + "\n</feed>");
+  const model = buildFeedModel({
+    id: feedId,
+    title: folderName,
+    updated: new Date().toISOString(),
+    kind: feedKind,
+    selfHref,
+    startHref: `/${FEED_FILE}`,
+    fragments: entries,
+  });
+  const completeFeed = renderXml(model);
 
   try {
     await deps.fs.atomicWrite(feedOutputPath, completeFeed);
@@ -137,6 +143,13 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
       subfolders: folderEntries.length,
       books: bookEntries.length,
     });
+
+    try {
+      await deps.fs.atomicWrite(join(normalizedDir, INDEX_FILE), renderHtml(model));
+      deps.logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
+    } catch (htmlError) {
+      deps.logger.error("FolderMetaSync", "Failed to render index.html", htmlError, { path: relativePath || "/" });
+    }
 
     if (relativePath !== "") {
       const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);

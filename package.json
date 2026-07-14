@@ -18,27 +18,58 @@
     "test:unit": "docker compose -f docker-compose.test.yml run --rm test bun test test/unit",
     "test:integration": "docker compose -f docker-compose.test.yml run --rm test bun test test/integration",
     "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage",
-    "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && bun test test/e2e; docker compose -f docker-compose.e2e.yml down",
-    "test:all": "bun run test && bun run test:e2e"
+    "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && (bun test test/e2e; rc=$?; docker compose -f docker-compose.e2e.yml down; exit $rc)",
+    "build:ui": "bun ui/scripts/build-ui.ts",
+    "build:ui:check": "bun run build:ui && git diff --exit-code static/",
+    "dev:ui": "vite --config ui/vite.config.ts",
+    "fixtures:pull": "bun ui/scripts/fixtures-pull.ts",
+    "test:all": "bun run build:ui:check && bun run test && bun run test:e2e"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.5.5",
-    "knip": "^5.86.0",
+    "fast-xml-parser": "^5.10.0",
+    "knip": "^5.88.1",
     "neverthrow": "^8.2.0",
     "node-unrar-js": "^2.0.2",
-    "opds-ts": "^2.1.0",
+    "opds-ts": "^2.1.1",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@csstools/postcss-random-function": "^2.0.1",
     "@types/bun": "latest",
+    "autoprefixer": "^10.5.2",
+    "cssnano": "^7.1.9",
+    "focus-trap": "^8.2.2",
     "oxfmt": "^0.21.0",
     "oxlint": "latest",
-    "oxlint-tsgolint": "latest"
+    "oxlint-tsgolint": "latest",
+    "postcss": "^8.5.19",
+    "postcss-nesting": "^13.0.2",
+    "tabbable": "^6.5.0",
+    "vite": "^6.4.3"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "lint-staged": {
     "*": "oxfmt --no-error-on-unmatched-pattern"
+  },
+  "knip": {
+    "entry": [
+      "src/server.ts",
+      "ui/scripts/*.ts",
+      "ui/gridnav/main.ts",
+      "ui/vite.config.ts",
+      "ui/playground/main.ts",
+      "test/**/*.test.ts"
+    ],
+    "project": [
+      "src/**/*.ts",
+      "ui/**/*.{ts,js}",
+      "test/**/*.ts"
+    ],
+    "ignoreDependencies": [
+      "focus-trap",
+      "tabbable"
+    ]
   }
 }

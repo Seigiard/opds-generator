@@ -1,8 +1,9 @@
 import { mkdir, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { Feed } from "opds-ts/v1.2";
 import { config } from "./config.ts";
 import { FEED_FILE } from "./constants.ts";
+import { buildFeedModel } from "./render/feed-model.ts";
+import { renderXml } from "./render/feed-xml.ts";
 import { log } from "./logging/index.ts";
 import { isRawBooksEvent, isRawDataEvent } from "./effect/types.ts";
 import { adaptBooksEvent } from "./effect/adapters/books-adapter.ts";
@@ -42,17 +43,16 @@ async function doSync(ctx: AppContext): Promise<void> {
 
   const feedPath = join(config.dataPath, FEED_FILE);
   if (!(await Bun.file(feedPath).exists())) {
-    const seed = new Feed("urn:opds:catalog:root", "Catalog")
-      .addSelfLink(`/${FEED_FILE}`, "navigation")
-      .addNavigationLink("start", `/${FEED_FILE}`)
-      .setKind("navigation");
-    const xml = seed
-      .toXml({ prettyPrint: true })
-      .replace(
-        '<?xml version="1.0" encoding="utf-8"?>',
-        `<?xml version="1.0" encoding="utf-8"?>\n<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>`,
-      );
-    await Bun.write(feedPath, xml);
+    const seedModel = buildFeedModel({
+      id: "urn:opds:catalog:root",
+      title: "Catalog",
+      updated: new Date().toISOString(),
+      kind: "navigation",
+      selfHref: `/${FEED_FILE}`,
+      startHref: `/${FEED_FILE}`,
+      fragments: [],
+    });
+    await Bun.write(feedPath, renderXml(seedModel));
     log.info("InitialSync", "Seed feed.xml created");
   }
 

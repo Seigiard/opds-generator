@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:comics/Batman</id>
+  <title>Batman</title>
+  <updated>2026-07-14T05:25:47.552Z</updated>
+  <link rel="self" href="/comics/Batman/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:book:comics/Batman/Absolute Batman 014 (2026) (Digital) (Shan-Empire).cbz</id>
+  <title>Absolute Batman 014 (2026) (Digital) (Shan Empire)</title>
+  <updated>2026-01-03T16:39:34.277Z</updated>
+  <dc:format>CBZ</dc:format>
+  <content type="text">48.9 MB</content>
+  <link rel="http://opds-spec.org/image" href="/comics/Batman/Absolute%20Batman%20014%20(2026)%20(Digital)%20(Shan-Empire).cbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/comics/Batman/Absolute%20Batman%20014%20(2026)%20(Digital)%20(Shan-Empire).cbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/comics/Batman/Absolute%20Batman%20014%20(2026)%20(Digital)%20(Shan-Empire).cbz/file" type="application/vnd.comicbook+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:comics/Batman/Absolute Batman 2025 Annual 001 (2025) (Digital) (Shan-Empire).cbz</id>
+  <title>Absolute Batman 2025 Annual 001 (2025) (Digital) (Shan Empire)</title>
+  <updated>2026-01-03T16:39:34.374Z</updated>
+  <dc:format>CBZ</dc:format>
+  <content type="text">85.0 MB</content>
+  <link rel="http://opds-spec.org/image" href="/comics/Batman/Absolute%20Batman%202025%20Annual%20001%20(2025)%20(Digital)%20(Shan-Empire).cbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/comics/Batman/Absolute%20Batman%202025%20Annual%20001%20(2025)%20(Digital)%20(Shan-Empire).cbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/comics/Batman/Absolute%20Batman%202025%20Annual%20001%20(2025)%20(Digital)%20(Shan-Empire).cbz/file" type="application/vnd.comicbook+zip"/>
+</entry>
+</feed>

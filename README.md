@@ -66,7 +66,7 @@ volumes:
 docker compose up -d
 ```
 
-3. Open http://localhost:8080/opds
+3. Browse in a web browser at http://localhost:8080/ — or point an OPDS reader at http://localhost:8080/opds
 
 ### Docker Run
 
@@ -102,17 +102,18 @@ docker compose up -d --build
 
 ## API
 
-| Endpoint           | Description                                     |
-| ------------------ | ----------------------------------------------- |
-| `GET /`            | Redirect to /feed.xml                           |
-| `GET /opds`        | Redirect to /feed.xml                           |
-| `GET /feed.xml`    | Root catalog (OPDS feed)                        |
-| `GET /{path}/`     | Subcatalog (serves feed.xml as directory index) |
-| `GET /{book}/file` | Download book file (symlink)                    |
-| `GET /static/*`    | Static files                                    |
-| `GET /resync`      | Trigger full resync (requires Basic Auth)       |
+| Endpoint               | Audience | Description                                  |
+| ---------------------- | -------- | -------------------------------------------- |
+| `GET /`                | Browser  | Redirect to /index.html (HTML catalog)       |
+| `GET /{path}/`         | Browser  | Subcatalog rendered as HTML (index.html)     |
+| `GET /opds`            | Reader   | Redirect to /feed.xml                        |
+| `GET /feed.xml`        | Reader   | Root catalog (OPDS feed)                     |
+| `GET /{path}/feed.xml` | Reader   | Subcatalog feed                              |
+| `GET /{book}/file`     | Both     | Download book file (symlink)                 |
+| `GET /static/*`        | Both     | Static assets (style.css, main.js, favicons) |
+| `GET /resync`          | Admin    | Trigger full resync (requires Basic Auth)    |
 
-Note: nginx serves static files from `/data`. Returns 503 with `Retry-After: 5` if feed.xml doesn't exist yet (initial sync in progress).
+Browsers get server-rendered HTML (`index.html`, generated at sync time — no browser XSLT); OPDS readers get the `feed.xml` graph via `/opds`. Returns 503 with `Retry-After: 5` while the initial sync is still building a folder.
 
 ## Directory Structure
 
@@ -124,9 +125,11 @@ Note: nginx serves static files from `/data`. Returns 503 with `Retry-After: 5` 
     └── Batman.cbz
 
 /data/                     # Mirror cache (auto-generated)
-├── feed.xml               # Root feed
+├── feed.xml               # Root feed (readers)
+├── index.html             # Root catalog (browsers, rendered at sync time)
 ├── fiction/
 │   ├── feed.xml           # Subcatalog feed
+│   ├── index.html         # Subcatalog HTML
 │   ├── _entry.xml         # Entry for parent feed
 │   └── Foundation.epub/
 │       ├── entry.xml
@@ -157,6 +160,11 @@ bun run test:e2e
 
 # Lint + format
 bun run fix
+
+# Viewer (browser UI) — sources live in ui/, artifacts in static/
+bun run build:ui       # regenerate static/style.css + static/main.js
+bun run dev:ui         # Vite preview of renderHtml against cassettes (HMR, no docker)
+bun run fixtures:pull  # refresh test/fixtures/feeds/ cassettes from ./data
 ```
 
 ## OPDS Specification

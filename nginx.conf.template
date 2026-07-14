@@ -28,12 +28,12 @@ http {
         # Use relative redirects (no host prefix)
         absolute_redirect off;
 
-        # Index file for directories
-        index feed.xml;
+        # Index file for directories (browsers get HTML)
+        index index.html;
 
-        # Root redirect to feed.xml
+        # Root redirect to HTML for browsers
         location = / {
-            return 302 /feed.xml;
+            return 302 /index.html;
         }
 
         # /opds redirect to feed.xml
@@ -41,11 +41,18 @@ http {
             return 302 /feed.xml;
         }
 
+        location = /opds/ {
+            return 302 /feed.xml;
+        }
+
         # Static assets from /static folder
-        location /static/ {
+        # ^~ so the .xml/image regex locations below cannot capture /static/* into /data
+        # no-cache (ETag revalidation): style.css/main.js have unversioned URLs, and a
+        # deploy regenerates index.html against the NEW assets — "immutable" left
+        # browsers on day-old CSS/JS with mismatched markup (popup dead).
+        location ^~ /static/ {
             alias /app/static/;
-            expires 1d;
-            add_header Cache-Control "public, immutable";
+            add_header Cache-Control "no-cache";
         }
 
         # Admin endpoint: /resync (only if auth configured)
@@ -88,20 +95,31 @@ http {
             error_page 404 = @check_initializing;
         }
 
-        # All other paths - serve from /data
+        # Browser paths - folder URLs resolve to index.html
         location / {
             root /data;
-            try_files $uri $uri/ =404;
+            try_files $uri $uri/index.html =404;
 
-            # 503 for missing feed.xml (initializing)
+            # 404: no index.html; 403: directory exists but index.html not written yet
             error_page 404 = @check_initializing;
+            error_page 403 = @check_initializing;
         }
 
         location @check_initializing {
-            # If requesting feed.xml and it doesn't exist, return 503
-            if ($uri ~* feed\.xml$) {
+            # feed.xml / index.html targets may be mid-write (cascade): 503.
+            if ($uri ~* (feed\.xml|index\.html)$) {
                 return 503;
             }
+            # Folder URL whose directory exists but index.html is not written yet: mid-cascade, 503.
+            if (-d /data$uri) {
+                return 503;
+            }
+            # Root feed is seeded first during initial sync / resync; while it is
+            # absent nothing is built yet — everything is "initializing" (503).
+            if (!-f /data/feed.xml) {
+                return 503;
+            }
+            # Steady state and the path genuinely does not exist: a real 404.
             return 404;
         }
 

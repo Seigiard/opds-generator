@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:test</id>
+  <title>Test</title>
+  <updated>2026-07-14T05:25:47.570Z</updated>
+  <link rel="self" href="/test/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample.cb7</id>
+  <title>bobby make believe sample</title>
+  <updated>2026-01-03T16:39:34.678Z</updated>
+  <dc:format>CB7</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample.cb7/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample.cb7/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample.cb7/file" type="application/vnd.comicbook+7z"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample.cbr</id>
+  <title>bobby make believe sample</title>
+  <updated>2026-01-03T16:39:34.662Z</updated>
+  <dc:format>CBR</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample.cbr/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample.cbr/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample.cbr/file" type="application/vnd.comicbook-rar"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample.cbt</id>
+  <title>bobby make believe sample</title>
+  <updated>2026-01-03T16:39:33.879Z</updated>
+  <dc:format>CBT</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample.cbt/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample.cbt/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample.cbt/file" type="application/vnd.comicbook+tar"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample.cbz</id>
+  <title>bobby make believe sample</title>
+  <updated>2026-01-03T16:39:33.951Z</updated>
+  <dc:format>CBZ</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample.cbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample.cbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample.cbz/file" type="application/vnd.comicbook+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample_dir.cb7</id>
+  <title>bobby make believe sample dir</title>
+  <updated>2026-01-03T16:39:35.341Z</updated>
+  <dc:format>CB7</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample_dir.cb7/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample_dir.cb7/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample_dir.cb7/file" type="application/vnd.comicbook+7z"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample_dir.cbt</id>
+  <title>bobby make believe sample dir</title>
+  <updated>2026-01-03T16:39:35.367Z</updated>
+  <dc:format>CBT</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample_dir.cbt/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample_dir.cbt/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample_dir.cbt/file" type="application/vnd.comicbook+tar"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/bobby_make_believe_sample_dir.cbz</id>
+  <title>bobby make believe sample dir</title>
+  <updated>2026-01-03T16:39:35.371Z</updated>
+  <dc:format>CBZ</dc:format>
+  <content type="text">1.1 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/bobby_make_believe_sample_dir.cbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/bobby_make_believe_sample_dir.cbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/bobby_make_believe_sample_dir.cbz/file" type="application/vnd.comicbook+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Elf_Receiver_Radio-Craft_August_1936.cbz</id>
+  <title>Elf Receiver Radio Craft August 1936</title>
+  <updated>2026-01-03T16:39:35.474Z</updated>
+  <dc:format>CBZ</dc:format>
+  <content type="text">1.6 MB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Elf_Receiver_Radio-Craft_August_1936.cbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Elf_Receiver_Radio-Craft_August_1936.cbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Elf_Receiver_Radio-Craft_August_1936.cbz/file" type="application/vnd.comicbook+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/sample_text.txt</id>
+  <title>sample text</title>
+  <updated>2026-01-03T16:39:34.684Z</updated>
+  <dc:format>TXT</dc:format>
+  <content type="text">300 B</content>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/sample_text.txt/file" type="text/plain"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.fb2.zip</id>
+  <title>Test Book Test Author.fb2</title>
+  <updated>2026-01-03T16:39:34.688Z</updated>
+  <dc:format>ZIP</dc:format>
+  <content type="text">28.0 KB</content>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.fb2.zip/file" type="application/zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.azw3</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:34.733Z</updated>
+  <dc:issued>2021-09-12 01:56:26+00:00</dc:issued>
+  <dc:format>AZW3</dc:format>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <summary type="text">Test comment Multiline</summary>
+  <content type="text">45.9 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.azw3/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.azw3/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.azw3/file" type="application/x-mobi8-ebook"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.djvu</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:35.216Z</updated>
+  <dc:issued>2025</dc:issued>
+  <dc:format>DJVU</dc:format>
+  <dc:extent>3 pages</dc:extent>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <content type="text">13.6 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.djvu/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.djvu/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.djvu/file" type="image/vnd.djvu"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.epub</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:34.743Z</updated>
+  <dc:issued>2021-09</dc:issued>
+  <dc:language>en</dc:language>
+  <dc:format>EPUB</dc:format>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <summary type="text">Test comment Multiline</summary>
+  <content type="text">32.2 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.epub/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.epub/file" type="application/epub+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.fb2</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:34.611Z</updated>
+  <dc:language>en</dc:language>
+  <dc:format>FB2</dc:format>
+  <dc:isPartOf>Test Series</dc:isPartOf>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <summary type="text">Test comment Multiline</summary>
+  <content type="text">39.1 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.fb2/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.fb2/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.fb2/file" type="application/x-fictionbook+xml"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.fbz</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:35.299Z</updated>
+  <dc:language>en</dc:language>
+  <dc:format>FBZ</dc:format>
+  <dc:isPartOf>Test Series</dc:isPartOf>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <summary type="text">Test comment Multiline</summary>
+  <content type="text">28.1 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.fbz/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.fbz/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.fbz/file" type="application/x-fictionbook+xml"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.mobi</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:34.609Z</updated>
+  <dc:issued>2021-09-12 01:56:26+00:00</dc:issued>
+  <dc:format>MOBI</dc:format>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <summary type="text">Test comment Multiline</summary>
+  <content type="text">43.2 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.mobi/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.mobi/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.mobi/file" type="application/x-mobipocket-ebook"/>
+</entry>
+<entry>
+  <id>urn:opds:book:test/Test Book - Test Author.pdf</id>
+  <title>Test Book</title>
+  <updated>2026-01-03T16:39:34.681Z</updated>
+  <dc:issued>2025</dc:issued>
+  <dc:format>PDF</dc:format>
+  <dc:extent>3 pages</dc:extent>
+  <dc:subject>test</dc:subject>
+  <author>
+    <name>Test Author</name>
+  </author>
+  <content type="text">90.1 KB</content>
+  <link rel="http://opds-spec.org/image" href="/test/Test%20Book%20-%20Test%20Author.pdf/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/test/Test%20Book%20-%20Test%20Author.pdf/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/test/Test%20Book%20-%20Test%20Author.pdf/file" type="application/pdf"/>
+</entry>
+</feed>
