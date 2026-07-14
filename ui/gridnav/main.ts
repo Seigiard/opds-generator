@@ -65,9 +65,27 @@ function syncPopup(): void {
   }
 }
 
+const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
+
 function init(): void {
   const grid = document.querySelector<HTMLElement>(".books-grid");
-  if (grid) new Gridnav(grid, popupIsOpen);
+  if (grid) {
+    new Gridnav(grid, popupIsOpen);
+
+    // First arrow/WASD press anywhere on the page enters the grid at its first card.
+    const selector = grid.getAttribute("data-element") || ".card__title a";
+    document.addEventListener("keydown", (e) => {
+      if (!NAV_KEYS.has(e.code) || popupIsOpen()) return;
+      const target = e.target as HTMLElement;
+      if (target.matches?.(selector)) return;
+      if (target.closest?.("input, textarea, select, [contenteditable]")) return;
+      const first = grid.querySelector<HTMLElement>(selector);
+      if (first) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+  }
 
   window.addEventListener("hashchange", syncPopup);
 
