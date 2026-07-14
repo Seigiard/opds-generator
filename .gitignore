@@ -44,3 +44,6 @@ docs/superpowers
 
 # git worktrees
 .worktrees
+
+# playwright MCP session artifacts
+.playwright-mcp/

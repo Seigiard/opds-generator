@@ -1,0 +1,620 @@
+<title>Ideation: Viewer dev workflow &amp; static sync</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --ink: #1a1d21;
+    --muted: #5c636b;
+    --line: #e3e0da;
+    --accent: #7c4a2d;
+    --accent-soft: #f4ebe4;
+    --accent-text: #6b3d22;
+    --warn-soft: #fbeee9;
+    --warn-text: #a03d1e;
+    --ok-soft: #eaf2ea;
+    --ok-text: #2e6136;
+    --info-soft: #eaf0f6;
+    --info-text: #2d5375;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  .page { max-width: 900px; margin-inline: auto; }
+  .prose, p, li dd { max-width: 72ch; }
+  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0.4rem 0 0.5rem; letter-spacing: -0.015em; }
+  h2 { font-size: 1.25rem; margin: 2.8rem 0 0.8rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+  .eyebrow {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--accent-text);
+  }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.6rem; }
+  .meta code { font-family: var(--mono); font-size: 0.8rem; background: var(--accent-soft); padding: 0.05rem 0.35rem; border-radius: 4px; color: var(--accent-text); }
+  .stats { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1.4rem 0 0; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0.55rem 0.9rem; min-width: 7.5rem;
+  }
+  .stat b { display: block; font-size: 1.15rem; }
+  .stat span { font-size: 0.75rem; color: var(--muted); }
+  .stat.deadline { background: var(--warn-soft); border-color: #efd5c9; }
+  .stat.deadline b, .stat.deadline span { color: var(--warn-text); }
+  .callout {
+    border-radius: 12px; padding: 0.9rem 1.1rem; margin: 1.1rem 0;
+    background: var(--warn-soft); border: 1px solid #efd5c9;
+  }
+  .callout .eyebrow { color: var(--warn-text); }
+  .callout p { margin: 0.35rem 0 0; }
+  .callout.info { background: var(--info-soft); border-color: #d3dfea; }
+  .callout.info .eyebrow { color: var(--info-text); }
+  section { margin-top: 2.4rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.85em; background: #f1efeb; padding: 0.05rem 0.3rem; border-radius: 4px; }
+  a { color: var(--accent-text); }
+  .jump { list-style: none; padding: 0.9rem 1.1rem; margin: 1rem 0 1.6rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .jump li { margin: 0.2rem 0; }
+  .jump .chips { color: var(--muted); font-size: 0.78rem; margin-left: 0.4rem; white-space: nowrap; }
+  article.idea {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1.3rem 1.5rem 1.1rem; margin: 1.2rem 0;
+  }
+  .idea-head { display: flex; gap: 0.7rem; align-items: baseline; flex-wrap: wrap; }
+  .idnum {
+    font-family: var(--mono); font-weight: 700; font-size: 0.85rem;
+    background: var(--accent-soft); color: var(--accent-text);
+    border-radius: 999px; padding: 0.15rem 0.6rem;
+  }
+  .chip {
+    font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 0.18rem 0.65rem;
+    letter-spacing: 0.03em;
+  }
+  .chip.axis { background: var(--info-soft); color: var(--info-text); }
+  .chip.conf-hi { background: var(--ok-soft); color: var(--ok-text); }
+  .chip.conf-md { background: var(--accent-soft); color: var(--accent-text); }
+  .chip.conf-lo { background: var(--warn-soft); color: var(--warn-text); }
+  .idea dl { margin: 0.8rem 0 0; }
+  .idea dt {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin-top: 0.75rem;
+  }
+  .idea dd { margin: 0.15rem 0 0; }
+  figure { margin: 1.2rem 0 0.4rem; }
+  figure svg { max-width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.78rem; color: var(--muted); margin-top: 0.4rem; }
+  footer.composition-signal {
+    margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
+    font-size: 0.78rem; color: var(--muted);
+  }
+  .axes-list { padding-left: 1.2rem; }
+  .axes-list li { margin: 0.25rem 0; }
+  .axes-list .slug { font-family: var(--mono); font-size: 0.82rem; color: var(--accent-text); }
+</style>
+
+<div class="page">
+  <div class="eyebrow">Ideation &middot; repo-grounded</div>
+  <h1>Viewer dev workflow &amp; static sync</h1>
+  <p class="meta">
+    date: <time datetime="2026-07-14">2026-07-14</time> &middot; topic: <code>viewer-dev-workflow</code> &middot; focus: разработка
+    viewer&rsquo;а оторвана от реальных данных; нет пути синхронизации шаблонов в <code>opds-generator/static</code>; перенести разработку
+    сюда или сменить билд-артефакт, не потеряв DX
+  </p>
+
+  <div class="stats">
+    <div class="stat"><b>47</b><span>сырых идей (5 агентов)</span></div>
+    <div class="stat"><b>6</b><span>выживших</span></div>
+    <div class="stat"><b>10</b><span>отклонено с причиной</span></div>
+    <div class="stat"><b>5</b><span>осей темы</span></div>
+    <div class="stat deadline"><b>17 ноя 2026</b><span>Chrome 158 удаляет XSLT</span></div>
+  </div>
+
+  <div class="callout">
+    <div class="eyebrow">Форсирующий фактор — меняет постановку задачи</div>
+    <p>
+      Chrome удаляет XSLT из браузера: предупреждения с Chrome&nbsp;143 (дек&nbsp;2025),
+      <strong>полное отключение в стабильном Chrome&nbsp;158 — 17 ноября 2026</strong> (Origin-Trial-исключения до авг&nbsp;2027). Firefox и
+      WebKit поддержали удаление. Официальный WASM-полифилл Google воспроизводит только явные вызовы <code>XSLTProcessor</code> из JS — он
+      <strong>не умеет</strong> перехватывать <code>&lt;?xml-stylesheet?&gt;</code>-автотрансформацию, то есть ровно тот механизм, на
+      котором работает текущий viewer. Вопрос «как синхронизировать разработку с layout.xsl» стал вопросом «что заменит layout.xsl» —
+      синхронизация решается выбором замены. Источники:
+      <a href="https://developer.chrome.com/docs/web-platform/deprecating-xslt">Chrome for Developers</a>,
+      <a href="https://cr-status.appspot.com/feature/4709671889534976">Chrome Platform Status</a>.
+    </p>
+  </div>
+
+  <section id="grounding-context">
+    <h2>Grounding Context</h2>
+    <p>
+      <strong>Codebase Context.</strong> Продакшн (<code>opds-generator</code>): человеческий UI — браузерный XSLT&nbsp;1.0; каждый feed.xml
+      получает PI <code>&lt;?xml-stylesheet href="/static/layout.xsl"?&gt;</code> (инжектится в <code>src/server.ts</code> и
+      <code>src/effect/handlers/folder-meta-sync.ts</code>). <code>static/layout.xsl</code> (238 строк) грузит <code>style.css</code>,
+      рукописный <code>main.js</code> (Gridnav-клавонавигация) и два CDN-скрипта с unpkg (tabbable, focus-trap). Дев-плейграунд
+      (<code>opds-viewer</code>): React&nbsp;19 + Vite&nbsp;6 + react-cosmos; разметка <code>LayoutExample.tsx</code> зеркалит layout.xsl
+      1:1 (те же BEM-классы) и портируется руками; CSS собирается в <code>dist/static/index.css</code> и вручную копируется в
+      <code>static/style.css</code> (727 vs 728 строк — дрейф уже есть); React-бандл в проде не используется вовсе; у
+      <code>main.js</code> нет исходника ни в одном репо; фикстуры cosmos — выдуманные строки, реальные данные (кириллица, 200-элементные
+      папки, отсутствующие обложки) впервые видны в проде.
+    </p>
+    <p>
+      <strong>Наблюдаемый дрейф:</strong> попап в JSX хардкодит &laquo;Fiction, Drama, Classic&raquo; там, где XSL рендерит реальные
+      <code>dc:*</code>-поля; поиск есть в JSX, но <code>&lt;!-- search hidden --&gt;</code> в XSL; атрибуты
+      <code>data-element</code>/<code>data-focus-group</code>, от которых зависит main.js, существуют только в XSL — плейграунд их не видит.
+    </p>
+    <p>
+      <strong>External Context.</strong> Помимо таймлайна Chrome: техника Джейка Арчибальда (2025) — HTML-namespaced
+      <code>&lt;script&gt;</code> первым потомком XML-корня исполняется браузером и может заменить
+      <code>documentElement</code> отрендеренным HTML; SaxonJS/XJSLT компилируют XSLT в JS; пиры (Kavita, Komga) разделяют OPDS-эндпоинт для
+      читалок и человеческий UI; cosmos-export (уже в package.json) — паттерн «один исходник фикстур, два билд-выхода»; JSX&harr;XSLT-мосты
+      в экосистеме бросают из-за импеданса.
+    </p>
+    <p>
+      <strong>Evidence:</strong> досье с проверенными цитатами —
+      <code>/tmp/compound-engineering/ce-ideate/a3f91c2e/evidence-viewer-sync.md</code>; все <code>direct:</code>-базисы ниже сверены с
+      файлами репозиториев генерирующими агентами и независимым верификатором.
+    </p>
+  </section>
+
+  <section id="topic-axes">
+    <h2>Topic Axes</h2>
+    <ul class="axes-list">
+      <li><span class="slug">markup-source-of-truth</span> — кто владеет шаблоном; дублирование JSX&harr;XSLT</li>
+      <li><span class="slug">artifact-pipeline</span> — как собранные CSS/JS/шаблоны попадают в <code>static/</code></li>
+      <li><span class="slug">real-data-dev-loop</span> — разработка на живых OPDS-фидах вместо фикстур</li>
+      <li><span class="slug">repo-topology</span> — отдельный репозиторий vs монорепо/пакет</li>
+      <li><span class="slug">runtime-rendering</span> — браузерный XSLT vs альтернативы (удаление XSLT — форсирующий фактор)</li>
+    </ul>
+  </section>
+
+  <section id="ranked-ideas">
+    <h2>Ranked Ideas</h2>
+    <ul class="jump">
+      <li>
+        <a href="#idea-1">1. Конвергенция: один TS-рендерер, HTML на этапе синка</a
+        ><span class="chips">markup-source-of-truth &middot; 90% &middot; High</span>
+      </li>
+      <li>
+        <a href="#idea-2">2. Mod-loader: Vite-прокси поверх живого docker</a
+        ><span class="chips">real-data-dev-loop &middot; 85% &middot; Low-Med</span>
+      </li>
+      <li>
+        <a href="#idea-3">3. Stop-the-bleed: sync-static + golden-харнесс</a
+        ><span class="chips">artifact-pipeline &middot; 90% &middot; Low</span>
+      </li>
+      <li>
+        <a href="#idea-4">4. main.js получает исходник, unpkg увольняется</a
+        ><span class="chips">artifact-pipeline &middot; 95% &middot; Low</span>
+      </li>
+      <li>
+        <a href="#idea-5">5. Кассеты: фикстуры из реального /data</a><span class="chips">real-data-dev-loop &middot; 85% &middot; Low</span>
+      </li>
+      <li>
+        <a href="#idea-6">6. Самотрансформирующийся фид (техника Арчибальда)</a
+        ><span class="chips">runtime-rendering &middot; 75% &middot; Medium</span>
+      </li>
+    </ul>
+
+    <article class="idea" id="idea-1">
+      <div class="idea-head">
+        <span class="idnum">1</span>
+        <h3>Конвергенция: один TS-рендерер, HTML рендерится на этапе синка</h3>
+      </div>
+      <div>
+        <span class="chip axis">markup-source-of-truth</span>
+        <span class="chip conf-hi">Confidence 90%</span>
+        <span class="chip conf-lo">Complexity High</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          Целевая архитектура из четырёх ходов, каждый самостоятелен: (1)&nbsp;viewer переезжает в <code>opds-generator</code> как
+          bun-workspace <code>ui/</code>; (2)&nbsp;пишется один зависимость-свободный TS-модуль
+          <code>renderFeed(xmlDoc)&nbsp;&rarr;&nbsp;html</code> — вся логика layout.xsl (value-of, for-each, MIME&rarr;формат) выражается
+          шаблонными литералами (~200 строк); (3)&nbsp;генератор вызывает его в существующем событийном каскаде и кладёт
+          <code>index.html</code> рядом с <code>feed.xml</code> в каждую папку /data; разводка аудиторий не требует content-negotiation —
+          читалки уже живут в графе feed.xml-ссылок (<code>rel="subsection"</code> в реальном <code>data/feed.xml</code> указывает на
+          <code>/comics/feed.xml</code> и т.п.), браузеры переезжают на папочные URL (<code>index index.html</code> + корневой redirect —
+          две строчки nginx); паттерн Kavita/Komga; (4)&nbsp;Vite hot-reload&rsquo;ит тот же модуль в плейграунде на реальных фикстурах
+          (идея&nbsp;5). <code>layout.xsl</code> и <code>LayoutExample.tsx</code> удаляются — двух диалектов больше нет.
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>direct:</code> <code>folder-meta-sync.ts:127</code> — рендеринг фида уже per-folder-операция каскада, index.html — ещё один
+          артефакт того же цикла; <code>external:</code> Astro/Eleventy — единый язык шаблонов для HTML и XML вместо моста между двумя
+          языками; Kavita/Komga — разделение OPDS-протокола и человеческого UI; <code>reasoned:</code> вся логическая поверхность layout.xsl
+          (прочитан целиком) — value-of, for-each, contains()-цепочка format-from-mime — тривиально выражается в JS, ни одна XSLT-фича не
+          является несущей; <code>direct:</code> спайк 2026-07-14 на живом dev-стенде: черновой <code>renderFeed()</code> (~90 строк,
+          fast-xml-parser — уже зависимость) отрендерил 8 index.html по всему /data; правка nginx — ровно 2 строки (<code
+            >index index.html</code
+          >
+          + корневой redirect); вся роутинг-матрица зелёная с первого запуска: <code>/</code> и <code>/comics/</code> отдают HTML с прод-CSS
+          и папочной навигацией, feed.xml/<code>/opds</code>/скачивание книг нетронуты (curl-проверка; сами фиды байт-в-байт не менялись,
+          так что путь читалок не затронут по построению); визуально подтверждено пользователем.
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Единственное направление, которое решает <em>обе</em> проблемы пользователя и дедлайн Chrome одним механизмом: правка шаблона =
+          один файл, hot-reload в дев-режиме, автоматическая доставка в прод при следующем синке. Сохраняет скрытую суперсилу XSLT — работу
+          без JS (попапы уже на CSS-чекбоксах, main.js — только прогрессивное улучшение). Ошибки рендеринга всплывают в логах сервера при
+          синке, а не в браузере пользователя.
+        </dd>
+        <dt>Downsides</dt>
+        <dd>
+          Самый большой объём работы из всех идей; +N файлов index.html в /data (место — копейки); nginx-механика снята спайком 2026-07-14
+          (2 строки, вся матрица зелёная — см. Basis); остаётся: человек со старой закладкой на feed.xml увидит сырой XML (опционально
+          лечится Accept-redirect'ом); полнота рендера — спайк покрыл только карточки, попап/метаданные/breadcrumb-логика впереди,
+          эквивалентность с XSL требует доказательства (закрывается идеей&nbsp;3 — golden-харнессом); не проверялась ветка
+          <code>@check_initializing</code> при пустом /data.
+        </dd>
+      </dl>
+      <figure>
+        <svg viewBox="0 0 860 300" role="img" aria-label="До: два репозитория, два диалекта. После: один рендерер, три потребителя">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#8a8377" />
+            </marker>
+          </defs>
+          <text x="120" y="24" font-size="12" font-weight="700" fill="#a03d1e" letter-spacing="1">СЕЙЧАС: 2 ДИАЛЕКТА, РУЧНОЙ ПОРТ</text>
+          <rect x="30" y="40" width="150" height="46" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="105" y="59" text-anchor="middle" font-size="12" fill="#1a1d21">LayoutExample.tsx</text>
+          <text x="105" y="76" text-anchor="middle" font-size="10" fill="#5c636b">JSX, cosmos</text>
+          <rect x="250" y="40" width="150" height="46" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="325" y="59" text-anchor="middle" font-size="12" fill="#1a1d21">layout.xsl</text>
+          <text x="325" y="76" text-anchor="middle" font-size="10" fill="#5c636b">XSLT, прод</text>
+          <line x1="180" y1="63" x2="248" y2="63" stroke="#a03d1e" stroke-width="1.5" marker-end="url(#arr)" stroke-dasharray="5 4" />
+          <text x="214" y="52" text-anchor="middle" font-size="10" fill="#a03d1e">руками</text>
+          <rect x="30" y="120" width="150" height="46" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="105" y="139" text-anchor="middle" font-size="12" fill="#1a1d21">dist/index.css</text>
+          <text x="105" y="156" text-anchor="middle" font-size="10" fill="#5c636b">vite build</text>
+          <rect x="250" y="120" width="150" height="46" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="325" y="139" text-anchor="middle" font-size="12" fill="#1a1d21">static/style.css</text>
+          <text x="325" y="156" text-anchor="middle" font-size="10" fill="#5c636b">уже дрейфует</text>
+          <line x1="180" y1="143" x2="248" y2="143" stroke="#a03d1e" stroke-width="1.5" marker-end="url(#arr)" stroke-dasharray="5 4" />
+          <text x="214" y="132" text-anchor="middle" font-size="10" fill="#a03d1e">copy-paste</text>
+          <rect x="30" y="200" width="150" height="46" rx="8" fill="#fbeee9" stroke="#efd5c9" />
+          <text x="105" y="219" text-anchor="middle" font-size="12" fill="#a03d1e">main.js</text>
+          <text x="105" y="236" text-anchor="middle" font-size="10" fill="#a03d1e">без исходника</text>
+
+          <line x1="450" y1="150" x2="450" y2="150" stroke="none" />
+          <text x="590" y="24" font-size="12" font-weight="700" fill="#2e6136" letter-spacing="1">ЦЕЛЬ: 1 РЕНДЕРЕР, 3 ПОТРЕБИТЕЛЯ</text>
+          <rect x="530" y="110" width="170" height="52" rx="8" fill="#eaf2ea" stroke="#c4d8c6" />
+          <text x="615" y="131" text-anchor="middle" font-size="12" font-weight="600" fill="#2e6136">renderFeed(xml)</text>
+          <text x="615" y="148" text-anchor="middle" font-size="10" fill="#2e6136">один TS-модуль, ui/</text>
+          <rect x="740" y="40" width="105" height="44" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="792" y="58" text-anchor="middle" font-size="11" fill="#1a1d21">Bun @ sync</text>
+          <text x="792" y="74" text-anchor="middle" font-size="10" fill="#5c636b">index.html</text>
+          <rect x="740" y="128" width="105" height="44" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="792" y="146" text-anchor="middle" font-size="11" fill="#1a1d21">Vite HMR</text>
+          <text x="792" y="162" text-anchor="middle" font-size="10" fill="#5c636b">плейграунд</text>
+          <rect x="740" y="216" width="105" height="44" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="792" y="234" text-anchor="middle" font-size="11" fill="#1a1d21">тесты</text>
+          <text x="792" y="250" text-anchor="middle" font-size="10" fill="#5c636b">bun test</text>
+          <line x1="700" y1="122" x2="738" y2="70" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr)" />
+          <line x1="700" y1="138" x2="738" y2="148" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr)" />
+          <line x1="700" y1="155" x2="738" y2="230" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr)" />
+        </svg>
+        <figcaption>
+          Слева — текущие два ручных моста и файл без исходника; справа — один модуль, который потребляют прод-синк, плейграунд и тесты.
+        </figcaption>
+      </figure>
+    </article>
+
+    <article class="idea" id="idea-2">
+      <div class="idea-head">
+        <span class="idnum">2</span>
+        <h3>Mod-loader: Vite-прокси поверх живого docker с подменой /static/</h3>
+      </div>
+      <div>
+        <span class="chip axis">real-data-dev-loop</span>
+        <span class="chip conf-hi">Confidence 85%</span>
+        <span class="chip conf-hi">Complexity Low-Med</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          Как мод-лоадер в играх накладывает дев-каталог поверх файловой системы игры: Vite dev server проксирует живой docker (<code
+            >localhost:8080</code
+          >
+          — реальная библиотека, реальные фиды), но перехватывает <code>/static/*</code> и отдаёт layout.xsl / CSS / main.js из исходников с
+          hot reload. Браузер открывает настоящий фид, а шаблон и стили — твои локальные, с мгновенной перезагрузкой.
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>direct:</code> <code>server.ts:53</code> — PI-href корне-относительный (<code>/static/layout.xsl</code>), значит кто отдаёт
+          страницу, тот и контролирует, какой layout.xsl загрузится; верификатор подтвердил механическую осуществимость прокси-оверлея
+          (same-origin под nginx-алиасом <code>/static/</code>).
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Убивает главную жалобу («разработка далеко от реальных данных») за ~30 строк vite.config, не дожидаясь большой миграции: дев-цикл
+          «сохранил CSS — вся твоя реальная библиотека перерендерилась» в миллисекундах. Работает с сегодняшней XSLT-архитектурой и
+          переживёт миграцию (оверлей поверх любых /static-артефактов).
+        </dd>
+        <dt>Downsides</dt>
+        <dd>
+          Требует запущенного docker; это дополнение к cosmos (изолированные состояния компонентов остаются в фикстурах), а не замена;
+          XSL-правки перестанут hot-reload&rsquo;иться после ухода от XSLT — но CSS/JS-оверлей останется актуальным.
+        </dd>
+      </dl>
+      <figure>
+        <svg
+          viewBox="0 0 860 170"
+          role="img"
+          aria-label="Браузер обращается к Vite-прокси: /static идёт в исходники с HMR, остальное — в docker"
+        >
+          <defs>
+            <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#8a8377" />
+            </marker>
+          </defs>
+          <rect x="20" y="60" width="130" height="50" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="85" y="81" text-anchor="middle" font-size="12" fill="#1a1d21">Браузер</text>
+          <text x="85" y="98" text-anchor="middle" font-size="10" fill="#5c636b">localhost:5173</text>
+          <rect x="280" y="60" width="150" height="50" rx="8" fill="#eaf0f6" stroke="#d3dfea" />
+          <text x="355" y="81" text-anchor="middle" font-size="12" font-weight="600" fill="#2d5375">Vite proxy</text>
+          <text x="355" y="98" text-anchor="middle" font-size="10" fill="#2d5375">оверлей</text>
+          <line x1="150" y1="85" x2="278" y2="85" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr2)" />
+          <rect x="580" y="18" width="250" height="50" rx="8" fill="#eaf2ea" stroke="#c4d8c6" />
+          <text x="705" y="39" text-anchor="middle" font-size="12" fill="#2e6136">исходники viewer + HMR</text>
+          <text x="705" y="56" text-anchor="middle" font-size="10" fill="#2e6136">layout.xsl &middot; style.css &middot; main.js</text>
+          <rect x="580" y="102" width="250" height="50" rx="8" fill="#fff" stroke="#e3e0da" />
+          <text x="705" y="123" text-anchor="middle" font-size="12" fill="#1a1d21">docker :8080 — реальные фиды</text>
+          <text x="705" y="140" text-anchor="middle" font-size="10" fill="#5c636b">2000 книг, кириллица, вложенность</text>
+          <line x1="430" y1="75" x2="578" y2="45" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr2)" />
+          <text x="502" y="42" text-anchor="middle" font-size="10" fill="#5c636b">/static/*</text>
+          <line x1="430" y1="95" x2="578" y2="125" stroke="#8a8377" stroke-width="1.5" marker-end="url(#arr2)" />
+          <text x="502" y="130" text-anchor="middle" font-size="10" fill="#5c636b">/feed.xml, /*</text>
+        </svg>
+        <figcaption>Один таб: данные настоящие, шаблон и стили — локальные с hot reload.</figcaption>
+      </figure>
+    </article>
+
+    <article class="idea" id="idea-3">
+      <div class="idea-head">
+        <span class="idnum">3</span>
+        <h3>Stop-the-bleed: <code>sync-static</code> + golden-харнесс как страховка миграции</h3>
+      </div>
+      <div>
+        <span class="chip axis">artifact-pipeline</span>
+        <span class="chip conf-hi">Confidence 90%</span>
+        <span class="chip conf-hi">Complexity Low</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          Terraform-принцип plan/apply для static/: (а)&nbsp;<code>bun run sync-static</code> — собирает viewer и пишет артефакты прямо в
+          <code>opds-generator/static/</code>; <code>sync:check</code> падает при байтовом дрейфе (CI/pre-commit); (б)&nbsp;golden-харнесс —
+          Playwright открывает N реальных URL из docker, снимает DOM-снапшоты и скриншоты, diff против эталонов. Пункт (б) — это
+          доказательство эквивалентности «до/после» для любой миграции рендеринга (идеи 1 и 6).
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>direct:</code> дрейф уже случился — static/style.css 727 строк vs dist/static/index.css 728 (подтверждено diff&rsquo;ом);
+          <code>reasoned:</code> в проекте нет ни одного теста отрендеренной страницы — тестовое дерево покрывает форматы/очередь/nginx, но
+          не человеческий UI; при двух рукосинхронизируемых диалектах каждая правка шаблона не верифицирована.
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Самое дешёвое в списке (день работы), останавливает текущее кровотечение и — главное — превращает «страшную миграцию до 17 ноября»
+          в механический проверяемый рефакторинг: переписал рендерер &rarr; харнесс доказал пиксельный паритет.
+        </dd>
+        <dt>Downsides</dt>
+        <dd>
+          Не устраняет причину (два диалекта) — только делает дрейф громким; golden-снапшоты требуют стабильной тестовой библиотеки книг
+          (фиксированный набор в docker-compose.test).
+        </dd>
+      </dl>
+    </article>
+
+    <article class="idea" id="idea-4">
+      <div class="idea-head">
+        <span class="idnum">4</span>
+        <h3>main.js получает исходник, unpkg увольняется</h3>
+      </div>
+      <div>
+        <span class="chip axis">artifact-pipeline</span>
+        <span class="chip conf-hi">Confidence 95%</span>
+        <span class="chip conf-hi">Complexity Low</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          Перенести Gridnav + focus-trap-обвязку в <code>viewer/src/gridnav.ts</code> (вторая Vite-entry &rarr;
+          <code>static/main.js</code>), подключить tabbable/focus-trap как npm-зависимости вместо рантайм-скриптов с unpkg, и добавить
+          cosmos-фикстуру с реальными атрибутами <code>data-element</code>/<code>data-focus-group</code> — клавиатурная навигация впервые
+          становится тестируемой до прода.
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>direct:</code> <code>layout.xsl:66-67</code> — <code>&lt;script src="https://unpkg.com/tabbable/..."&gt;</code> без пина
+          версии: self-hosted приложение с жёсткой рантайм-зависимостью от аптайма unpkg; досье: main.js &laquo;не имеет исходника ни в
+          одном репо — разрабатывался вслепую&raquo;; атрибуты, от которых он зависит, отсутствуют в DOM плейграунда.
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Самый интерактивный код продукта (2D-клавонавигация, фокус-ловушки) — единственный код вообще без дев-цикла. Идея
+          направление-нейтральна: нужна при любом исходе (XSLT, Арчибальд, sync-time HTML) и закрывает реальную дыру надёжности — прод-UI
+          сейчас ломается, если unpkg лёг.
+        </dd>
+        <dt>Downsides</dt>
+        <dd>Практически нет; чуть больше размер main.js (бандлится tabbable/focus-trap — несколько КБ).</dd>
+      </dl>
+    </article>
+
+    <article class="idea" id="idea-5">
+      <div class="idea-head">
+        <span class="idnum">5</span>
+        <h3>Кассеты: <code>fixtures:pull</code> собирает худшие реальные случаи из /data</h3>
+      </div>
+      <div>
+        <span class="chip axis">real-data-dev-loop</span>
+        <span class="chip conf-hi">Confidence 85%</span>
+        <span class="chip conf-hi">Complexity Low</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          VCR-паттерн из API-тестирования: скрипт обходит <code>/data</code> (обычное файловое зеркало — feed.xml/entry.xml на папку,
+          подтверждено верификатором), выбирает патологические записи — самый длинный заголовок, отсутствующая обложка, глубочайшая
+          вложенность, самая большая папка — и записывает их версионируемыми фикстурами cosmos. Фикстуры перестают быть выдумкой
+          (&laquo;Fiction, Drama, Classic&raquo;) и становятся greatest-hits реальных краевых случаев.
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>direct:</code> <code>LayoutExample.tsx:147-148</code> — данные плейграунда буквально захардкожены; досье: &laquo;кириллица,
+          длинные описания, отсутствующие обложки, 200-элементные папки — всё впервые видно в проде&raquo;; /data — walkable-файлы, не API.
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Дополняет идею 2: прокси даёт живую итерацию, кассеты — оффлайн-работу и закреплённые регрессионные случаи, переживающие изменения
+          библиотеки. Десяток строк Bun. Эти же фикстуры кормят рендерер идеи 1 и харнесс идеи 3 — тройное использование.
+        </dd>
+        <dt>Downsides</dt>
+        <dd>Снапшоты устаревают (лечится перезапуском скрипта); нужен доступ к /data или запущенный docker при harvest&rsquo;е.</dd>
+      </dl>
+    </article>
+
+    <article class="idea" id="idea-6">
+      <div class="idea-head">
+        <span class="idnum">6</span>
+        <h3>Самотрансформирующийся фид: script-bootstrap вместо PI (техника Арчибальда)</h3>
+      </div>
+      <div>
+        <span class="chip axis">runtime-rendering</span>
+        <span class="chip conf-md">Confidence 75%</span>
+        <span class="chip conf-md">Complexity Medium</span>
+      </div>
+      <dl>
+        <dt>Description</dt>
+        <dd>
+          Альтернативный ответ на дедлайн Chrome, сохраняющий фирменное свойство «один URL — и валидный OPDS, и человеческая страница»:
+          вместо <code>&lt;?xml-stylesheet?&gt;</code> генератор инжектит HTML-namespaced <code>&lt;script&gt;</code> первым потомком корня
+          фида; браузер исполняет его даже внутри XML-документа, скрипт читает XML-DOM, в котором живёт, и заменяет
+          <code>documentElement</code> отрендеренным HTML. Скриптом может стать сегодня мёртвый билд viewer&rsquo;а —
+          <code>dist/static/index.js</code> впервые получает работу.
+        </dd>
+        <dt>Basis</dt>
+        <dd>
+          <code>external:</code> <a href="https://jakearchibald.com/2025/making-xml-human-readable-without-xslt/">Jake Archibald, 2025</a> —
+          работает с Content-Type: text/xml; <code>direct:</code> <code>server.ts:53</code> — инжекция PI уже одна строка-шаблон, замена
+          полезной нагрузки — минимальный диф; <code>direct:</code> смок-тест 2026-07-14 на живом dev-стенде:
+          <code
+            >&lt;script xmlns=&quot;http://www.w3.org/1999/xhtml&quot; src=&quot;/static/bootstrap.js&quot;
+            defer=&quot;defer&quot;/&gt;</code
+          >
+          первым потомком <code>&lt;feed&gt;</code> в <code>data/test/feed.xml</code> — Chromium отрендерил HTML (все 17 записей, ошибок
+          нет), Moon+ Reader и FB Reader переварили фид со script-элементом: папка открывается, книга качается. Firefox/Safari визуально не
+          подтверждены.
+        </dd>
+        <dt>Rationale</dt>
+        <dd>
+          Минимальный диф от текущей архитектуры среди всех пост-XSLT путей; объединяет рендереры плейграунда и прода в один JS-бандл.
+          Честный соперник идеи 1 — выбор между ними и есть главное решение.
+        </dd>
+        <dt>Downsides</dt>
+        <dd>
+          Главный риск снят смок-тестом 2026-07-14 (см. Basis): реальные читалки пользователя (Moon+ Reader, FB Reader) толерантны к
+          script-элементу; выборка — 2 читалки, экзотические парсеры не проверялись. Остаётся: теряется работа без JS — то, что XSLT давал
+          бесплатно и что чекбоксовые попапы проекта уже ценят; рендер-баги всплывают в браузере пользователя, а не в логах синка;
+          Firefox/Safari не подтверждены визуально.
+        </dd>
+      </dl>
+    </article>
+  </section>
+
+  <section id="rejection-summary">
+    <h2>Rejection Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Идея</th>
+          <th>Причина отклонения</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>«Нулевой билд»: удалить PostCSS, писать CSS прямо в static/</td>
+          <td>
+            Опровергнуто верификацией: <code>random()</code> используется 14&times; в variations.css и запекает реальные oklch-значения
+            (static/style.css:680-683) — пайплайн несёт нагрузку, его удаление = ручной подсчёт оттенков навсегда
+          </td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Плейграунд рендерит настоящий layout.xsl через XSLTProcessor</td>
+          <td>
+            Инвестиция в умирающий шаблонный язык; XSLTProcessor нигде не используется (greenfield-обвязка); осмысленно только при
+            «XSLT-максимализме», который сам отклонён
+          </td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Скоупированный JSX&rarr;XSLT-компилятор</td>
+          <td>Внешние свидетельства: мосты такого рода бросают на импедансе; строго доминируется единым TS-рендерером (идея 1)</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Lit + Declarative Shadow DOM как общий слой компонентов</td>
+          <td>
+            Фреймворк ради 4 компонентов — непропорционально; plain-TS-рендерер даёт то же без новой зависимости и DSD-поддержки браузеров
+          </td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td>XSLT-максимализм: layout.xsl как источник, XJSLT/SaxonJS-компиляция</td>
+          <td>
+            Тяжёлый тулчейн и незрелость компиляторов против ~200 строк шаблонных литералов; «ноль переписывания разметки» не окупает
+            владение экзотическим рантаймом
+          </td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td>DOM-parity-тест JSX vs XSL</td>
+          <td>Chore, а не направление; как компонент влит в идею 3, устаревает с приходом единого рендерера</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td>Публиковать cosmos-export как styleguide на прод-nginx</td>
+          <td>
+            Публичная поверхность для инструмента с единственным пользователем — соло-мейнтейнером; ту же страховку даёт golden-харнесс
+          </td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td>Арчибальд-конвергенция (монорепо + рендерер + script-bootstrap)</td>
+          <td>
+            Доминируется идеей 1: жертвует работой без JS ради «одного URL», который sync-time HTML и так обеспечивает через
+            content-negotiation
+          </td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Монорепо как отдельная идея</td>
+          <td>Влито в идею 1 как фаза 1 — самостоятельная ценность («один CI») недотягивает до направления</td>
+        </tr>
+        <tr>
+          <td>10</td>
+          <td>Правило «должно работать без JS» как фильтр</td>
+          <td>Не идея, а критерий выбора — использован в обосновании ранжирования (идея 1 &gt; идея 6)</td>
+        </tr>
+        <tr>
+          <td>&mdash;</td>
+          <td>axis: repo-topology</td>
+          <td>Нет отдельного выжившего — осознанно влита в идею 1 (фаза «монорепо»); пробел намеренный</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="composition-signal">
+    Composed 2026-07-14 by ce-ideate (repo-grounded, 5 ideation agents + independent basis verifier) from focus: &laquo;перенести разработку
+    viewer&rsquo;а сюда или сменить билд-артефакт, не потеряв в удобстве&raquo;
+  </footer>
+</div>
