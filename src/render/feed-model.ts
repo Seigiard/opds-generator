@@ -54,8 +54,15 @@ export function toLinks(value: unknown): RawLink[] {
 }
 
 export function entryFromFragment(xml: string): FeedEntry {
-  const parsed = entryParser.parse(xml) as { entry?: Record<string, unknown> };
-  const e = parsed.entry ?? {};
+  let e: Record<string, unknown>;
+  try {
+    const parsed = entryParser.parse(xml) as { entry?: Record<string, unknown> };
+    e = parsed.entry ?? {};
+  } catch {
+    // A malformed cached entry.xml degrades the HTML card only — renderXml splices
+    // the verbatim fragment regardless, and feed.xml generation must never block (R2).
+    return { xml, kind: "book", id: "", title: "" };
+  }
 
   const links = toLinks(e.link);
   const findHref = (rel: string): string | undefined => links.find((l) => l["@_rel"] === rel)?.["@_href"];

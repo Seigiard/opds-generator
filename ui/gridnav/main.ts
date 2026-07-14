@@ -18,17 +18,23 @@ function stampEntryPopup(): void {
   if (popupIsOpen()) history.replaceState({ popupEntry: true }, "");
 }
 
+// history.back() resolves asynchronously; block repeat Esc / double-click until
+// the resulting hashchange runs syncPopup, or the second back() leaves the folder.
+let closing = false;
+
 function closePopup(): void {
-  if (!popupIsOpen()) return;
+  if (!popupIsOpen() || closing) return;
   if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
     history.replaceState(null, "", location.pathname + location.search);
     syncPopup();
     return;
   }
+  closing = true;
   history.back();
 }
 
 function syncPopup(): void {
+  closing = false;
   const id = location.hash.slice(1);
   const popup = id ? document.getElementById(id) : null;
 

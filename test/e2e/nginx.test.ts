@@ -105,6 +105,12 @@ describe("nginx integration", () => {
       expect(response.status).toBe(200);
     });
 
+    test("GET /static/favicon/*.png served from /app/static, not captured by the /data image regex", async () => {
+      const response = await fetch(`${BASE_URL}/static/favicon/favicon-96x96.png`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type") || "").toContain("image/png");
+    });
+
     test("GET /static/layout.xsl returns 404 (XSLT removed)", async () => {
       const response = await fetch(`${BASE_URL}/static/layout.xsl`);
       expect(response.status).toBe(404);
@@ -117,11 +123,18 @@ describe("nginx integration", () => {
       expect(response.status).toBe(404);
     });
 
-    test("GET /nonexistent-folder/ returns 503 (treated as initializing)", async () => {
-      // A directory-style URI without index.html cannot be distinguished from a
-      // not-yet-built folder during initial sync, so nginx answers 503 (KTD-8).
+    test("GET /nonexistent-folder/ returns 404 once the catalog is built", async () => {
+      // Steady state (root feed exists): a folder that will never exist is a real
+      // 404, not a retry-forever 503. Mid-cascade states (dir exists, index.html
+      // pending) and cold start (no root feed yet) still answer 503.
       const response = await fetch(`${BASE_URL}/nonexistent-folder/`, { redirect: "manual" });
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(404);
+    });
+
+    test("GET /opds/ (trailing slash) redirects to /feed.xml like /opds", async () => {
+      const response = await fetch(`${BASE_URL}/opds/`, { redirect: "manual" });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("/feed.xml");
     });
   });
 

@@ -82,7 +82,10 @@ export class Gridnav {
 
     if (typeof move === "number") {
       const next = this.items[currentIndex + move];
-      if (next) this.focusWithScroll(next);
+      if (!next) return;
+      // Horizontal steps stop at the row edge instead of wrapping to the next row.
+      if (Math.abs(move) === 1 && this.position(next).y !== this.position(target).y) return;
+      this.focusWithScroll(next);
       return;
     }
 

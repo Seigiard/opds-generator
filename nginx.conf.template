@@ -41,8 +41,13 @@ http {
             return 302 /feed.xml;
         }
 
+        location = /opds/ {
+            return 302 /feed.xml;
+        }
+
         # Static assets from /static folder
-        location /static/ {
+        # ^~ so the .xml/image regex locations below cannot capture /static/* into /data
+        location ^~ /static/ {
             alias /app/static/;
             expires 1d;
             add_header Cache-Control "public, immutable";
@@ -99,14 +104,20 @@ http {
         }
 
         location @check_initializing {
-            # During initial build / mid-cascade the target file may not exist yet.
-            # Treat feed.xml, index.html and directory URIs as "initializing" (503).
+            # feed.xml / index.html targets may be mid-write (cascade): 503.
             if ($uri ~* (feed\.xml|index\.html)$) {
                 return 503;
             }
-            if ($uri ~* /$) {
+            # Folder URL whose directory exists but index.html is not written yet: mid-cascade, 503.
+            if (-d /data$uri) {
                 return 503;
             }
+            # Root feed is seeded first during initial sync / resync; while it is
+            # absent nothing is built yet — everything is "initializing" (503).
+            if (!-f /data/feed.xml) {
+                return 503;
+            }
+            # Steady state and the path genuinely does not exist: a real 404.
             return 404;
         }
 

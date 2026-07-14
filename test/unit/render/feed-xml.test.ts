@@ -130,6 +130,17 @@ describe("entryFromFragment", () => {
     expect(entry.cover).toBeUndefined();
   });
 
+  test("is total: malformed fragment degrades fields but preserves verbatim xml", () => {
+    // #given a fragment fast-xml-parser cannot handle
+    const malformed = "<entry><title>broken << & unclosed";
+    // #when parsed
+    expect(() => entryFromFragment(malformed)).not.toThrow();
+    const entry = entryFromFragment(malformed);
+    // #then the verbatim xml survives so renderXml (and feed.xml) is unaffected
+    expect(entry.xml).toBe(malformed);
+    expect(renderXml(rootModel([malformed]))).toContain(malformed);
+  });
+
   test("multiple dc:subject values parse to an array", () => {
     const fragment = `<entry>
   <id>urn:opds:book:x</id>

@@ -44,6 +44,26 @@ describe("parseFeed", () => {
     expect(learning?.subjects).toEqual(["Computers & Technology"]);
   });
 
+  test("matches entries carrying attributes on the <entry> tag", () => {
+    // #given a feed whose entry has attributes (valid Atom)
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>urn:test</id>
+  <title>Attr</title>
+  <link rel="self" href="/attr/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <entry xml:lang="en">
+    <id>urn:opds:book:a</id>
+    <title>Attributed</title>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="/a/file" type="application/pdf"/>
+  </entry>
+</feed>`;
+    // #when parsed
+    const model = parseFeed(xml);
+    // #then the attributed entry is not silently dropped
+    expect(model.entries).toHaveLength(1);
+    expect(model.entries[0]?.title).toBe("Attributed");
+  });
+
   test("navigation feed without books parses as navigation kind", async () => {
     const model = parseFeed(await readFeed("deep-nested.xml"));
     expect(["navigation", "acquisition"]).toContain(model.kind);

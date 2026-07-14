@@ -2,7 +2,7 @@ import { createXmlParser, getString } from "../formats/utils.ts";
 import { entryFromFragment, toLinks, type FeedModel } from "./feed-model.ts";
 
 const feedParser = createXmlParser(["link"]);
-const ENTRY_RE = /<entry>[\s\S]*?<\/entry>/g;
+const ENTRY_RE = /<entry(?:\s[^>]*)?>[\s\S]*?<\/entry>/g;
 
 export function parseFeed(xml: string): FeedModel {
   const fragments = xml.match(ENTRY_RE) ?? [];
