@@ -2,19 +2,26 @@ import { describe, test, expect, beforeAll } from "bun:test";
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
-// Wait for server to be ready
-async function waitForServer(maxWaitMs = 30000): Promise<void> {
+// Wait for a URL to return 200
+async function waitFor(path: string, maxWaitMs = 45000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
-      const response = await fetch(`${BASE_URL}/feed.xml`);
+      const response = await fetch(`${BASE_URL}${path}`);
       if (response.status === 200) return;
     } catch {
       // Connection refused
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error("Server not ready");
+  throw new Error(`Not ready: ${path}`);
+}
+
+async function waitForServer(): Promise<void> {
+  await waitFor("/feed.xml");
+  // index.html is written by the cascade after feed.xml — wait for the browser view too
+  await waitFor("/index.html");
+  await waitFor("/test/");
 }
 
 // Check if /resync is enabled
@@ -29,16 +36,50 @@ describe("nginx integration", () => {
   });
 
   describe("redirects", () => {
-    test("GET / redirects to /feed.xml", async () => {
+    test("GET / redirects to /index.html (browsers get HTML)", async () => {
       const response = await fetch(`${BASE_URL}/`, { redirect: "manual" });
       expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe("/feed.xml");
+      expect(response.headers.get("location")).toBe("/index.html");
     });
 
-    test("GET /opds redirects to /feed.xml", async () => {
+    test("GET /opds redirects to /feed.xml (readers get feeds)", async () => {
       const response = await fetch(`${BASE_URL}/opds`, { redirect: "manual" });
       expect(response.status).toBe(302);
       expect(response.headers.get("location")).toBe("/feed.xml");
+    });
+  });
+
+  describe("browser HTML routing", () => {
+    test("GET /index.html returns 200 text/html", async () => {
+      const response = await fetch(`${BASE_URL}/index.html`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type") || "").toContain("text/html");
+      const body = await response.text();
+      expect(body).toContain("<!DOCTYPE html>");
+      expect(body).toContain('class="books-grid"');
+    });
+
+    test("GET /test/ returns 200 text/html (folder URL → index.html)", async () => {
+      const response = await fetch(`${BASE_URL}/test/`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type") || "").toContain("text/html");
+    });
+
+    test("GET /test/feed.xml still returns 200 XML (readers)", async () => {
+      const response = await fetch(`${BASE_URL}/test/feed.xml`);
+      expect(response.status).toBe(200);
+      expect((response.headers.get("content-type") || "").toLowerCase()).toContain("xml");
+    });
+
+    test("AE2: book download returns 200 with Content-Disposition", async () => {
+      // discover an acquisition href from a real feed
+      const feed = await (await fetch(`${BASE_URL}/test/feed.xml`)).text();
+      const match = feed.match(/acquisition[^>]*href="([^"]+)"/);
+      expect(match).not.toBeNull();
+      const downloadUrl = match![1]!;
+      const response = await fetch(`${BASE_URL}${downloadUrl}`, { redirect: "manual" });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-disposition") || "").toContain("attachment");
     });
   });
 
@@ -59,21 +100,28 @@ describe("nginx integration", () => {
   });
 
   describe("static files", () => {
-    test("GET /static/layout.xsl returns 200", async () => {
-      const response = await fetch(`${BASE_URL}/static/layout.xsl`);
-      expect(response.status).toBe(200);
-    });
-
     test("GET /static/style.css returns 200", async () => {
       const response = await fetch(`${BASE_URL}/static/style.css`);
       expect(response.status).toBe(200);
     });
+
+    test("GET /static/layout.xsl returns 404 (XSLT removed)", async () => {
+      const response = await fetch(`${BASE_URL}/static/layout.xsl`);
+      expect(response.status).toBe(404);
+    });
   });
 
   describe("directory index", () => {
-    test("GET /nonexistent/ returns 404", async () => {
-      const response = await fetch(`${BASE_URL}/nonexistent/`, { redirect: "manual" });
+    test("GET /nonexistent.file returns 404 (non-directory miss)", async () => {
+      const response = await fetch(`${BASE_URL}/nonexistent.file`, { redirect: "manual" });
       expect(response.status).toBe(404);
+    });
+
+    test("GET /nonexistent-folder/ returns 503 (treated as initializing)", async () => {
+      // A directory-style URI without index.html cannot be distinguished from a
+      // not-yet-built folder during initial sync, so nginx answers 503 (KTD-8).
+      const response = await fetch(`${BASE_URL}/nonexistent-folder/`, { redirect: "manual" });
+      expect(response.status).toBe(503);
     });
   });
 
@@ -100,6 +148,46 @@ describe("nginx integration", () => {
       expect(feedContent).toContain("kind=navigation");
       expect(feedContent).toContain('rel="self"');
       expect(feedContent).toContain("</feed>");
+    });
+  });
+
+  // R15 smoke: crawl the whole feed graph, every folder must render HTML and links must resolve
+  describe("R15 smoke", () => {
+    test("every folder renders index.html and internal links resolve", async () => {
+      const visited = new Set<string>();
+      const queue: string[] = ["/feed.xml"];
+      const assets = new Set<string>();
+
+      while (queue.length > 0) {
+        const feedPath = queue.shift()!;
+        if (visited.has(feedPath)) continue;
+        visited.add(feedPath);
+
+        const feedRes = await fetch(`${BASE_URL}${feedPath}`);
+        expect(feedRes.status).toBe(200);
+        const xml = await feedRes.text();
+
+        // the folder that owns this feed must serve an HTML index
+        const dir = feedPath.replace(/feed\.xml$/, "");
+        const htmlRes = await fetch(`${BASE_URL}${dir}`);
+        expect(htmlRes.status).toBe(200);
+        expect((htmlRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
+
+        for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) queue.push(m[1]!);
+        const image = xml.match(/opds-spec\.org\/image"\s+href="([^"]+)"/);
+        if (image) assets.add(image[1]!);
+        const acquisition = xml.match(/acquisition[^>]*href="([^"]+)"/);
+        if (acquisition) assets.add(acquisition[1]!);
+      }
+
+      // a real library has several nested folders
+      expect(visited.size).toBeGreaterThan(3);
+
+      // every sampled cover and download link resolves
+      for (const asset of assets) {
+        const res = await fetch(`${BASE_URL}${asset}`);
+        expect(res.status).toBe(200);
+      }
     });
   });
 

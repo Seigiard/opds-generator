@@ -59,10 +59,15 @@ describe("formats/utils", () => {
       expect(getString({ "#text": "  spaced  " })).toBe("spaced");
     });
 
-    test("returns undefined for non-string/object", () => {
+    test("coerces numeric and boolean scalars to strings", () => {
+      expect(getString(123)).toBe("123");
+      expect(getString(2025)).toBe("2025");
+      expect(getString(false)).toBe("false");
+    });
+
+    test("returns undefined for null/undefined/array", () => {
       expect(getString(null)).toBeUndefined();
       expect(getString(undefined)).toBeUndefined();
-      expect(getString(123)).toBeUndefined();
       expect(getString([])).toBeUndefined();
     });
 
@@ -117,8 +122,12 @@ describe("formats/utils", () => {
       expect(getStringArray(undefined)).toBeUndefined();
     });
 
-    test("returns undefined for array with only non-strings", () => {
-      expect(getStringArray([null, undefined, 123])).toBeUndefined();
+    test("returns undefined for array with only null/undefined", () => {
+      expect(getStringArray([null, undefined])).toBeUndefined();
+    });
+
+    test("coerces numeric values within an array", () => {
+      expect(getStringArray([null, 123])).toEqual(["123"]);
     });
 
     test("trims and decodes entities", () => {

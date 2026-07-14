@@ -59,7 +59,9 @@ h4,
 h5,
 h6 {
   text-wrap: balance;
-} /* --- CSS Variables --- */
+}
+
+/* --- CSS Variables --- */
 :root {
   /* --- Typography --- */
   --font-system: system-ui, sans-serif;
@@ -123,6 +125,7 @@ body {
   margin: 0 auto;
   max-width: 80rem;
   padding: 1.5rem;
+  scroll-padding: 20px 0;
 }
 ::-webkit-scrollbar {
   height: 8px;
@@ -172,6 +175,7 @@ body {
   grid-template-rows: 1fr min-content;
   max-width: var(--card-max-width);
   outline: 0;
+  position: relative;
   text-decoration: none;
 }
 .book,
@@ -309,18 +313,13 @@ body {
 }
 
 /* --- Card States --- */
-.card:has(input:checked) .book__cover {
-  box-shadow: var(--card-shadow);
-  transform: perspective(2000px) rotateY(-45deg);
-  transform-style: preserve-3d;
-}
 @media (hover: hover) and (pointer: fine) {
-  .card.card--book:has(label:hover):not(:has(input:checked)) .book__cover {
+  .card.card--book:has(a:hover) .book__cover {
     box-shadow: var(--card-shadow);
     transform: perspective(2000px) rotateY(-30deg);
     transform-style: preserve-3d;
   }
-  .card.card--book:has(label:hover) .book__cover:after {
+  .card.card--book:has(a:hover) .book__cover:after {
     opacity: 0.5;
   }
   .card.card--folder:has(a:hover) .book:nth-child(3n + 1) {
@@ -375,12 +374,9 @@ body {
 }
 
 /* --- Popup --- */
-body:has(.popup-trigger__wrapper input:checked) {
+body:has(.popup:target) {
   overflow: hidden;
 }
-.popup-trigger input,
-.popup-trigger span,
-.popup__close-button input,
 .popup__close-button span {
   height: 1px;
   margin: -1px;
@@ -391,18 +387,6 @@ body:has(.popup-trigger__wrapper input:checked) {
   clip: rect(0, 0, 0, 0);
   border-width: 0;
   white-space: nowrap;
-}
-.popup-trigger__wrapper:not(:has(input:checked)) {
-  position: relative;
-}
-.popup-trigger__wrapper:not(:has(input:checked)) .popup-trigger:after {
-  content: "";
-  cursor: pointer;
-  display: block;
-  inset: 0;
-  outline: none;
-  position: absolute;
-  z-index: 10;
 }
 .popup__close-button {
   background:
@@ -427,7 +411,7 @@ body:has(.popup-trigger__wrapper input:checked) {
   outline-color: var(--card-focus-ring);
 }
 @media (hover: hover) and (pointer: fine) {
-  .popup-trigger__wrapper:has(input:checked) + .popup .popup__close-button:hover {
+  .popup:target .popup__close-button:hover {
     transform: scale(1.1);
   }
 }
@@ -439,7 +423,7 @@ body:has(.popup-trigger__wrapper input:checked) {
   position: fixed;
   z-index: 100;
 }
-.popup-trigger__wrapper:has(input:checked) + .popup {
+.popup:target {
   animation: popup-fade-in var(--transition-slow) forwards;
   display: block;
 }
@@ -558,7 +542,9 @@ body:has(.popup-trigger__wrapper input:checked) {
     overflow-y: visible;
     padding: 1rem 2rem;
   }
-} /* --- Header --- */
+}
+
+/* --- Header --- */
 .header {
   align-items: flex-start;
   display: flex;
@@ -676,52 +662,46 @@ body:has(.popup-trigger__wrapper input:checked) {
     width: 100%;
   }
 }
-.books-grid > div:nth-child(3n + 1) .book:nth-child(3n + 1) {
+.books-grid > div:nth-child(3n + 1) .book:nth-child(3n + 1),
+.books-grid > div:nth-child(3n + 2) .book:nth-child(3n + 1) {
   --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 150deg));
 }
-.books-grid > div:nth-child(3n + 2) .book:nth-child(3n + 1) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 300deg));
-}
 .books-grid > div:nth-child(3n + 3) .book:nth-child(3n + 1) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 30deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 135deg));
 }
 
 /* Book heights: 5n cycle */
 .books-grid > div:nth-child(5n + 1) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 165deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 195deg));
 }
 .books-grid > div:nth-child(5n + 2) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 300deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 225deg));
 }
 .books-grid > div:nth-child(5n + 3) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 0deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 210deg));
 }
 .books-grid > div:nth-child(5n + 4) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 90deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 255deg));
 }
 .books-grid > div:nth-child(5n + 5) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 210deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 240deg));
 }
 
 /* White section: 7n cycle */
-.books-grid > div:nth-child(7n + 1) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 285deg));
-}
+.books-grid > div:nth-child(7n + 1) .book:nth-child(3n + 3),
 .books-grid > div:nth-child(7n + 2) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 150deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 300deg));
 }
 .books-grid > div:nth-child(7n + 3) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 270deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 285deg));
 }
 .books-grid > div:nth-child(7n + 4) .book:nth-child(3n + 3) {
   --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 360deg));
 }
-.books-grid > div:nth-child(7n + 5) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 45deg));
-}
+.books-grid > div:nth-child(7n + 5) .book:nth-child(3n + 3),
 .books-grid > div:nth-child(7n + 6) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 195deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 345deg));
 }
 .books-grid > div:nth-child(7n + 7) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 120deg));
+  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 330deg));
 }

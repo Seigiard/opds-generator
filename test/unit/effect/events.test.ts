@@ -169,4 +169,9 @@ describe("adaptDataEvent (data watcher classification)", () => {
     const result = adaptDataEvent({ parent: "/data/Fiction/", name: "feed.xml", events: "CLOSE_WRITE" }, alwaysProcessDedup);
     expect(result).toBeNull();
   });
+
+  test("ignores index.html (no event loop from generated HTML)", () => {
+    const result = adaptDataEvent({ parent: "/data/Fiction/", name: "index.html", events: "CLOSE_WRITE" }, alwaysProcessDedup);
+    expect(result).toBeNull();
+  });
 });

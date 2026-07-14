@@ -78,11 +78,11 @@ describe("folderMetaSync handler", () => {
     expect(exists).toBe(true);
   });
 
-  test("includes XML declaration and stylesheet", async () => {
+  test("includes XML declaration and no XSLT stylesheet PI (post-flip)", async () => {
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
     expect(content).toContain('<?xml version="1.0"');
-    expect(content).toContain('<?xml-stylesheet href="/static/layout.xsl"');
+    expect(content).not.toContain("xml-stylesheet");
   });
 
   test("sets feed as navigation type for empty folder", async () => {

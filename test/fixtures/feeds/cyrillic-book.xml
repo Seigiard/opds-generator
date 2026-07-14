@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:comics/One Punch Man</id>
+  <title>One Punch Man</title>
+  <updated>2026-07-14T05:25:47.559Z</updated>
+  <link rel="self" href="/comics/One%20Punch%20Man/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:book:comics/One Punch Man/Onepunchman_Vol01_Ch01 (1) [Уроборос].zip</id>
+  <title>Onepunchman Vol01 Ch01 (1) [Уроборос]</title>
+  <updated>2026-01-03T16:39:34.521Z</updated>
+  <dc:format>ZIP</dc:format>
+  <content type="text">9.3 MB</content>
+  <link rel="http://opds-spec.org/image" href="/comics/One%20Punch%20Man/Onepunchman_Vol01_Ch01%20(1)%20%5B%D0%A3%D1%80%D0%BE%D0%B1%D0%BE%D1%80%D0%BE%D1%81%5D.zip/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/comics/One%20Punch%20Man/Onepunchman_Vol01_Ch01%20(1)%20%5B%D0%A3%D1%80%D0%BE%D0%B1%D0%BE%D1%80%D0%BE%D1%81%5D.zip/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/comics/One%20Punch%20Man/Onepunchman_Vol01_Ch01%20(1)%20%5B%D0%A3%D1%80%D0%BE%D0%B1%D0%BE%D1%80%D0%BE%D1%81%5D.zip/file" type="application/zip"/>
+</entry>
+</feed>

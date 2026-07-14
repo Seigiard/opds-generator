@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OPDS Viewer Playground</title>
+    <style>
+      .playground-bar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background: color-mix(in srgb, canvas 80%, gray);
+        font: 14px system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="playground-bar">
+      <label
+        >Cassette:
+        <select id="cassette"></select
+      ></label>
+    </div>
+    <div id="preview"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

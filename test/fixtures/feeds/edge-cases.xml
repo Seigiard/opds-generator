@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet href="/static/layout.xsl" type="text/xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:edge</id>
+  <title>Edge &amp; Corner Cases</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <link rel="self" href="/edge/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:catalog:edge/Sub</id>
+  <title>Sub &lt;folder&gt;</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <summary type="text">📚 2</summary>
+  <link rel="subsection" href="/edge/Sub/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:book:edge/no-cover.txt</id>
+  <title>Book Without Cover</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <dc:format>TXT</dc:format>
+  <content type="text">1.2 KB</content>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/edge/no-cover.txt/file" type="text/plain"/>
+</entry>
+<entry>
+  <id>urn:opds:book:edge/no-author.epub</id>
+  <title>Tom &amp; Jerry: &lt;Adventures&gt;</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <dc:format>EPUB</dc:format>
+  <dc:subject>humor</dc:subject>
+  <dc:subject>kids</dc:subject>
+  <content type="text">4.0 MB</content>
+  <link rel="http://opds-spec.org/image" href="/edge/no-author.epub/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/edge/no-author.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/edge/no-author.epub/file" type="application/epub+zip"/>
+</entry>
+</feed>

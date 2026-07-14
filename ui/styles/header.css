@@ -1,0 +1,128 @@
+/* --- Header --- */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* --- Breadcrumb --- */
+.header__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.header__home {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+  transition:
+    color var(--transition-fast),
+    outline-color var(--transition-slow);
+
+  &:hover {
+    color: var(--color-accent);
+  }
+
+  &:focus-visible {
+    outline-color: var(--color-accent);
+  }
+}
+
+.header__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.header__separator {
+  color: var(--color-text-muted);
+  font-weight: 300;
+}
+
+.header__breadcrumb-text {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* --- Title --- */
+.header__title {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+}
+
+/* --- Search --- */
+.header__search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 15rem;
+  max-width: 25rem;
+  flex: 1;
+}
+
+.header__search-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.header__search {
+  width: 100%;
+  padding: 0.625rem 0.75rem 0.625rem 2.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
+  border: none;
+  border-radius: 1.5rem;
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background var(--transition-fast),
+    outline-color var(--transition-slow);
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+  }
+
+  &:focus {
+    background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+    outline-color: var(--color-accent);
+  }
+}
+
+/* --- Mobile --- */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .header__search-wrapper {
+    width: 100%;
+    max-width: none;
+  }
+}

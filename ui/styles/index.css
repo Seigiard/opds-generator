@@ -1,0 +1,529 @@
+/* --- CSS Variables --- */
+:root {
+  /* --- Typography --- */
+  --font-system: system-ui, sans-serif;
+  --font-old-style: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", P052, serif;
+  --font-size-sm: 0.875rem;
+
+  /* --- Colors --- */
+  --color-bg: #ffffff;
+  --color-text: #0a0a0a;
+  --color-text-muted: #71717a;
+  --color-accent: #6366f1;
+
+  /* --- Scrollbar --- */
+  --scrollbar-track: var(--color-bg);
+  --scrollbar-thumb: #d4d4d8;
+  --scrollbar-thumb-hover: var(--color-accent);
+
+  /* --- Card --- */
+  --card-bg--basic: #f1f5f9;
+  --card-bg: var(--card-bg--basic);
+  --card-max-width: 11rem;
+  --card-radius: 0.125rem 0.3rem 0.3rem 0.125rem;
+  --card-light-radius: 0 0.3rem 0.3rem 0;
+  --card-shadow: inset 4px 1px 3px #ffffff60, inset 0 -1px 2px #00000080, 10px 0px 10px -5px #00000030, 0px 0px 1px 0px #0000007d;
+  --card-pages-shadow:
+    10px 40px 40px -10px #00000030, inset -2px 0 0 grey, inset -3px 0 0 #dbdbdb, inset -4px 0 0 white, inset -5px 0 0 #dbdbdb,
+    inset -6px 0 0 white, inset -7px 0 0 #dbdbdb, inset -8px 0 0 white, inset -9px 0 0 #dbdbdb;
+  --card-focus-ring: var(--color-accent);
+  --card-rotate-1: 5deg;
+  --card-rotate-2: -5deg;
+  --card-rotate-3: 2deg;
+
+  /* --- Animation --- */
+  --transition-fast: 200ms ease-out;
+  --transition-slow: 500ms ease-out;
+
+  /* --- Layout --- */
+  --grid-min-col: 10rem;
+}
+
+/* --- Dark Mode --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0a0a0a;
+    --color-text: #fafafa;
+    --color-text-muted: #a1a1aa;
+    --scrollbar-thumb: #52525b;
+    --card-bg: #27272a;
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+    --card-pages-shadow:
+      10px 40px 40px -10px #00000060, inset -2px 0 0 #52525b, inset -3px 0 0 #3f3f46, inset -4px 0 0 #27272a, inset -5px 0 0 #3f3f46,
+      inset -6px 0 0 #27272a, inset -7px 0 0 #3f3f46, inset -8px 0 0 #27272a, inset -9px 0 0 #3f3f46;
+  }
+}
+
+/* --- Global Styles --- */
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-system);
+  padding: 1.5rem;
+  max-width: 80rem;
+  margin: 0 auto;
+  scroll-padding: 20px 0;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* --- Grid --- */
+.books-grid {
+  --grid-amount: 1;
+  --grid-gap: 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--grid-min-col), 1fr));
+  gap: var(--grid-gap);
+  max-width: calc((var(--grid-min-col) + var(--grid-gap)) * var(--grid-amount));
+}
+.books-grid:has(> :nth-child(2)) {
+  --grid-amount: 2;
+}
+.books-grid:has(> :nth-child(3)) {
+  --grid-amount: 3;
+}
+.books-grid:has(> :nth-child(4)) {
+  --grid-amount: 4;
+}
+.books-grid:has(> :nth-child(5)) {
+  --grid-amount: 5;
+}
+.books-grid:has(> :nth-child(6)) {
+  --grid-amount: 6;
+}
+
+/* --- Card --- */
+.card {
+  position: relative;
+  align-self: start;
+  width: 100%;
+  max-width: var(--card-max-width);
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr min-content;
+  gap: 0.75rem;
+  outline: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.book {
+  grid-area: 1/1/2/2;
+  width: 100%;
+  aspect-ratio: 225/350;
+  border-radius: var(--card-radius);
+  isolation: isolate;
+  display: grid;
+  grid-template-areas: "stack";
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+
+  &:after {
+    grid-area: stack;
+    content: "";
+    display: block;
+    z-index: 0;
+    width: calc(100% - 2px);
+    height: 96%;
+    position: relative;
+    top: 2%;
+    border: 1px solid grey;
+    border-radius: 3px;
+    background: white;
+  }
+}
+
+.card--folder {
+  position: relative;
+}
+
+.card--folder .book {
+  transform-style: preserve-3d;
+  transition: transform var(--transition-slow);
+  padding: 8% 5%;
+
+  &:nth-child(3n + 1) {
+    transform-origin: bottom;
+    transform: rotate(var(--card-rotate-1)) translateY(-0.5rem);
+  }
+
+  &:nth-child(3n + 2) {
+    transform-origin: top;
+    transform: rotate(var(--card-rotate-2)) translateX(-1rem);
+  }
+
+  &:nth-child(3n + 3) {
+    transform-origin: center;
+    transform: rotate(var(--card-rotate-3));
+  }
+}
+
+.card--book .book:after {
+  /* Page edges — stacked paper illusion via layered inset shadows */
+  box-shadow: var(--card-pages-shadow);
+}
+
+.book__cover {
+  /* Book cover with spine and glare effects */
+  grid-area: stack;
+  z-index: 1;
+  display: grid;
+  grid-template-areas: "spine cover";
+  grid-template-columns: 0.5rem 1fr;
+  grid-template-rows: 1fr;
+  aspect-ratio: inherit;
+  border-radius: var(--card-radius);
+  isolation: isolate;
+  overflow: hidden;
+  justify-content: center;
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition:
+    transform var(--transition-slow),
+    box-shadow var(--transition-slow),
+    outline-color var(--transition-slow);
+  transform-origin: 0 50%;
+
+  &:before {
+    /* Spine shadow — depth illusion at book binding */
+    content: "";
+    display: block;
+    grid-area: spine;
+    z-index: 2;
+    border-right: 1.5px solid #00000020;
+    box-shadow: 0 1.5px 0px 1px #ffffff20;
+    background-image: linear-gradient(to right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+    place-self: stretch;
+  }
+
+  &:after {
+    /* Glare overlay — light reflection on cover surface */
+    content: "";
+    display: block;
+    grid-area: cover;
+    z-index: 2;
+    border-radius: var(--card-light-radius);
+    background-image: linear-gradient(to right, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 50%);
+    opacity: 0.3;
+    place-self: stretch;
+    transition: opacity var(--transition-slow);
+  }
+
+  & > img {
+    grid-area: 1/1/2/3;
+    z-index: 1;
+    width: 100%;
+    min-height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-slow);
+    place-self: center;
+  }
+
+  & > span {
+    grid-area: 1/1/2/3;
+    align-self: start;
+    justify-self: left;
+    font-family: var(--font-old-style);
+    margin: 10%;
+    width: 5rem;
+    height: fit-content;
+    line-height: 1.25;
+    text-align: right;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    opacity: 0.8;
+    color: #000;
+    @supports (hanging-punctuation: first) and (font: -apple-system-body) and (-webkit-appearance: none) {
+      /* Hide in Safari (bug with writing-mode: vertical-rl;) */
+      display: none;
+    }
+  }
+}
+
+/* --- Card States --- */
+@media (hover: hover) and (pointer: fine) {
+  .card.card--book {
+    &:has(a:hover) .book__cover {
+      box-shadow: var(--card-shadow);
+      transform: perspective(2000px) rotateY(-30deg);
+      transform-style: preserve-3d;
+    }
+
+    &:has(a:hover) .book__cover:after {
+      opacity: 0.5;
+    }
+  }
+
+  .card.card--folder {
+    &:has(a:hover) {
+      .book:nth-child(3n + 1) {
+        --card-rotate-1: 6deg;
+      }
+      .book:nth-child(3n + 2) {
+        --card-rotate-2: -6deg;
+      }
+      .book:nth-child(3n + 3) {
+        --card-rotate-3: 1deg;
+      }
+    }
+  }
+}
+
+.card.card--book:has(:focus-visible) .book__cover,
+.card.card--folder:has(:focus-visible) .book:nth-child(3) .book__cover {
+  outline-color: var(--card-focus-ring);
+}
+
+.card__info {
+  grid-area: 2/1/2/2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0 0.75rem;
+  min-width: 0;
+
+  h3 {
+    font-weight: 500;
+    font-size: 1rem;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: inherit;
+
+    a {
+      color: inherit;
+      text-decoration: none;
+      outline: none;
+
+      &:before {
+        content: "";
+        display: block;
+        position: absolute;
+        inset: 0;
+      }
+    }
+  }
+
+  p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* --- Popup --- */
+body:has(.popup:target) {
+  overflow: hidden;
+}
+
+.popup__close-button span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.popup__close-button {
+  /* X close button via crossed diagonal gradients */
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  z-index: 101;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  outline: 3px solid transparent;
+  outline-offset: 4px;
+  transition:
+    transform var(--transition-fast),
+    outline-color var(--transition-fast);
+  background:
+    linear-gradient(45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%),
+    linear-gradient(-45deg, transparent 42%, var(--color-text) 42%, var(--color-text) 58%, transparent 58%);
+
+  &:focus-visible {
+    outline-color: var(--card-focus-ring);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popup:target .popup__close-button:hover {
+    transform: scale(1.1);
+  }
+}
+
+.popup {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--color-bg);
+  overflow: none;
+}
+
+.popup:target {
+  display: block;
+  animation: popup-fade-in var(--transition-slow) forwards;
+}
+
+@keyframes popup-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.popup__content {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  max-width: 80rem;
+  height: 100svh;
+  margin: 0 auto;
+}
+
+.popup__cover {
+  display: flex;
+  align-items: start;
+  justify-content: center;
+  padding: 3rem;
+
+  .book {
+    width: 55svh;
+    max-width: 20rem;
+  }
+}
+
+.popup__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  height: 100svh;
+  overflow-y: auto;
+  padding: 3rem 4rem;
+  hgroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+.popup__title {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.popup__author {
+  font-size: 1.3rem;
+}
+
+.popup__description {
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.popup__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  column-gap: 4rem;
+  row-gap: 1rem;
+}
+
+.popup__meta {
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text-muted);
+}
+
+.popup__downloads {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.popup__download-btn {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  background: var(--color-accent);
+  color: white;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast),
+    outline-color var(--transition-fast);
+
+  &:focus-visible {
+    outline-color: var(--color-accent);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .popup__download-btn:hover {
+    background: color-mix(in srgb, var(--color-accent) 85%, black);
+    transform: translateY(-1px);
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    /* --- Layout --- */
+    --grid-min-col: 10rem;
+  }
+  .popup__content {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .popup__cover {
+    height: 24rem;
+    .book {
+      max-width: 12rem;
+      width: 100%;
+    }
+  }
+
+  .popup__info {
+    overflow-y: visible;
+    padding: 1rem 2rem;
+    height: auto;
+  }
+}
