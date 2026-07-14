@@ -2,6 +2,8 @@ import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./t
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
 
+const SOURCE_FILE_EXTENSIONS = /\.(indd|qxd|docx?|odt|rtf|pages|tex|pub|wpd|fm)$/i;
+
 interface PdfInfo {
   title?: string;
   author?: string;
@@ -21,10 +23,18 @@ async function parsePdfInfo(filePath: string): Promise<PdfInfo | null> {
 
   if (exitCode !== 0) return null;
 
+  return parsePdfInfoOutput(output);
+}
+
+export function parsePdfInfoOutput(output: string): PdfInfo {
   const info: PdfInfo = {};
   const lines = output.split("\n");
 
   for (const line of lines) {
+    // Indented lines belong to sub-blocks like "PDF subtype" whose own
+    // Title (e.g. "ISO 15930 - ...") must not override the document title
+    if (/^\s/.test(line)) continue;
+
     const colonIndex = line.indexOf(":");
     if (colonIndex === -1) continue;
 
@@ -56,6 +66,10 @@ async function parsePdfInfo(filePath: string): Promise<PdfInfo | null> {
   }
 
   return info;
+}
+
+export function stripSourceFileExtension(title: string): string {
+  return title.replace(SOURCE_FILE_EXTENSIONS, "");
 }
 
 function parseCreationDate(dateStr: string | undefined): string | undefined {
@@ -98,7 +112,7 @@ async function createPdfHandler(filePath: string): Promise<FormatHandler | null>
     if (!info) return null;
 
     const metadata: BookMetadata = {
-      title: info.title || "",
+      title: stripSourceFileExtension(info.title || ""),
       author: info.author,
       description: info.subject,
       issued: parseCreationDate(info.creationDate),
