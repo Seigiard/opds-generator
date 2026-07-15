@@ -29,16 +29,17 @@ export async function saveCoverAndThumbnail(
   try {
     await Promise.all([mkdir(dirname(coverPath), { recursive: true }), mkdir(dirname(thumbPath), { recursive: true })]);
 
-    const pipeline = sharp(buffer).toColorspace("srgb");
-
+    // Two independent pipelines instead of a shared pipeline + .clone(): cloning
+    // retains ~7 KB of native memory per call (A/B-measured via the memory-leak
+    // probe, see docs/known-flaky-tests.md) — real MBs across a large sync.
     await Promise.all([
-      pipeline
-        .clone()
+      sharp(buffer)
+        .toColorspace("srgb")
         .resize(coverMaxSize, coverMaxSize, { fit: "inside", withoutEnlargement: true })
         .jpeg({ quality: 90 })
         .toFile(coverPath),
-      pipeline
-        .clone()
+      sharp(buffer)
+        .toColorspace("srgb")
         .resize(thumbMaxSize, thumbMaxSize, { fit: "inside", withoutEnlargement: true })
         .jpeg({ quality: 90 })
         .toFile(thumbPath),
