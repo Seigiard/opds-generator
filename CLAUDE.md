@@ -149,7 +149,8 @@ src/
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
 ├── styles/          # CSS sources (reset, index, header, variations) → static/style.css
-├── gridnav/         # main.ts + gridnav.ts → static/main.js (bundled tabbable/focus-trap)
+├── gridnav/         # main.ts (thin prod entry) + viewer.ts (initGlobal/wire popup+nav
+│                    #   driver, reused by the playground) + gridnav.ts → static/main.js
 ├── reader/          # In-browser reader shell: shell.ts (chrome+foliate boundary),
 │                    #   fragment.ts (R15 URL validation), reader.ts (prod entry),
 │                    #   read.html (template), reader.css → static/reader.js + read.html;
