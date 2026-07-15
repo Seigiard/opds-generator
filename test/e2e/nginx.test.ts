@@ -83,6 +83,59 @@ describe("nginx integration", () => {
     });
   });
 
+  describe("byte-range delivery (reader streaming contract)", () => {
+    async function discoverBookUrl(): Promise<string> {
+      const feed = await (await fetch(`${BASE_URL}/test/feed.xml`)).text();
+      const match = feed.match(/acquisition[^>]*href="([^"]+)"/);
+      expect(match).not.toBeNull();
+      return match![1]!;
+    }
+
+    test("AE2: Range bytes=0-1023 on a book file returns 206 with Content-Range and 1024 bytes", async () => {
+      // #given
+      const bookUrl = await discoverBookUrl();
+
+      // #when
+      const response = await fetch(`${BASE_URL}${bookUrl}`, {
+        headers: { Range: "bytes=0-1023" },
+      });
+
+      // #then
+      expect(response.status).toBe(206);
+      expect(response.headers.get("content-range") || "").toMatch(/^bytes 0-1023\/\d+$/);
+      expect((await response.arrayBuffer()).byteLength).toBe(1024);
+    });
+
+    test("open-ended range (bytes=0-) returns 206 with the full remainder", async () => {
+      // #given
+      const bookUrl = await discoverBookUrl();
+      const full = await fetch(`${BASE_URL}${bookUrl}`);
+      const fullLength = (await full.arrayBuffer()).byteLength;
+
+      // #when
+      const response = await fetch(`${BASE_URL}${bookUrl}`, {
+        headers: { Range: "bytes=0-" },
+      });
+
+      // #then — nginx answers open-ended ranges with 206 (recorded per plan U1;
+      // pdf.js accepts either 206 or a plain 200)
+      expect(response.status).toBe(206);
+      expect((await response.arrayBuffer()).byteLength).toBe(fullLength);
+    });
+
+    test("AE4 guard: plain GET on the same book still forces attachment", async () => {
+      // #given
+      const bookUrl = await discoverBookUrl();
+
+      // #when
+      const response = await fetch(`${BASE_URL}${bookUrl}`, { redirect: "manual" });
+
+      // #then
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-disposition") || "").toContain("attachment");
+    });
+  });
+
   describe("feed.xml", () => {
     test("GET /feed.xml returns 200 with XML content", async () => {
       const response = await fetch(`${BASE_URL}/feed.xml`);
@@ -118,6 +171,58 @@ describe("nginx integration", () => {
     test("GET /static/layout.xsl returns 404 (XSLT removed)", async () => {
       const response = await fetch(`${BASE_URL}/static/layout.xsl`);
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe("reader surface (CSP + caching)", () => {
+    // KTD-6 pinned verbatim: a drive-by widening of any directive fails this test.
+    const READER_CSP =
+      "default-src 'none'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; " +
+      "frame-ancestors 'self'; connect-src 'self'; worker-src 'self'; frame-src blob:; " +
+      "img-src blob: data:; style-src 'unsafe-inline' blob: data:";
+
+    async function foliateBase(): Promise<string> {
+      const html = await (await fetch(`${BASE_URL}/static/read.html`)).text();
+      const match = html.match(/name="foliate-base" content="([^"]+)"/);
+      expect(match).not.toBeNull();
+      return match![1]!;
+    }
+
+    test("R8: /static/read.html carries the exact KTD-6 policy and stays no-cache", async () => {
+      const response = await fetch(`${BASE_URL}/static/read.html`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-security-policy")).toBe(READER_CSP);
+      // add_header replaces inherited headers — this guards the no-cache re-declaration
+      expect(response.headers.get("cache-control") || "").toContain("no-cache");
+      expect(response.headers.get("content-type") || "").toContain("text/html");
+    });
+
+    test("R8: catalog and feed routes carry no CSP", async () => {
+      for (const path of ["/index.html", "/feed.xml", "/test/"]) {
+        const response = await fetch(`${BASE_URL}${path}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-security-policy")).toBeNull();
+      }
+    });
+
+    test("R13: hashed foliate runtime is immutable-cacheable with module-safe MIME", async () => {
+      const base = await foliateBase();
+      for (const file of ["/view.js", "/vendor/pdfjs/pdf.mjs", "/vendor/pdfjs/pdf.worker.mjs"]) {
+        const response = await fetch(`${BASE_URL}${base}${file}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+        // strict module MIME: octet-stream would make the browser reject the import
+        expect(response.headers.get("content-type") || "").toContain("javascript");
+      }
+    });
+
+    test("unversioned static assets stay no-cache (main.js, reader.js)", async () => {
+      for (const file of ["/static/main.js", "/static/reader.js"]) {
+        const response = await fetch(`${BASE_URL}${file}`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get("cache-control") || "").toContain("no-cache");
+        expect(response.headers.get("content-security-policy")).toBeNull();
+      }
     });
   });
 

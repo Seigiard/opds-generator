@@ -139,7 +139,7 @@
     "builtin": true
   },
   "globals": {},
-  "ignorePatterns": ["static/main.js"],
+  "ignorePatterns": ["static/main.js", "static/reader.js", "static/foliate-*/**", "ui/vendor/**"],
   "overrides": [
     {
       "files": ["src/render/**/*.ts"],

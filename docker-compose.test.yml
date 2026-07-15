@@ -8,6 +8,10 @@ services:
       - ./test:/app/test:ro
       - ./files:/app/files:ro
       - ./bunfig.toml:/app/bunfig.toml:ro
+      # Reader-shell pure helpers (fragment validation) are unit-tested in docker too
+      - ./ui/reader:/app/ui/reader:ro
+      # Vendored foliate-js: vendor-posture.test.ts pins its iframe sandbox posture
+      - ./ui/vendor/foliate-js:/app/ui/vendor/foliate-js:ro
     environment:
       - LOG_LEVEL=warn
     # Run all test folders except e2e (e2e requires running container, use bun run test:e2e)

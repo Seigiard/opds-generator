@@ -501,9 +501,36 @@ body:has(.popup[open]) {
   }
 }
 
+.popup__view-btn {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  border-radius: 0.375rem;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition:
+    background var(--transition-fast),
+    transform var(--transition-fast),
+    outline-color var(--transition-fast);
+
+  &:focus-visible {
+    outline-color: var(--color-accent);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .popup__download-btn:hover {
     background: color-mix(in srgb, var(--color-accent) 85%, black);
+    transform: translateY(-1px);
+  }
+
+  .popup__view-btn:hover {
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
     transform: translateY(-1px);
   }
 }

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reader</title>
+    <meta name="foliate-base" content="__FOLIATE_BASE__" />
+    <!-- No favicon links: the reader CSP (img-src blob: data:) blocks them, so they
+         would only generate console noise. -->
+    <style>
+      __READER_CSS__
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <div class="reader-fallback">
+        <p>This reader needs JavaScript. You can download books directly from the catalog instead.</p>
+        <p><a href="/">Back to catalog</a></p>
+      </div>
+    </noscript>
+    <div id="reader" class="reader" hidden>
+      <header class="reader__bar">
+        <a id="reader-return" class="reader__return" href="/">Catalog</a>
+        <button id="reader-toc-toggle" class="reader__toc-toggle" type="button" aria-expanded="false" aria-controls="reader-toc" hidden>
+          Contents
+        </button>
+        <span id="reader-title" class="reader__title"></span>
+        <a id="reader-download" class="reader__download" hidden>Download</a>
+      </header>
+      <nav id="reader-toc" class="reader__toc" hidden aria-label="Table of contents"></nav>
+      <main id="reader-view" class="reader__view"></main>
+      <footer class="reader__footer">
+        <button id="reader-prev" class="reader__nav-btn" type="button" aria-label="Previous page" hidden>&#8592;</button>
+        <span id="reader-position" class="reader__position"></span>
+        <button id="reader-next" class="reader__nav-btn" type="button" aria-label="Next page" hidden>&#8594;</button>
+      </footer>
+    </div>
+    <div id="reader-error" class="reader-fallback" hidden>
+      <p id="reader-error-message"></p>
+      <p><a id="reader-error-return" href="/">Back to catalog</a></p>
+    </div>
+    <script type="module" src="/static/reader.js"></script>
+  </body>
+</html>

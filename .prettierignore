@@ -1,6 +1,12 @@
 # Generated build artifacts — written by build:ui (cssnano / Bun.build minify), never oxfmt
 static/main.js
 static/style.css
+static/reader.js
+static/read.html
+static/foliate-*/
+
+# Vendored submodule — upstream's formatting, never ours
+ui/vendor/
 
 # Byte-exact golden renders — written by render:golden, diffed by render:check; never normalize
 test/golden/

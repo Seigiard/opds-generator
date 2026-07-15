@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # build:ui:check regenerates static/ from ui/, which needs the vendored
+          # foliate-js submodule; the build job below ships committed static/ only.
+          submodules: true
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

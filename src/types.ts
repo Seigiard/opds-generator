@@ -31,3 +31,10 @@ export const MIME_TYPES: Record<string, string> = {
 };
 
 export const BOOK_EXTENSIONS = Object.keys(MIME_TYPES);
+
+/**
+ * Formats the in-browser reader can render (R2/R3, KTD-7). Consumed by the catalog
+ * renderer (View links) and the reader shell (fragment validation) — both are browser
+ * bundles, so this module must stay free of Bun/node imports.
+ */
+export const VIEWABLE_FORMATS: ReadonlySet<string> = new Set(["epub", "pdf"]);
