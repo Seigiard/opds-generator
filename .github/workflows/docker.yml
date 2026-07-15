@@ -40,8 +40,11 @@ jobs:
       - name: Run tests in Docker
         run: bun run test
 
+      # Routing/security e2e only (nginx.test.ts): reader CSP + cache, 206, /resync CSRF.
+      # The event-logging e2e suite is inotify-timing-flaky (docs/known-flaky-tests.md) and
+      # stays a local `test:all` check rather than a CI gate.
       - name: Run e2e tests (nginx routing, reader CSP + cache, 206, /resync CSRF)
-        run: bun run test:e2e
+        run: bun run test:e2e:routing
 
   build:
     runs-on: ubuntu-latest
