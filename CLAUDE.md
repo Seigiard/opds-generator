@@ -33,7 +33,7 @@ If you change `ui/styles/*`, `ui/gridnav/*`, or the renderer, run `bun run build
 **Renderer gates (host-side, no docker):**
 
 - `bun run render:check` — regenerates `test/golden/*.html` from every cassette and fails on any diff or untracked golden. Byte-exact, no normalization; `test/golden/` is in `.prettierignore` so oxfmt never touches it. Any markup change to `src/render/feed-html.ts` requires re-running `bun run render:golden` and committing the regenerated goldens.
-- `bun run render:pure` — proves `src/render/*` stays browser-importable (KTD-7): builds the four modules with `--target=browser` (catches node builtins, direct + transitive) and runs a `Bun`-globals oxlint rule scoped to `src/render/*` (see `.oxlintrc.json` `overrides`).
+- `bun run render:pure` — proves `src/render/*` stays browser-importable (KTD-7): builds the four modules with `--target=browser` (catches node builtins, direct + transitive) and runs a `Bun`-globals oxlint rule scoped to `src/render/**/*.ts` (see `.oxlintrc.json` `overrides`).
 
 `bun run fix` must produce 0 warnings and 0 errors. Fix all lint/format issues before committing.
 

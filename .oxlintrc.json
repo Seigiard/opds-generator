@@ -142,7 +142,7 @@
   "ignorePatterns": ["static/main.js"],
   "overrides": [
     {
-      "files": ["src/render/*.ts"],
+      "files": ["src/render/**/*.ts"],
       "rules": {
         "no-restricted-globals": [
           "error",

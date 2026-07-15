@@ -4,8 +4,12 @@ import type { FeedEntry, FeedModel } from "./feed-model.ts";
 
 type Fragment = HtmlEscapedString | string;
 
-/** Sync-narrowed hono/html tag: auto-escapes interpolated values, no async interpolation (R10). */
-const frag = (strings: TemplateStringsArray, ...values: unknown[]): HtmlEscapedString => html(strings, ...values) as HtmlEscapedString;
+/** Sync-narrowed hono/html tag: auto-escapes interpolated values. An async interpolation would make hono return a Promise — forbidden by R10, enforced here at runtime. */
+const frag = (strings: TemplateStringsArray, ...values: unknown[]): HtmlEscapedString => {
+  const result = html(strings, ...values);
+  if (result instanceof Promise) throw new Error("frag: async interpolation forbidden (R10)");
+  return result;
+};
 
 /** Interleave fragments with a literal separator instead of `.join()`, which would strip the escaped marker (KTD-3). */
 function interleave(items: Fragment[], separator: string): Fragment[] {
@@ -18,9 +22,14 @@ function browserHref(feedHref: string): string {
   return folderUrl === "" ? "/" : folderUrl;
 }
 
-/** Auto-escaping neutralizes markup, not schemes; drop anything but http(s)/relative/fragment to `#` (KTD-4, R11). */
+/**
+ * Auto-escaping neutralizes markup, not schemes; drop anything but http(s)/relative/fragment to `#` (KTD-4, R11).
+ * Strip ASCII control chars first: browsers ignore C0/DEL bytes when resolving a scheme, so `java\tscript:` would
+ * reconstitute to `javascript:` after the naive scheme regex let it through raw.
+ */
 function safeHref(href: string): string {
-  const trimmed = href.trim();
+  // oxlint-disable-next-line no-control-regex -- deliberate: strip C0/DEL bytes that browsers ignore during scheme resolution
+  const trimmed = href.trim().replace(/[\u0000-\u001F\u007F]/g, "");
   if (trimmed.startsWith("#") || trimmed.startsWith("/")) return trimmed;
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
   if (scheme) return scheme[1]!.toLowerCase() === "http" || scheme[1]!.toLowerCase() === "https" ? trimmed : "#";
