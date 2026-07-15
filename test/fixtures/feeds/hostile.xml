@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog" xmlns:dc="http://purl.org/dc/terms/">
+  <id>urn:opds:catalog:hostile</id>
+  <title>Hostile &lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt; &amp; 'quotes' "dquotes"</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <link rel="self" href="/hostile/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+<entry>
+  <id>urn:opds:catalog:hostile/Sub</id>
+  <title>Folder " onmouseover=alert(1) 'apos'</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <summary type="text">Folder summary &lt;/script&gt;&lt;style&gt;body{}&lt;/style&gt;</summary>
+  <link rel="subsection" href="javascript:alert('folder')" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+</entry>
+<entry>
+  <id>urn:opds:book:hostile/xss.epub</id>
+  <title>Tom's "War" &lt;b&gt;bold&lt;/b&gt; " onmouseover=alert(1)</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <author><name>Evil &lt;/script&gt;&lt;script&gt;alert('author')&lt;/script&gt;</name></author>
+  <summary type="text">Summary breakout &lt;/script&gt;&lt;script&gt;alert('summary')&lt;/script&gt; and &lt;/style&gt;&lt;style&gt;*{}&lt;/style&gt;</summary>
+  <dc:format>EPUB &lt;b&gt;x&lt;/b&gt;</dc:format>
+  <dc:subject>tag" onmouseover=alert(1)</dc:subject>
+  <dc:subject>tag' onmouseover=alert(1)</dc:subject>
+  <dc:issued>2020&lt;script&gt;</dc:issued>
+  <dc:language>en"&gt;</dc:language>
+  <dc:isPartOf>Series &amp; &lt;i&gt;emphasis&lt;/i&gt;</dc:isPartOf>
+  <content type="text">4.0 MB</content>
+  <link rel="http://opds-spec.org/image" href="javascript:alert('cover')" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="javascript:alert('thumb')" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="javascript:alert('acq')" type="application/epub+zip"/>
+</entry>
+<entry>
+  <id>urn:opds:book:hostile/preescaped.epub</id>
+  <title>Ampersand &amp; entity test</title>
+  <updated>2026-01-01T00:00:00.000Z</updated>
+  <author><name>Line
+Break Author</name></author>
+  <summary type="text">Legit summary with a &amp; ampersand.</summary>
+  <dc:format>EPUB</dc:format>
+  <content type="text">1.0 MB</content>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/hostile/preescaped.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/hostile/preescaped.epub/file" type="application/epub+zip"/>
+</entry>
+</feed>

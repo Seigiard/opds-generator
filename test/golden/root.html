@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catalog</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/favicon/site.webmanifest" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__left">
+        <nav class="header__breadcrumb">
+        </nav>
+        <h1 class="header__title">Catalog</h1>
+      </div>
+    </header>
+    <main class="books-grid" data-element=".card__title a">
+      <div>
+        <article class="card card--folder">
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Comics</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Comics</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Comics</span></div></div>
+        <div class="card__info">
+          <h3 class="card__title"><a href="/comics/">Comics</a></h3>
+        </div>
+        </article>
+      </div>
+      <div>
+        <article class="card card--folder">
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Nonfiction</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Nonfiction</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Nonfiction</span></div></div>
+        <div class="card__info">
+          <h3 class="card__title"><a href="/nonfiction/">Nonfiction</a></h3>
+        </div>
+        </article>
+      </div>
+      <div>
+        <article class="card card--folder">
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Pdf</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Pdf</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Pdf</span></div></div>
+        <div class="card__info">
+          <h3 class="card__title"><a href="/pdf/">Pdf</a></h3>
+        </div>
+        </article>
+      </div>
+      <div>
+        <article class="card card--folder">
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Test</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Test</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Test</span></div></div>
+        <div class="card__info">
+          <h3 class="card__title"><a href="/test/">Test</a></h3>
+        </div>
+        </article>
+      </div>
+      <div>
+        <article class="card card--book">
+          <div class="book" aria-hidden="true">
+            <div class="book__cover"><img src="/manual-test.pdf/thumb.jpg" alt="Test Book" loading="lazy" /></div>
+          </div>
+          <div class="card__info">
+            <h3 class="card__title"><a href="#book-1">Test Book</a></h3>
+          <p class="card__description">Test Author</p>
+          </div>
+        </article>
+        <div class="popup" id="book-1">
+          <div class="popup__content">
+            <div class="popup__cover" aria-hidden="true">
+              <div class="book"><div class="book__cover"><img src="/manual-test.pdf/cover.jpg" alt="Test Book" /></div></div>
+            </div>
+            <div class="popup__info">
+              <a class="popup__close-button" href="#"><span>Close</span></a>
+              <hgroup>
+                <h2 class="popup__title">Test Book</h2>
+                <p class="popup__author">Test Author</p>
+              </hgroup>
+              <div class="popup__footer">
+                <div class="popup__meta">
+                  <span>test</span>
+                  <span>PDF · 90.1 KB</span>
+                  <span>2025</span>
+                </div>
+                <div class="popup__downloads">
+                  <a href="/manual-test.pdf/file" class="popup__download-btn">PDF</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="/static/main.js"></script>
+  </body>
+</html>
