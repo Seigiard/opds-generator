@@ -40,7 +40,7 @@
   "devDependencies": {
     "@csstools/postcss-random-function": "^2.0.1",
     "@types/bun": "latest",
-    "autoprefixer": "^10.5.2",
+    "autoprefixer": "^10.5.3",
     "cssnano": "^7.1.9",
     "oxfmt": "^0.21.0",
     "oxlint": "latest",
