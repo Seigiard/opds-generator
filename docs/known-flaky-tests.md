@@ -13,9 +13,13 @@ a re-run of the exact same suite passes clean (`404 pass / 0 fail`).
 the first full run, passed on immediate re-run with no code change in between. Also observed
 2026-07-14.
 
-**Status:** unidentified. The failing test is not stable across runs, so it has not been pinned to a
-specific file. Suspected timing/ordering sensitivity in the docker unit run rather than a real
-assertion defect.
+**Status:** partially identified. One concrete instance seen on CI (PR #6, 2026-07-15):
+`test/integration/memory-leak.test.ts` — "full chain: readEntry + saveCoverAndThumbnail" asserts
+`< 1 KB/iter` RSS growth and reported `2.7 KB/iter`. RSS-per-iteration is noisy on CI runners
+(GC/allocator timing — the mimalloc sensitivity in `project_memory_leak_investigation`), so it
+crosses the 0-KB-target threshold intermittently without a real leak. Do **not** loosen the
+threshold reflexively — it is a real leak guard; re-run first, and only investigate if the same
+test fails twice with a code change that could plausibly affect the cover/image path.
 
 **How to confirm it's the flake, not a regression:** re-run `bun run test`. If the second run is
 green with no change, it was the flake. If the _same named test_ fails twice, investigate it.
@@ -42,6 +46,37 @@ instead of a fixed window), **widen CI back to the full suite:** point the `Run 
 
 ### Follow-up
 
-Item 1 is worth pinning down: capture the failing test name across several full docker runs (e.g.
-`bun run test 2>&1 | grep -E "\(fail\)"` looped) to identify which test is unstable, then decide
-whether to add a retry, fix an ordering assumption, or mark it. Until then, the re-run rule stands.
+Capture the failing test name across several full docker runs (e.g.
+`bun run test 2>&1 | grep -E "\(fail\)"` looped) to confirm whether the memory-leak chain test below
+is the _only_ unstable one or there are others. Until item 1 is de-flaked, the re-run rule stands.
+
+### Fix candidate — `memory-leak.test.ts` "full chain" (the concrete instance of item 1)
+
+**Why it flakes (root cause).** `measureLeak` derives the leak from a **single two-point RSS delta**:
+`(rssAfter − rssBefore) · 1024 / ITERATIONS`. With `ITERATIONS = 300` and `MAX_CHAIN_LEAK_KB = 1`,
+the whole run is allowed only `1 · 300 / 1024 ≈ 0.29 MB` of RSS growth. RSS is not a clean proxy for
+heap retention: the allocator (mimalloc arenas) and `sharp`/libvips hold buffers non-deterministically,
+so a single allocation spike at the moment `rssAfter` is sampled inflates the delta past the 0.29 MB
+budget with no real leak. CI observed `2.7 KB/iter` (~0.79 MB delta) — noise, not a monotonic leak.
+
+**Why not just raise the threshold.** `MAX_CHAIN_LEAK_KB = 1` encodes a real intent ("≈0 KB/iter, this
+chain must not leak"). Bumping it to hide noise also blinds the guard to a genuine slow leak. Prefer a
+metric that separates *trend* from *jitter*.
+
+**Fix directions (pick one; 1 is the principled one):**
+
+1. **Regression slope instead of a two-point delta.** Sample RSS every ~25 iterations across the run,
+   fit a least-squares line, and assert on the *slope* (KB/iter) with a small tolerance. A true leak is
+   a positive slope with low residual; allocator noise is a ~flat slope with variance. This is what
+   "target 0 KB/iter" actually means and kills the single-spike sensitivity.
+2. **Sample an RSS floor, not an instantaneous read.** Take several `Bun.gc(true)` + short-settle
+   readings at the start and end and use the *minimum* of each window; the RSS floor is far more stable
+   than one post-loop sample.
+3. **Average the noise down.** Fixed ~0.3 MB jitter is `0.3 MB / ITERATIONS` per iter, so raising
+   `ITERATIONS` (e.g. 1000) shrinks per-iter noise ~3× toward the 1 KB budget — cheapest, least
+   principled, still a two-point metric.
+4. **Ungate on CI.** If RSS on shared runners stays too noisy after 1–2, move the memory-leak suite to a
+   local/nightly lane (as the event-logging e2e suite is kept out of the CI gate) rather than blocking PRs.
+
+Owner note: this touches the memory-leak guard tracked in `project_memory_leak_investigation` — keep
+the guard's teeth (option 1/2), do not silently widen the threshold.
