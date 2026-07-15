@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ideation: Templating for feed-html.ts</title>
+    <style>
+      :root{
+        --bg:#faf9f7; --fg:#1f2328; --muted:#6a737d; --border:#e1dfda;
+        --accent:#0b6bcb; --accent-soft:#eaf2fb; --accent-text:#0a4f96;
+        --warn-soft:#fdf3e4; --warn-text:#8a5a00;
+        --ok-soft:#e9f5ec; --ok-text:#1a6b34;
+        --bad-soft:#faecec; --bad-text:#9b2c2c;
+        --code-bg:#f0efec;
+      }
+      *{box-sizing:border-box}
+      body{margin:0;background:var(--bg);color:var(--fg);
+        font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+      main{max-width:900px;margin-inline:auto;padding:2.5rem 1.5rem 4rem}
+      p,li,dd{max-width:72ch}
+      h1{font-size:1.7rem;line-height:1.25;margin:.2rem 0 .6rem}
+      h2{font-size:1.25rem;margin:2.4rem 0 .8rem;padding-bottom:.3rem;border-bottom:1px solid var(--border)}
+      h3{font-size:1.05rem;margin:1.6rem 0 .5rem}
+      code{background:var(--code-bg);padding:.1em .35em;border-radius:4px;font-size:.88em;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+      pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;
+        padding: .8rem 1rem;overflow-x:auto;font-size:.82rem;line-height:1.5}
+      pre code{background:none;padding:0}
+      a{color:var(--accent)}
+      table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+      th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top}
+      th{background:var(--code-bg);font-weight:600}
+      .eyebrow{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+      .meta{display:flex;flex-wrap:wrap;gap:.4rem .6rem;margin:.8rem 0 0;padding:0;list-style:none;font-size:.82rem}
+      .meta li{background:var(--code-bg);border:1px solid var(--border);border-radius:999px;padding:.15rem .7rem}
+      .idea{border:1px solid var(--border);border-radius:10px;background:#fff;padding:1.1rem 1.3rem;margin:1.1rem 0}
+      .idea h3{margin:.1rem 0 .5rem;font-size:1.08rem}
+      .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0 .8rem}
+      .chip{font-size:.74rem;border-radius:999px;padding:.12rem .65rem;border:1px solid transparent}
+      .chip-axis{background:var(--accent-soft);color:var(--accent-text)}
+      .chip-conf-hi{background:var(--ok-soft);color:var(--ok-text)}
+      .chip-conf-med{background:var(--warn-soft);color:var(--warn-text)}
+      .chip-conf-lo{background:var(--bad-soft);color:var(--bad-text)}
+      .chip-cx{background:var(--code-bg);color:var(--muted)}
+      .idea dl{margin:.6rem 0 0}
+      .idea dt{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:.7rem}
+      .idea dd{margin:.15rem 0 0}
+      .cols{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:.6rem 0}
+      @media (max-width:640px){.cols{grid-template-columns:1fr}}
+      .cols figure{margin:0}
+      .cols figcaption{font-size:.75rem;color:var(--muted);margin-bottom:.25rem}
+      .jump{background:#fff;border:1px solid var(--border);border-radius:10px;padding:.8rem 1.1rem;font-size:.88rem}
+      .jump ol{margin:.3rem 0 0;padding-left:1.3rem}
+      .callout{border-radius:10px;padding:.7rem 1rem;margin:.8rem 0;font-size:.9rem}
+      .callout-warn{background:var(--warn-soft)}
+      .callout-warn .eyebrow{color:var(--warn-text)}
+      .callout-info{background:var(--accent-soft)}
+      .callout-info .eyebrow{color:var(--accent-text)}
+      figure.diagram{margin:1rem 0;text-align:center}
+      figure.diagram svg{max-width:100%;height:auto}
+      figure.diagram figcaption{font-size:.78rem;color:var(--muted);margin-top:.3rem}
+      footer.composition-signal{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);
+        font-size:.78rem;color:var(--muted)}
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Ideation · repo-grounded</p>
+      <h1>Templating for <code>src/render/feed-html.ts</code></h1>
+      <p>
+        Should the hand-rolled string renderer be replaced with a small js-to-html templating approach? And if so, which one, and what has
+        to land first so the swap is safe?
+      </p>
+      <ul class="meta">
+        <li>date: 2026-07-14</li>
+        <li>topic: feed-html-templating</li>
+        <li>mode: repo-grounded</li>
+        <li>
+          focus: use a small js-to-html library instead of hand-built string concatenation (suggested: Alpine.js, htmx, data-template,
+          uhtml, TwinSpark, sprae)
+        </li>
+      </ul>
+
+      <section id="grounding-context">
+        <h2>Grounding Context</h2>
+        <p>
+          <strong>Codebase context.</strong>
+          <a href="https://github.com/Seigiard/opds-generator/blob/main/src/render/feed-html.ts"><code>src/render/feed-html.ts</code></a> is
+          175 lines: two escape helpers (<code>escapeHtml</code>, <code>escapeAttr</code>) and eight composition functions building HTML via
+          template literals with 15+ manual escape call sites. HTML is rendered <em>server-side at sync time</em>:
+          <code>renderHtml(model)</code> returns a string written to <code>/data/&lt;folder&gt;/index.html</code>; nginx serves it
+          statically. Browser JS (<code>static/main.js</code>, 23.8&nbsp;KB: gridnav + focus-trap) is progressive enhancement only; the book
+          popup works with zero JS via CSS <code>:target</code>.
+        </p>
+        <p>
+          <strong>Hard constraints (still valid).</strong> The convergence plan merged earlier today (<a
+            href="https://github.com/Seigiard/opds-generator/blob/main/docs/plans/2026-07-14-001-refactor-viewer-renderer-convergence-plan.md"
+            ><code>docs/plans/2026-07-14-001</code></a
+          >) fixed two decisions. KTD-1: one <code>FeedModel</code>, two serializers (<code>renderXml</code> splices verbatim fragments;
+          <code>renderHtml</code> consumes parsed fields only). KTD-7: <code>src/render/*</code> imports no Bun/node APIs so the Vite
+          playground can import the renderer directly. That plan also concluded "no templating library" — a migration-scoped restriction,
+          per the author: now that the convergence has landed, a library is back on the table if its pros outweigh the cons. The constraints
+          (string output, no DOM at render time, browser-importable) remain binding.
+        </p>
+        <p>
+          <strong>Verified findings from evidence scouts.</strong> <code>escapeAttr</code> escapes <code>"</code> but never <code>'</code>:
+          a real, untested injection surface, since ebook metadata is untrusted input. <code>model.title</code> is escaped independently in
+          two functions; card and popup duplicate cover/title/author/meta markup. The 11 unit tests + 1 e2e assert exact byte sequences
+          (<code>countOccurrences</code>, <code>indexOf</code> ordering) that would break on harmless attribute reordering.
+          <code>tsconfig.json</code> has <code>jsx: "react-jsx"</code> with no <code>jsxImportSource</code>. Nothing mechanically enforces
+          KTD-7 today.
+        </p>
+        <p>
+          <strong>External research (2026).</strong> Of the six suggested libraries, only <strong>uhtml-ssr</strong> renders strings
+          server-side. Alpine.js and sprae are client-side DOM-reactive runtimes; htmx and TwinSpark consume server HTML rather than produce
+          it; data-template is a stale client-side DOM templater. The genuine string-output field converges on two poles: tagged template +
+          auto-escape (<code>hono/html</code>, <code>uhtml-ssr</code>) and JSX-to-string (<code>@kitajs/html</code>, wrapped by Elysia's
+          html plugin). Eta does not escape by default; vhtml is unmaintained; lit-html SSR is the wrong weight class.
+          <code>escape-html</code> (74M weekly downloads) covers just the escaper.
+        </p>
+        <p>
+          <strong>Institutional learnings.</strong> No <code>docs/solutions/</code> knowledge base exists. A render spike
+          (<code>docs/ideation/render-spike.ts</code>) validated the hand-rolled approach in July 2026.
+        </p>
+      </section>
+
+      <section id="topic-axes">
+        <h2>Topic Axes</h2>
+        <ul>
+          <li><strong>template-composition</strong> — how markup is authored in feed-html.ts: escaping, readability, repetition</li>
+          <li><strong>render-constraints</strong> — browser-importability, sync-time string output, dual-renderer FeedModel contract</li>
+          <li>
+            <strong>client-enhancement</strong> — the progressive-enhancement JS layer (gridnav, popups) and where client-side libraries
+            legitimately sit
+          </li>
+          <li><strong>migration-safety</strong> — tests, cassettes, build gates, CSS-class coupling that a rewrite must survive</li>
+        </ul>
+      </section>
+
+      <section id="ranked-ideas">
+        <h2>Ranked Ideas</h2>
+
+        <nav class="jump" aria-label="Idea index">
+          Jump to:
+          <ol>
+            <li><a href="#idea-1">Auto-escaping tagged template: hono/html, uhtml-ssr, or ~30 hand-rolled lines</a></li>
+            <li><a href="#idea-2">Harness before swap: hostile cassette + golden render gate + structural tests</a></li>
+            <li><a href="#idea-3">Component formalization: exported render units + pre-escaped view objects</a></li>
+            <li><a href="#idea-4">Make KTD-7 mechanical: browser-purity gate + playground spike protocol</a></li>
+            <li><a href="#idea-5">POST /rehtml: re-render every index.html from existing feed.xml in seconds</a></li>
+            <li><a href="#idea-6">Hyperscript node tree + single serializer (zero deps)</a></li>
+            <li><a href="#idea-7">JSX-to-string via @kitajs/html (spike-gated)</a></li>
+          </ol>
+        </nav>
+
+        <article class="idea" id="idea-1">
+          <h3>1. Auto-escaping tagged template: hono/html, uhtml-ssr, or ~30 hand-rolled lines</h3>
+          <div class="chips">
+            <span class="chip chip-axis">template-composition</span>
+            <span class="chip chip-conf-hi">Confidence 85%</span>
+            <span class="chip chip-cx">Complexity: Low</span>
+          </div>
+          <p>
+            <strong>Description:</strong> Replace <code>escapeHtml</code>/<code>escapeAttr</code> and every manual call site with an
+            <code>html``</code> tagged template that auto-escapes every interpolated value by default, plus <code>raw()</code> (or a branded
+            <code>SafeHtml</code> return type) for composed fragments. Existing template literals keep their exact shape: the migration is
+            "prefix the backtick, delete the escape calls." Three implementations of the same design, in ascending dependency appetite: a
+            hand-rolled ~30-line tag (zero deps, keeps today's "no library" conclusion technically intact), <strong>uhtml-ssr</strong> (the
+            one suggestion from the original list that genuinely renders strings server-side; same tagged-template ergonomics), or
+            <strong>hono/html</strong> (actively maintained, audited escaping, isomorphic, a few hundred bytes).
+          </p>
+          <div class="cols">
+            <figure>
+              <figcaption>Today — escaping is opt-in at every interpolation</figcaption>
+              <pre><code>`&lt;a href="${escapeAttr(a.href)}"
+   class="popup__download-btn"&gt;
+  ${escapeHtml(formatFromMime(a.type))}
+&lt;/a&gt;`</code></pre>
+            </figure>
+            <figure>
+              <figcaption>After — escaping is the default; raw is the visible exception</figcaption>
+              <pre><code>html`&lt;a href="${a.href}"
+   class="popup__download-btn"&gt;
+  ${formatFromMime(a.type)}
+&lt;/a&gt;`</code></pre>
+            </figure>
+          </div>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>feed-html.ts:3-9</code>: <code>escapeAttr</code> chains <code>escapeHtml</code> then replaces only
+              <code>"</code>, never <code>'</code> (verified by the adversarial pass); <code>feed-html.ts:168</code> shows two escape calls
+              in a single interpolated line, repeated across 8 functions. Evidence dossier: "No tests for … XSS attempts."
+              <code>external:</code> hono/html and uhtml-ssr both implement exactly this contract (auto-escape + raw opt-out, pure string
+              output, no DOM).
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Today's safety net is "did the author remember to call the right escaper here": 15+ opportunities to forget, and one
+              already-latent gap (single quotes). Auto-escaping inverts the default: forgetting becomes safe, unescaped output becomes a
+              visible <code>raw()</code> decision. This is the user's "kinda template" feel with the smallest possible diff, and it
+              satisfies KTD-7 untouched (all three variants are pure string operations, browser-importable).
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Hand-rolled variant means owning the escaper (mitigated by idea 2's hostile cassette). Library variants add a dependency
+              (knip/oxlint bookkeeping, supply-chain surface); the plan's no-library stance was migration-scoped and is now negotiable. None
+              of the variants fixes <code>javascript:</code> href sanitization (see idea 2).
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-2">
+          <h3>2. Harness before swap: hostile cassette + golden render gate + structural tests</h3>
+          <div class="chips">
+            <span class="chip chip-axis">migration-safety</span>
+            <span class="chip chip-conf-hi">Confidence 90%</span>
+            <span class="chip chip-cx">Complexity: Medium</span>
+          </div>
+          <p>
+            <strong>Description:</strong> Land a renderer-migration harness as its own PR <em>before</em> touching feed-html.ts, with four
+            parts. (a) A hand-authored <code>hostile.xml</code> cassette: <code>" onmouseover=alert(1)</code> titles,
+            <code>javascript:</code> acquisition hrefs, <code>&lt;/script&gt;</code> breakouts, apostrophes, newlines, double-escape probes.
+            (b) A <code>render:check</code> golden gate: commit <code>renderHtml(parseFeed(cassette))</code> output for all cassettes as
+            golden HTML, gate with <code>git diff --exit-code</code>, exactly mirroring the existing <code>build:ui:check</code> idiom. (c)
+            Migrate the byte-exact test assertions (<code>countOccurrences</code>, <code>indexOf</code> ordering) to parse-then-query
+            structural assertions using fast-xml-parser, already a dependency. (d) Name the zero-JS popup invariant explicitly: a test
+            asserting no <code>on*=</code> attributes ever appear in rendered output.
+          </p>
+          <figure class="diagram">
+            <svg viewBox="0 0 720 130" role="img" aria-label="Harness lands first, then any renderer swap is judged against it">
+              <defs>
+                <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0 0L10 5L0 10z" fill="#6a737d" />
+                </marker>
+              </defs>
+              <rect x="10" y="35" width="180" height="60" rx="9" fill="#e9f5ec" stroke="#1a6b34" />
+              <text x="100" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="#1a6b34">Harness PR</text>
+              <text x="100" y="78" text-anchor="middle" font-size="10.5" fill="#1a6b34">hostile.xml · goldens · structural tests</text>
+              <line x1="190" y1="65" x2="260" y2="65" stroke="#6a737d" stroke-width="1.5" marker-end="url(#arr)" />
+              <rect x="262" y="35" width="180" height="60" rx="9" fill="#eaf2fb" stroke="#0a4f96" />
+              <text x="352" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="#0a4f96">Renderer swap</text>
+              <text x="352" y="78" text-anchor="middle" font-size="10.5" fill="#0a4f96">idea 1, 6 or 7 — any candidate</text>
+              <line x1="442" y1="65" x2="512" y2="65" stroke="#6a737d" stroke-width="1.5" marker-end="url(#arr)" />
+              <rect x="514" y="35" width="196" height="60" rx="9" fill="#f0efec" stroke="#6a737d" />
+              <text x="612" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">Acceptance = 1 line</text>
+              <text x="612" y="78" text-anchor="middle" font-size="10.5" fill="#6a737d">goldens unchanged · hostile passes</text>
+            </svg>
+            <figcaption>The harness turns "which library escapes correctly?" from a docs-reading exercise into a red/green run.</figcaption>
+          </figure>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> dossier: "No tests for: double-escaping scenarios / attribute value edge cases (quotes, apostrophes,
+              newlines) / XSS attempts"; <code>feed-html.test.ts</code> asserts
+              <code>countOccurrences(html, 'class="card card--book"') === 5</code> and <code>indexOf</code> ordering (verified); both break
+              under harmless attribute reordering; <code>package.json:23</code> <code>build:ui:check</code> proves the repo already trusts
+              the commit-and-diff gate idiom. <code>reasoned:</code> ebook metadata comes from downloaded internet files:
+              attacker-controlled strings whose only barrier is this renderer's escaping; and <code>javascript:</code> href sanitization is
+              a model-layer rule that <em>no candidate library provides</em>, so only this corpus would catch it.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This is what makes every other idea on the list cheap and reversible. With the harness in place, any candidate (tagged
+              template, hyperscript, JSX, uhtml-ssr) is validated in one test run against real cassettes plus an adversarial corpus, instead
+              of hoping 25 substring checks covered enough. It also fixes something real regardless of direction: the apostrophe gap and the
+              untested injection surface exist today.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Golden files churn on intentional markup changes (that is also their point: reviewers see the actual HTML diff). Structural
+              test migration is a test-only PR that must be reviewed carefully to preserve intent.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-3">
+          <h3>3. Component formalization: exported render units + pre-escaped view objects</h3>
+          <div class="chips">
+            <span class="chip chip-axis">template-composition</span>
+            <span class="chip chip-conf-hi">Confidence 80%</span>
+            <span class="chip chip-cx">Complexity: Low</span>
+          </div>
+          <p>
+            <strong>Description:</strong> Formalize the component boundaries that already exist implicitly. Export
+            <code>renderCover</code>/<code>renderMeta</code>/<code>renderDownloads</code> (card and popup already share them;
+            <code>renderCover</code> is called twice inside <code>renderBook</code> with different args). Add a
+            <code>toView(entry)</code> mapper that escapes each field once into a plain object, so render functions read pre-escaped fields
+            instead of re-escaping per usage site (<code>model.title</code> is currently escaped independently in
+            <code>renderHtml</code> and <code>renderHeader</code>). Extract the multi-line ternaries (author line, summary line) into named
+            fragment functions. The playground gains per-component preview panes since it can import the units directly.
+          </p>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>feed-html.ts:41/66</code>: same field escaped in two functions; <code>:116-117</code>:
+              <code>cardCover</code>/<code>popupCover</code> from one shared function; <code>:136-139</code>: a conditional spanning the
+              template-literal boundary with hand-maintained <code>\n</code> + 16-space indentation, flagged by the dossier as the file's
+              worst readability spot.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              This is the "do regardless" move: it reduces the repetition the original request reacts to, with zero dependencies and zero
+              KTD friction. The resulting view-object + component shape is exactly what any templating library expects as input, so it
+              converts a later library adoption from rewrite into rename. If the team is not ready to reverse this morning's decision, this
+              still delivers most of the felt improvement.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Doesn't change the escaping default (idea 1 does that); done alone, the manual-escape discipline remains, just centralized.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-4">
+          <h3>4. Make KTD-7 mechanical: browser-purity gate + playground spike protocol</h3>
+          <div class="chips">
+            <span class="chip chip-axis">render-constraints</span>
+            <span class="chip chip-conf-hi">Confidence 85%</span>
+            <span class="chip chip-cx">Complexity: Low</span>
+          </div>
+          <p>
+            <strong>Description:</strong> KTD-7 ("src/render/* imports no Bun/node APIs; stays Vite-importable") is currently enforced by
+            nothing (verified: no script or CI step checks it). Add one: <code>bun build src/render/*.ts --target=browser</code> as a CI
+            step (or an oxlint <code>no-restricted-imports</code> rule scoped to <code>src/render</code>) that fails on any Bun/node import,
+            direct or transitive. Pair it with a standing protocol: every candidate library gets a 10-minute spike inside
+            <code>bun run dev:ui</code> (Vite HMR) before serious consideration.
+          </p>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> KTD-7 quoted verbatim in the plan («Модули <code>src/render/*</code> не импортируют Bun- и node:fs-API…
+              это держит их импортируемыми Vite-плейграундом») with zero enforcement anywhere in <code>package.json</code> (verified);
+              <code>ui/playground/main.ts:6-7,27</code> is the live import path a bad dependency would break. <code>reasoned:</code> SSR
+              libraries are the classic source of transitive <code>node:stream</code>/<code>node:buffer</code> imports; the risk KTD-7
+              guards against goes <em>up</em> exactly when a library is adopted.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Reframes today's decision entirely: "browser-importability" stops being an argument <em>against</em> libraries and becomes a
+              5-second acceptance test each library passes or fails. hono/html, uhtml-ssr, @kitajs/html each get an objective verdict
+              instead of a debate. Cheapest item on the list; follows the repo's existing gate idiom.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              A transitive-import gate can produce false confidence about runtime behavior (a lib can be importable yet behave differently
+              under Vite HMR; hence the paired spike protocol).
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-5">
+          <h3>5. POST /rehtml: re-render every index.html from existing feed.xml in seconds</h3>
+          <div class="chips">
+            <span class="chip chip-axis">render-constraints</span>
+            <span class="chip chip-conf-med">Confidence 75%</span>
+            <span class="chip chip-cx">Complexity: Medium</span>
+          </div>
+          <p>
+            <strong>Description:</strong> Template changes currently require a container restart or full <code>POST /resync</code>; the
+            whole sync machine re-runs (metadata extraction, covers, queue cascade) just to change a CSS class in the markup. But
+            <code>renderHtml(parseFeed(feedXml))</code> is already the tested composition: a standalone pass can walk <code>/data</code>,
+            read each existing <code>feed.xml</code>, and rewrite only <code>index.html</code>: no book files touched, no queue involved.
+            Expose as <code>POST /rehtml</code> behind the same Basic Auth as <code>/resync</code>, or trigger automatically at boot when a
+            renderer-version hash embedded in <code>index.html</code> doesn't match.
+          </p>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>test/unit/render/feed-html.test.ts:11-12</code> imports and composes <code>parseFeed</code> +
+              <code>renderHtml</code>; this exact pipeline is the tested path (verified); KTD-1 confirms <code>renderHtml</code> consumes
+              only parsed fields, and <code>parse-feed.ts</code> exists precisely to rebuild the model from feed.xml.
+              <code>reasoned:</code> nothing in the composition touches book files or metadata extraction, so a re-render pass is
+              architecturally independent of the sync cascade.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              Changes the cost model of every other idea here: template iteration drops from "full library resync" to seconds over existing
+              XML. Whichever renderer direction wins, the swap itself and every future markup tweak becomes cheap to roll out and cheap to
+              roll back.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              New endpoint = new surface: needs auth wiring (mirror <code>/resync</code>), nginx route, and a decision about concurrency
+              with a running cascade (skip-if-syncing flag, same pattern as the existing <code>isSyncing</code> guard).
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-6">
+          <h3>6. Hyperscript node tree + single serializer (zero deps)</h3>
+          <div class="chips">
+            <span class="chip chip-axis">template-composition</span>
+            <span class="chip chip-conf-med">Confidence 65%</span>
+            <span class="chip chip-cx">Complexity: Medium</span>
+          </div>
+          <p>
+            <strong>Description:</strong> The structure-over-syntax alternative to idea 1: a ~40-line
+            <code>h(tag, attrs, ...children)</code> building a plain node tree, plus one <code>serialize()</code> that owns escaping,
+            attribute quoting, and void elements in a single choke point. Conditionals become plain TS (<code
+              >entry.author &amp;&amp; h("p", {class:"popup__author"}, entry.author)</code
+            >) instead of ternaries spliced into literals; whitespace becomes the serializer's job, not the author's.
+          </p>
+          <pre><code>h("a", { href: a.href, class: "popup__download-btn" },
+  formatFromMime(a.type))</code></pre>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>feed-xml.ts:11</code> has <code>feed.toXml({ prettyPrint: true })</code>: the XML half of this
+              renderer is already builder + emitter, while the HTML half hand-splices strings (verified structural asymmetry).
+              <code>reasoned:</code> serializer discipline (protobuf, pandoc writers): output built as data and emitted by one encoder makes
+              escaping bugs impossible by construction and lets tests assert on the tree rather than substring-match serialized bytes.
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              The only option where FeedModel → output becomes mechanically inspectable (a tree you can walk) rather than a string you can
+              grep. Restores symmetry with <code>renderXml</code>, keeps zero dependencies, and makes structural testing (idea 2c) nearly
+              free.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Markup stops looking like HTML: a real taste cost versus idea 1, and a bigger diff (every literal rewritten as calls).
+              Competing head-on with ideas 1 and 7 for the same slot; the team should pick exactly one pole.
+            </dd>
+          </dl>
+        </article>
+
+        <article class="idea" id="idea-7">
+          <h3>7. JSX-to-string via @kitajs/html (spike-gated)</h3>
+          <div class="chips">
+            <span class="chip chip-axis">render-constraints</span>
+            <span class="chip chip-conf-lo">Confidence 55%</span>
+            <span class="chip chip-cx">Complexity: Medium–High</span>
+          </div>
+          <p>
+            <strong>Description:</strong> The high-ceiling pole: rename to <code>feed-html.tsx</code>, set <code>jsxImportSource</code> to
+            <code>@kitajs/html</code>, and author <code>&lt;BookCard entry={entry}/&gt;</code> with typed props. JSX renders directly to
+            strings (no VDOM, no DOM), auto-escapes by default, and, unlike template literals, is visible to the formatter, the linter, and
+            the type checker: a <code>clas=</code> typo becomes an error, and oxfmt can finally reflow the markup.
+          </p>
+          <div class="callout callout-warn">
+            <p class="eyebrow">Spike first: two unverified blockers</p>
+            <p>
+              <code>tsconfig.json</code> currently sets <code>jsx: "react-jsx"</code> with <em>no</em>
+              <code>jsxImportSource</code> (verified; it defaults to React), and one config must drive both Bun's native transpiler (docker
+              prod + tests) and Vite's esbuild (playground). Historical Bun issue #3528 (non-React
+              <code>jsxImportSource</code> mis-transpilation) is from 2023 and may be fixed; its current status is unverified. Half-day
+              spike: render one cassette through both toolchains and diff the outputs.
+            </p>
+          </div>
+          <dl>
+            <dt>Basis</dt>
+            <dd>
+              <code>direct:</code> <code>tsconfig.json</code> sets <code>"jsx": "react-jsx"</code> with no <code>jsxImportSource</code> key
+              (verified by the adversarial pass). <code>external:</code> @kitajs/html renders JSX to strings, auto-escapes, fastest-in-class
+              in its own benchmarks; Bun transpiles JSX natively from tsconfig; Elysia's html plugin wraps it (ecosystem validation).
+            </dd>
+            <dt>Rationale</dt>
+            <dd>
+              The biggest authoring-ergonomics win on the table and the only option that scales if the viewer grows (search pages, tag
+              pages, sorting views): real components, typed props, tool-visible markup. The cost is also the largest: shared build config
+              touching the playground, plus the spike burden.
+            </dd>
+            <dt>Downsides</dt>
+            <dd>
+              Highest integration risk of any candidate; reverses this morning's KTD most visibly; JSX idioms invite
+              <code>onClick</code>-shaped habits that the zero-JS popup contract forbids (idea 2d's invariant is the guard).
+            </dd>
+          </dl>
+        </article>
+      </section>
+
+      <section id="rejection-summary">
+        <h2>Rejection Summary</h2>
+        <p>
+          44 raw ideas from five framing agents were merged into 20 clusters; an independent adversarial pass verified quotes against the
+          repo (no fabrications found) and issued verdicts. Cut, with reasons:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Idea</th>
+              <th>Reason Rejected</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Native <code>&lt;dialog&gt;</code> popup (delete focus-trap/tabbable, ~20&nbsp;KB)</td>
+              <td>
+                Verifier: weak. CSS <code>:target</code> doesn't drive dialog modal state; this redesigns the zero-JS contract the tests
+                enforce, not a rider on the renderer swap. Worth its own spike later.
+              </td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>JSON-island popup dedup (render card once, hydrate popup)</td>
+              <td>
+                Breaks the zero-JS popup guarantee asserted by existing tests; the trade was admitted but never resolved. Real duplication
+                problem; revisit only if the zero-JS requirement is consciously relaxed.
+              </td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Client-rendered shell (one static shell.html + parseFeed→renderHtml in browser)</td>
+              <td>
+                Re-litigates KTD-1 merged the same day with no new evidence; the playground precedent doesn't transfer: production serves
+                no-JS clients and crawlers the playground doesn't. Reopen only as an explicit user decision.
+              </td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>sprae behavior-attributes enhancement layer</td>
+              <td>
+                Weakest grounding of the near-survivors: the claimed conflict with the dialog idea was asserted, not demonstrated; needs a
+                concrete before/after to be discussable.
+              </td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>Page shell as a real <code>.html</code> file with slots</td>
+              <td>
+                The Bun-side <code>?raw</code>-import story is unverified (Vite side works today); reintroduces the dual-toolchain seam
+                KTD-7 exists to avoid.
+              </td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td><code>escape-html</code> micro-swap</td>
+              <td>Subsumed: it is the minimal branch of idea 1.</td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td>XSLT-at-build-time (feed.xml as the literal template)</td>
+              <td>
+                Self-rejected boundary stake: violates KTD-7 (native dep, breaks the playground path). Its surviving insight is idea 5.
+              </td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td>Freshness-gate hardening (hash-based build:ui:check)</td>
+              <td>Real (commit d745c9f already bit this) but orthogonal to the templating decision; backlog item.</td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td>Alpine.js, htmx, TwinSpark, data-template (from the original suggestion list)</td>
+              <td>
+                Category error for this problem: all four are client-side runtimes that consume or bind to server HTML; none produces
+                server-side strings. Their legitimate home (enhancement layer) produced no surviving candidate this round.
+              </td>
+            </tr>
+            <tr>
+              <td>10</td>
+              <td>CSS-class coherence gate (single source of class names)</td>
+              <td>
+                Sound but crowded out at the 7-survivor cap; partially covered by idea 2's golden diffs, which make class drift visible in
+                review.
+              </td>
+            </tr>
+            <tr>
+              <td>—</td>
+              <td>axis: client-enhancement</td>
+              <td>
+                Deliberate gap: no standalone survivor. All four candidates (dialog, JSON island, sprae, client shell) either break or must
+                spike the zero-JS contract; the zero-JS invariant itself survives inside idea 2.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="composition-signal">
+        Composed 2026-07-14 by ce-ideate (repo-grounded) from the focus prompt "use small js-to-html library to avoid complex
+        src/render/feed-html.ts" · evidence: 4 scout dossiers, adversarially verified · 44 raw → 20 clusters → 7 survivors
+      </footer>
+    </main>
+  </body>
+</html>
