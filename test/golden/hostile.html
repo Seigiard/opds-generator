@@ -46,7 +46,7 @@
           <p class="card__description">Evil &lt;/script&gt;&lt;script&gt;alert(&#39;author&#39;)&lt;/script&gt;</p>
           </div>
         </article>
-        <div class="popup" id="book-1">
+        <dialog class="popup" id="book-1" aria-labelledby="book-1-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
               <div class="book"><div class="book__cover"><img src="#" alt="Tom&#39;s &quot;War&quot; &lt;b&gt;bold&lt;/b&gt; &quot; onmouseover=alert(1)" /></div></div>
@@ -54,7 +54,7 @@
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
               <hgroup>
-                <h2 class="popup__title">Tom&#39;s &quot;War&quot; &lt;b&gt;bold&lt;/b&gt; &quot; onmouseover=alert(1)</h2>
+                <h2 class="popup__title" id="book-1-title">Tom&#39;s &quot;War&quot; &lt;b&gt;bold&lt;/b&gt; &quot; onmouseover=alert(1)</h2>
                 <p class="popup__author">Evil &lt;/script&gt;&lt;script&gt;alert(&#39;author&#39;)&lt;/script&gt;</p>
               </hgroup>
               <p class="popup__description">Summary breakout &lt;/script&gt;&lt;script&gt;alert(&#39;summary&#39;)&lt;/script&gt; and &lt;/style&gt;&lt;style&gt;*{}&lt;/style&gt;</p>
@@ -71,7 +71,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       </div>
       <div>
         <article class="card card--book">
@@ -84,7 +84,7 @@
 Break Author</p>
           </div>
         </article>
-        <div class="popup" id="book-2">
+        <dialog class="popup" id="book-2" aria-labelledby="book-2-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
               <div class="book"><div class="book__cover"><img src="/hostile/preescaped.epub/thumb.jpg" alt="Ampersand &amp; entity test" /></div></div>
@@ -92,7 +92,7 @@ Break Author</p>
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
               <hgroup>
-                <h2 class="popup__title">Ampersand &amp; entity test</h2>
+                <h2 class="popup__title" id="book-2-title">Ampersand &amp; entity test</h2>
                 <p class="popup__author">Line
 Break Author</p>
               </hgroup>
@@ -107,7 +107,7 @@ Break Author</p>
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       </div>
     </main>
     <script src="/static/main.js"></script>

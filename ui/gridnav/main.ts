@@ -1,5 +1,3 @@
-import { createFocusTrap } from "focus-trap";
-import type { FocusTrap } from "focus-trap";
 import { Gridnav } from "./gridnav.ts";
 
 const POPUP_HASH = /^#book-/;
@@ -7,9 +5,6 @@ const POPUP_HASH = /^#book-/;
 function popupIsOpen(): boolean {
   return POPUP_HASH.test(location.hash);
 }
-
-let activeTrap: FocusTrap | null = null;
-let lastTrigger: HTMLElement | null = null;
 
 // A #book-N hash present at page load (deep link, reload) has no in-page history
 // entry behind it — history.back() would leave the site. Stamp that entry so
@@ -25,9 +20,8 @@ let closing = false;
 function closePopup(): void {
   if (!popupIsOpen() || closing) return;
   if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
-    // :target only re-evaluates on real fragment navigation — replaceState hides the
-    // hash but leaves the popup visible. location.replace navigates without adding a
-    // history entry; empty-fragment navigation resets scroll, so restore it.
+    // A deep-link entry has nothing behind it. location.replace navigates without
+    // adding a history entry; empty-fragment navigation resets scroll, so restore it.
     const { scrollX, scrollY } = window;
     location.replace("#");
     scrollTo(scrollX, scrollY);
@@ -37,32 +31,33 @@ function closePopup(): void {
   history.back();
 }
 
+function popupDialog(id: string): HTMLDialogElement | null {
+  const el = id ? document.getElementById(id) : null;
+  return el instanceof HTMLDialogElement && el.classList.contains("popup") ? el : null;
+}
+
+function openDialog(): HTMLDialogElement | null {
+  return document.querySelector<HTMLDialogElement>("dialog.popup[open]");
+}
+
+// UA focus restore targets the previously focused element, which is body for
+// Safari/macOS-Firefox mouse opens and for deep-link opens — so restore explicitly.
+function restoreTrigger(dialogId: string): void {
+  document.querySelector<HTMLElement>(`a[href="#${dialogId}"]`)?.focus();
+}
+
 function syncPopup(): void {
   closing = false;
-  const id = location.hash.slice(1);
-  const popup = id ? document.getElementById(id) : null;
+  const target = popupDialog(location.hash.slice(1));
+  const open = openDialog();
 
-  if (popup?.classList.contains("popup")) {
-    lastTrigger = (document.querySelector(`a[href="#${id}"]`) as HTMLElement) ?? lastTrigger;
-    popup.setAttribute("tabindex", "-1");
-    activeTrap?.deactivate();
-    activeTrap = createFocusTrap(popup, {
-      escapeDeactivates: false,
-      clickOutsideDeactivates: false,
-      initialFocus: popup,
-      fallbackFocus: popup,
-      returnFocusOnDeactivate: false,
-    });
-    activeTrap.activate();
-    return;
+  if (open && open !== target) {
+    const closedId = open.id;
+    open.close();
+    if (!target) restoreTrigger(closedId);
   }
 
-  activeTrap?.deactivate();
-  activeTrap = null;
-  if (lastTrigger) {
-    lastTrigger.focus();
-    lastTrigger = null;
-  }
+  if (target && !target.open) target.showModal();
 }
 
 const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
@@ -87,14 +82,20 @@ function init(): void {
     });
   }
 
-  window.addEventListener("hashchange", syncPopup);
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && popupIsOpen()) {
+  // Esc does not close the dialog directly: convert it to a history navigation so
+  // Esc, close button, and Back all converge on closePopup and the hash never desyncs.
+  // The close listener re-syncs if the UA force-closes the dialog (Chrome two-Esc).
+  document.querySelectorAll<HTMLDialogElement>("dialog.popup").forEach((dialog) => {
+    dialog.addEventListener("cancel", (e) => {
       e.preventDefault();
       closePopup();
-    }
+    });
+    dialog.addEventListener("close", () => {
+      if (location.hash.slice(1) === dialog.id) closePopup();
+    });
   });
+
+  window.addEventListener("hashchange", syncPopup);
 
   document.addEventListener("click", (e) => {
     const close = (e.target as HTMLElement).closest?.(".popup__close-button");

@@ -100,16 +100,16 @@ describe("renderHtml", () => {
     expect(byClass(roots, "books-grid")[0]?.attrs["data-element"]).toBe(".card__title a");
   });
 
-  test("AE3: popup opens/closes with pure links and no JS hooks", async () => {
+  test("R7: card links to a native dialog popup with no checkbox or inline handlers", async () => {
     // #given any book feed
     const roots = parseHtml(renderHtml(parseFeed(await readFeed("cyrillic-book.xml"))));
-    // #then the card opens the popup via a hash link (:target), no checkbox/label
+    // #then the card opens the popup via a hash link, no checkbox/label
     expect(links(roots).some((a) => a.attrs.href === "#book-1")).toBe(true);
     expect(allElements(roots).some((el) => el.tag === "input" && el.attrs.type === "checkbox")).toBe(false);
-    // and the close control is a plain anchor to "#" (closeable without JS)
-    const close = byClass(roots, "popup__close-button")[0];
-    expect(close?.tag).toBe("a");
-    expect(close?.attrs.href).toBe("#");
+    // and the popup is a <dialog class="popup" id="book-1"> element
+    const popup = byClass(roots, "popup")[0];
+    expect(popup?.tag).toBe("dialog");
+    expect(popup?.attrs.id).toBe("book-1");
     // and there are no inline JS event handlers on any element
     expect(
       allElements(roots)
@@ -118,11 +118,30 @@ describe("renderHtml", () => {
     ).toEqual([]);
   });
 
+  test("R7: the close control renders inside the dialog as a plain anchor to #", async () => {
+    // #given any book feed
+    const roots = parseHtml(renderHtml(parseFeed(await readFeed("cyrillic-book.xml"))));
+    // #then the close control is a plain anchor to "#"
+    const close = byClass(roots, "popup__close-button")[0];
+    expect(close?.tag).toBe("a");
+    expect(close?.attrs.href).toBe("#");
+  });
+
+  test("R7: the dialog is labelled by its own popup title", async () => {
+    // #given any book feed
+    const roots = parseHtml(renderHtml(parseFeed(await readFeed("cyrillic-book.xml"))));
+    // #then the dialog's aria-labelledby matches the id on its popup title heading
+    const popup = byClass(roots, "popup")[0];
+    const title = byClass(roots, "popup__title")[0];
+    expect(popup?.attrs["aria-labelledby"]).toBe("book-1-title");
+    expect(title?.attrs.id).toBe("book-1-title");
+  });
+
   test("popup→popup: distinct target ids let a second popup replace the first", async () => {
     // #given a feed with multiple books
     const html = renderHtml(parseFeed(await readFeed("large-folder.xml")));
     const roots = parseHtml(html);
-    // #then each book targets its own id, so navigating #book-1 → #book-2 swaps :target
+    // #then each book targets its own id, so navigating #book-1 → #book-2 swaps the open dialog
     const popupIds = byClass(roots, "popup").map((el) => el.attrs.id);
     expect(popupIds).toContain("book-1");
     expect(popupIds).toContain("book-2");
