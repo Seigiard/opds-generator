@@ -105,18 +105,19 @@ Driven by Playwright against `http://localhost:8080/static/read.html` (real ngin
 both engines. Fixtures: `scripted.epub`, `csp-matrix.epub`, and a real **73-page** technical
 PDF ("Next.js Performance Optimization", embedded fonts/images/code) as the complex-PDF case.
 
-| Check | Chromium (149) | WebKit (Playwright 2251) |
-| --- | --- | --- |
-| **AE3** scripted EPUB: `window.__scriptRan` | `false` (script blocked) | `false` (script blocked) |
-| **AE3** `onerror` rewrote title | no | no |
-| **AE3** CSP violations fired | 2 | 2 |
-| **AE6** hostile requests attempted | 5 | 0 |
-| **AE6** hostile requests that **succeeded** | **0** (all `net::ERR_BLOCKED_BY_CSP`) | **0** |
-| **PDF** opens + reads metadata | yes | yes |
-| **PDF** first paint | 267 ms | 275 ms |
-| **PDF** paginates (73-page doc) | 1/73 → 3/73 | 1/73 → 3/73 |
+| Check                                       | Chromium (149)                        | WebKit (Playwright 2251) |
+| ------------------------------------------- | ------------------------------------- | ------------------------ |
+| **AE3** scripted EPUB: `window.__scriptRan` | `false` (script blocked)              | `false` (script blocked) |
+| **AE3** `onerror` rewrote title             | no                                    | no                       |
+| **AE3** CSP violations fired                | 2                                     | 2                        |
+| **AE6** hostile requests attempted          | 5                                     | 0                        |
+| **AE6** hostile requests that **succeeded** | **0** (all `net::ERR_BLOCKED_BY_CSP`) | **0**                    |
+| **PDF** opens + reads metadata              | yes                                   | yes                      |
+| **PDF** first paint                         | 267 ms                                | 275 ms                   |
+| **PDF** paginates (73-page doc)             | 1/73 → 3/73                           | 1/73 → 3/73              |
 
 Notes:
+
 - WebKit reports the inline-`<script>` block with different console wording than Chromium, so a
   message-text match misses it — but `__scriptRan === false` and the untouched title are the
   functional proof the script never executed. AE3 holds in both engines.
@@ -126,7 +127,7 @@ Notes:
 - The **malicious-font PDF (CVE-2024-4367)** vector is closed structurally, not by crafting an
   exploit: pdf.js runs with `isEvalSupported: false` (pinned by `vendor-posture.test.ts`) and the
   vendored pdf.js 5.5.207 is well past the 4.2.67 fix. Re-check on a pdf.js downgrade.
-- Still worth a human eye before ship: PDF **rendering fidelity** on a PDF representative of *your*
+- Still worth a human eye before ship: PDF **rendering fidelity** on a PDF representative of _your_
   catalog (the 73-page technical PDF passed, but only you know your worst case), and mobile
   tap/zoom affordances.
 

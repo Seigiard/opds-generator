@@ -29,6 +29,17 @@ copy fans out into `FolderCreated` + `BookCreated` events.
 
 **How to apply:** re-run `bun run test:e2e` before treating a single failure as a regression.
 
+**CI scope (2026-07-15):** CI runs `bun run test:e2e:routing` (only `test/e2e/nginx.test.ts` — the
+reader security/routing checks: CSP, cache, 206, `/resync` CSRF), **not** the full `test:e2e`. When
+`test:e2e` was first added to CI (PR #6) this event-logging test flaked immediately and reddened an
+otherwise-clean build, so CI was narrowed to the routing suite. `event-logging.test.ts` still runs
+in local `bun run test:all`.
+
+**Once this flake is fixed** (make the copy-fan-out assertion wait on the events deterministically
+instead of a fixed window), **widen CI back to the full suite:** point the `Run e2e tests` step in
+`.github/workflows/docker.yml` at `bun run test:e2e` again and drop `test:e2e:routing` from
+`package.json` if nothing else uses it.
+
 ### Follow-up
 
 Item 1 is worth pinning down: capture the failing test name across several full docker runs (e.g.

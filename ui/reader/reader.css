@@ -21,6 +21,13 @@
   box-sizing: border-box;
 }
 
+/* reader.css is inlined alone (no reset.css), and author display:flex on .reader/.reader__bar
+   beats the UA [hidden] rule — without this the empty chrome flashes before load and shows
+   behind every error state. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

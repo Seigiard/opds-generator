@@ -35,10 +35,22 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
     if (segment === "" || DOT_SEGMENT.test(segment)) return INVALID;
   }
 
-  const filename = segments[segments.length - 1]!;
-  const dotIndex = filename.lastIndexOf(".");
-  if (dotIndex <= 0 || dotIndex === filename.length - 1) return INVALID;
-  const ext = filename.slice(dotIndex + 1).toLowerCase();
+  const extOf = (name: string): string | null => {
+    const dot = name.lastIndexOf(".");
+    return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : null;
+  };
+
+  const leaf = segments[segments.length - 1]!;
+  const parent = segments[segments.length - 2]!;
+  // Legacy /data (pre doubled-name migration) serves `.../<book>.<ext>/file` symlinks;
+  // treat a bare `file` leaf as the book named by its parent so those View links still
+  // open instead of hitting the invalid-link state. A `file` leaf never reaches /resync:
+  // it is accepted only when the parent carries a viewable extension.
+  const leafExt = extOf(leaf);
+  const isLegacyFileLeaf = leafExt === null && leaf === "file";
+  const ext = leafExt ?? (isLegacyFileLeaf ? extOf(parent) : null);
+  if (ext === null) return INVALID;
+  const filename = isLegacyFileLeaf ? parent : leaf;
 
   const encoded = segments.map(encodeURIComponent);
   const fetchPath = `/${encoded.join("/")}`;
@@ -52,7 +64,6 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
   // The data mirror doubles the book name (/folder/Book.epub/Book.epub): the browsable
   // folder sits above the book-data dir, so a trailing book-named dir is dropped too.
   let folderSegments = encoded.slice(0, -1);
-  const parent = segments[segments.length - 2]!;
   if (folderSegments.length > 0 && bookExtensions.some((e) => parent.toLowerCase().endsWith(`.${e}`))) {
     folderSegments = folderSegments.slice(0, -1);
   }

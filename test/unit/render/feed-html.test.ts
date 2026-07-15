@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { XMLValidator } from "fast-xml-parser";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
 import { renderHtml, formatFromMime } from "../../../src/render/feed-html.ts";
-import { VIEWABLE_FORMATS } from "../../../src/types.ts";
+import { BOOK_EXTENSIONS, VIEWABLE_FORMATS } from "../../../src/types.ts";
+import { parseFragment } from "../../../ui/reader/fragment.ts";
 import type { FeedModel } from "../../../src/render/feed-model.ts";
 import { allElements, byClass, flattenElements, parseHtml, type HtmlNode } from "../../helpers/html-query.ts";
 
@@ -255,6 +256,24 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
 
   test("v1 registry enables exactly epub and pdf", () => {
     expect([...VIEWABLE_FORMATS].sort()).toEqual(["epub", "pdf"]);
+  });
+
+  // Contract: every View link the renderer emits must be one the shell accepts. Covers
+  // both the current doubled-name shape and the legacy `/file` shape (pre-migration /data).
+  test("round-trip: rendered View hrefs parse back to kind:ok in the reader shell", () => {
+    const model = bookModel([
+      { title: "Doubled", href: "/sci-fi/Dune.epub/Dune.epub", type: "application/epub+zip" },
+      { title: "Legacy", href: "/manual-test.pdf/file", type: "application/pdf" },
+      { title: "Unicode", href: "/t/%D0%9A%20one.epub/%D0%9A%20one.epub", type: "application/epub+zip" },
+    ]);
+    const views = byClass(parseHtml(renderHtml(model)), "popup__view-btn");
+    expect(views).toHaveLength(3);
+    for (const view of views) {
+      const href = view.attrs.href!;
+      expect(href.startsWith("/static/read.html#")).toBe(true);
+      const fragment = href.slice("/static/read.html".length); // keep the leading '#'
+      expect(parseFragment(fragment, VIEWABLE_FORMATS, BOOK_EXTENSIONS).kind).toBe("ok");
+    }
   });
 });
 

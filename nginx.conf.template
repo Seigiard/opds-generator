@@ -87,6 +87,16 @@ http {
         # Admin endpoint: /resync (only if auth configured)
         # AUTH_BLOCK_START
         location = /resync {
+            # CSRF guard. proxy_method POST below turns ANY request to /resync into a POST,
+            # so a book-frame navigation (meta refresh / window.location) to /resync would
+            # fire a real resync using the browser's cached Basic-Auth credentials. The
+            # reader CSP already blocks passive subresource hits (img/form/@import → AE6);
+            # this closes the navigation gap. The admin tool (curl/wget) sends no
+            # Sec-Fetch-* headers and passes; browser navigations and cross-site requests
+            # are rejected before the auth challenge (rewrite phase precedes access phase).
+            if ($http_sec_fetch_mode = "navigate") { return 403; }
+            if ($http_sec_fetch_site = "cross-site") { return 403; }
+
             auth_basic "OPDS Admin";
             auth_basic_user_file /etc/nginx/.htpasswd;
 

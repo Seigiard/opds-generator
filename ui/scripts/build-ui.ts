@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import postcss from "postcss";
 import postcssRandomFunction from "@csstools/postcss-random-function";
@@ -113,6 +113,16 @@ async function hashFoliateRuntime(moduleFiles: string[]): Promise<string> {
   }
   for (const file of FOLIATE_PDFJS_FILES) {
     hasher.update(await Bun.file(join(foliateSourceDir, "vendor", "pdfjs", file)).arrayBuffer());
+  }
+  // Hash the copied CMap/font dirs too: nginx serves foliate-<hash> immutable for a year,
+  // so a submodule bump touching only a .bcmap/.pfb must still change the URL (KTD-3 trap).
+  for (const dir of FOLIATE_PDFJS_DIRS) {
+    const dirPath = join(foliateSourceDir, "vendor", "pdfjs", dir);
+    const entries = (await readdir(dirPath, { recursive: true })).sort();
+    for (const entry of entries) {
+      const full = join(dirPath, entry);
+      if ((await stat(full)).isFile()) hasher.update(`${dir}/${entry}\n`).update(await Bun.file(full).arrayBuffer());
+    }
   }
   // Fold the shim into the hash so changing it rebusts the immutable-cached dir name.
   hasher.update(PDFJS_COMPAT_SHIM);

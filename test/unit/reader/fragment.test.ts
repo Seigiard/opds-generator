@@ -30,6 +30,32 @@ describe("parseFragment", () => {
     expect(result).toMatchObject({ kind: "ok", folderPath: "/sci-fi/", ext: "pdf" });
   });
 
+  test("legacy /data shape: a bare `file` leaf resolves to the book named by its parent", () => {
+    // #given a pre-migration acquisition path (…/<book>.<ext>/file symlink)
+    const result = parse("#/sci-fi/Dune.epub/file");
+    // #then the View link still opens: ext + filename come from the parent, path is preserved
+    expect(result).toEqual({
+      kind: "ok",
+      fetchPath: "/sci-fi/Dune.epub/file",
+      folderPath: "/sci-fi/",
+      filename: "Dune.epub",
+      ext: "epub",
+    });
+  });
+
+  test("legacy /file leaf on a root-level book lands the back-link at the catalog root", () => {
+    expect(parse("#/manual-test.pdf/file")).toMatchObject({ kind: "ok", folderPath: "/", ext: "pdf", filename: "manual-test.pdf" });
+  });
+
+  test("a `file` leaf whose parent is not a viewable book is still invalid (no /resync reach)", () => {
+    expect(parse("#/resync/file")).toEqual({ kind: "invalid" });
+    expect(parse("#/a/b/file")).toEqual({ kind: "invalid" });
+  });
+
+  test("a `file` leaf under a non-viewable book reports unsupported, not ok", () => {
+    expect(parse("#/comics/thing.djvu/file")).toEqual({ kind: "unsupported", folderPath: "/comics/", ext: "djvu" });
+  });
+
   test("encoded unicode and spaces decode for validation and re-encode for fetch", () => {
     // #given a percent-encoded cyrillic name with spaces
     const result = parse("#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub");
