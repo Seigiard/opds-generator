@@ -1,5 +1,6 @@
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+import { VIEWABLE_FORMATS } from "../types.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
 
 type Fragment = HtmlEscapedString | string;
@@ -198,7 +199,15 @@ export function renderMeta(entry: FeedEntry): Fragment {
 export function renderDownloads(entry: FeedEntry): Fragment {
   if (!entry.acquisitions?.length) return "";
   const buttons = interleave(
-    entry.acquisitions.map((a) => frag`<a href="${safeHref(a.href)}" class="popup__download-btn">${formatFromMime(a.type)}</a>`),
+    entry.acquisitions.map((a) => {
+      const href = safeHref(a.href);
+      const label = formatFromMime(a.type);
+      const download = frag`<a href="${href}" class="popup__download-btn">${label}</a>`;
+      // View only for registry formats on root-relative book paths: the reader fragment
+      // must never carry a scheme or external host (R15 first line of defense).
+      if (!VIEWABLE_FORMATS.has(label.toLowerCase()) || !href.startsWith("/")) return download;
+      return frag`${download} <a href="${`/static/read.html#${href}`}" class="popup__view-btn">View</a>`;
+    }),
     "\n                  ",
   );
   return frag`

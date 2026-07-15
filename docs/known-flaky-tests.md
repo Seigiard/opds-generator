@@ -18,7 +18,7 @@ specific file. Suspected timing/ordering sensitivity in the docker unit run rath
 assertion defect.
 
 **How to confirm it's the flake, not a regression:** re-run `bun run test`. If the second run is
-green with no change, it was the flake. If the *same named test* fails twice, investigate it.
+green with no change, it was the flake. If the _same named test_ fails twice, investigate it.
 
 ### 2. e2e — `Event Logging Phase 4: copy folder triggers FolderCreated + BookCreated`
 

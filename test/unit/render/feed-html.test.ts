@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { XMLValidator } from "fast-xml-parser";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
 import { renderHtml, formatFromMime } from "../../../src/render/feed-html.ts";
+import { VIEWABLE_FORMATS } from "../../../src/types.ts";
 import type { FeedModel } from "../../../src/render/feed-model.ts";
 import { allElements, byClass, flattenElements, parseHtml, type HtmlNode } from "../../helpers/html-query.ts";
 
@@ -185,6 +186,76 @@ describe("renderHtml", () => {
       expect(result).toBe(true);
     });
   }
+});
+
+describe("View links (VIEWABLE_FORMATS registry)", () => {
+  const bookModel = (books: { title: string; href: string; type: string }[]): FeedModel => ({
+    id: "urn:opds:catalog:v",
+    title: "Viewable",
+    updated: "2026-01-01T00:00:00.000Z",
+    kind: "acquisition",
+    selfHref: "/v/feed.xml",
+    startHref: "/feed.xml",
+    entries: books.map((b, i) => ({
+      xml: "<entry/>",
+      kind: "book" as const,
+      id: `b${i}`,
+      title: b.title,
+      acquisitions: [{ href: b.href, type: b.type }],
+    })),
+  });
+
+  test("AE1: epub and pdf popups contain View links, djvu popup contains none", () => {
+    // #given a folder with an epub, a pdf, and a djvu book
+    const model = bookModel([
+      { title: "E", href: "/v/book.epub/book.epub", type: "application/epub+zip" },
+      { title: "P", href: "/v/book.pdf/book.pdf", type: "application/pdf" },
+      { title: "D", href: "/v/book.djvu/book.djvu", type: "image/vnd.djvu" },
+    ]);
+    // #when rendered
+    const roots = parseHtml(renderHtml(model));
+    // #then exactly the epub and pdf acquisitions carry View links
+    const views = byClass(roots, "popup__view-btn");
+    expect(views.map((v) => v.attrs.href)).toEqual(["/static/read.html#/v/book.epub/book.epub", "/static/read.html#/v/book.pdf/book.pdf"]);
+    // and every popup still has its download button
+    expect(byClass(roots, "popup__download-btn")).toHaveLength(3);
+  });
+
+  test("View href preserves percent-encoded spaces and unicode from the acquisition path", () => {
+    // #given an acquisition href with encoded spaces and cyrillic
+    const model = bookModel([
+      {
+        title: "U",
+        href: "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+        type: "application/epub+zip",
+      },
+    ]);
+    // #when rendered
+    const roots = parseHtml(renderHtml(model));
+    // #then the fragment carries the path exactly as encoded, no double-encoding
+    expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe(
+      "/static/read.html#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+    );
+  });
+
+  test("registry flip: adding fb2 turns the View link on with no renderer edit", () => {
+    // #given fb2 temporarily added to the registry
+    const model = bookModel([{ title: "F", href: "/v/book.fb2/book.fb2", type: "application/x-fictionbook+xml" }]);
+    expect(byClass(parseHtml(renderHtml(model)), "popup__view-btn")).toHaveLength(0);
+    (VIEWABLE_FORMATS as Set<string>).add("fb2");
+    try {
+      // #when rendered with the flipped registry
+      const roots = parseHtml(renderHtml(model));
+      // #then the fb2 acquisition now carries a View link
+      expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe("/static/read.html#/v/book.fb2/book.fb2");
+    } finally {
+      (VIEWABLE_FORMATS as Set<string>).delete("fb2");
+    }
+  });
+
+  test("v1 registry enables exactly epub and pdf", () => {
+    expect([...VIEWABLE_FORMATS].sort()).toEqual(["epub", "pdf"]);
+  });
 });
 
 describe("formatFromMime", () => {

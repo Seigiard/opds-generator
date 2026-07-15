@@ -55,6 +55,35 @@ http {
             add_header Cache-Control "no-cache";
         }
 
+        # Reader page: deny-by-default CSP (KTD-6), pinned verbatim by the e2e test.
+        # This is the load-bearing script control for book content: foliate's blob:
+        # iframes inherit it, and its own iframe sandbox provides no isolation
+        # (allow-same-origin + allow-scripts, WebKit bug 218086). Never widen it and
+        # never add 'unsafe-eval'. Exact match beats the ^~ /static/ prefix above.
+        # add_header REPLACES inherited headers, so no-cache must be re-declared here
+        # or read.html ships with no Cache-Control and the stale-asset bug (see the
+        # comment on /static/ above) returns.
+        location = /static/read.html {
+            alias /app/static/read.html;
+            add_header Cache-Control "no-cache";
+            add_header Content-Security-Policy "default-src 'none'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; connect-src 'self'; worker-src 'self'; frame-src blob:; img-src blob: data:; style-src 'unsafe-inline' blob: data:";
+        }
+
+        # Hashed foliate/pdf.js runtime: the directory name is content-hashed and
+        # regenerates together with read.html in one build:ui run (KTD-3 lockstep),
+        # so forever-caching is safe — unlike the unversioned URLs above.
+        # The stock mime.types has no mjs mapping: pdf.mjs would serve as
+        # octet-stream and fail the browser's strict module MIME check.
+        location ^~ /static/foliate- {
+            alias /app/static/foliate-;
+            types {
+                application/javascript js mjs;
+                text/css css;
+            }
+            default_type application/octet-stream;
+            add_header Cache-Control "public, max-age=31536000, immutable";
+        }
+
         # Admin endpoint: /resync (only if auth configured)
         # AUTH_BLOCK_START
         location = /resync {

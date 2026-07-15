@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ideation: In-browser PDF &amp; EPUB viewers</title>
+    <style>
+      :root{
+        --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --line:#e3dfd6;
+        --accent:#0f6f5c; --accent-soft:#e7f2ee; --accent-text:#0b5a4a;
+        --warn:#9a5b00; --warn-soft:#fbf1e2; --warn-text:#7c4a00;
+        --info-soft:#eaeff7; --info-text:#2f4a7a;
+        --card:#ffffff; --code-bg:#f1efe9;
+      }
+      *{box-sizing:border-box}
+      body{margin:0;background:var(--bg);color:var(--ink);
+        font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+      main{max-width:900px;margin-inline:auto;padding:2.5rem 1.5rem 4rem}
+      p,li,dd{max-width:70ch}
+      h1{font-size:1.7rem;line-height:1.25;margin:.2rem 0 .4rem}
+      h2{font-size:1.25rem;margin:2.6rem 0 .8rem;padding-top:1.2rem;border-top:1px solid var(--line)}
+      h3{font-size:1.05rem;margin:0 0 .5rem}
+      code{background:var(--code-bg);padding:.1em .35em;border-radius:4px;font-size:.88em;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+      a{color:var(--accent-text)}
+      .eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+      .meta{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin:.6rem 0 0;color:var(--muted);font-size:.86rem}
+      .meta strong{color:var(--ink);font-weight:600}
+      .statstrip{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.4rem 0 0}
+      .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.55rem .9rem;font-size:.85rem;color:var(--muted)}
+      .stat b{display:block;font-size:1.15rem;color:var(--ink)}
+      .jump{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1.1rem;margin:1rem 0 1.6rem}
+      .jump ol{margin:.3rem 0 0;padding-left:1.3rem}
+      .jump li{margin:.2rem 0}
+      article.idea{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.2rem 1.4rem;margin:1.2rem 0}
+      .ideahead{display:flex;align-items:baseline;gap:.7rem;flex-wrap:wrap;margin-bottom:.3rem}
+      .idchip{background:var(--accent-soft);color:var(--accent-text);font-weight:700;border-radius:999px;
+        padding:.15rem .7rem;font-size:.82rem;white-space:nowrap}
+      .chips{display:flex;gap:.45rem;flex-wrap:wrap;margin:.35rem 0 .8rem}
+      .chip{border-radius:999px;padding:.12rem .65rem;font-size:.76rem;font-weight:600;border:1px solid var(--line);color:var(--muted);background:var(--bg)}
+      .chip.conf-high{background:var(--accent-soft);color:var(--accent-text);border-color:transparent}
+      .chip.conf-med{background:var(--info-soft);color:var(--info-text);border-color:transparent}
+      .chip.cx{background:var(--warn-soft);color:var(--warn-text);border-color:transparent}
+      dl.fields{margin:.6rem 0 0}
+      dl.fields dt{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:.75rem}
+      dl.fields dd{margin:.15rem 0 0}
+      .callout{border-radius:10px;padding:.7rem 1rem;margin:.8rem 0;font-size:.92rem}
+      .callout.warn{background:var(--warn-soft)}
+      .callout.warn .eyebrow{color:var(--warn-text)}
+      .callout.info{background:var(--info-soft)}
+      .callout.info .eyebrow{color:var(--info-text)}
+      table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
+      th,td{border:1px solid var(--line);padding:.45rem .65rem;text-align:left;vertical-align:top}
+      th{background:var(--code-bg);font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
+      .wide{overflow-x:auto}
+      figure{margin:1rem 0;padding:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:10px}
+      figcaption{font-size:.8rem;color:var(--muted);margin-top:.5rem}
+      footer.composition-signal{margin-top:3.5rem;padding-top:1rem;border-top:1px solid var(--line);
+        font-size:.8rem;color:var(--muted)}
+      ul{padding-left:1.2rem}
+      strong{color:inherit}
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="eyebrow">Ideation</span>
+      <h1>In-browser PDF &amp; EPUB viewers</h1>
+      <div class="meta">
+        <span><strong>Date</strong> 2026-07-14</span>
+        <span><strong>Topic</strong> pdf-epub-viewers</span>
+        <span><strong>Mode</strong> repo-grounded</span>
+      </div>
+      <p class="meta" style="display:block;max-width:70ch">
+        <strong>Focus:</strong> add PDF and EPUB viewers for files; possibly a single HTML file with all data baked in (pdf.js or epub-js);
+        show a <code>view</code> button near the "download" button.
+      </p>
+
+      <div class="statstrip">
+        <span class="stat"><b>48</b> raw ideas</span>
+        <span class="stat"><b>5</b> frames × agents</span>
+        <span class="stat"><b>7</b> survivors</span>
+        <span class="stat"><b>5/5</b> axes covered</span>
+      </div>
+
+      <h2 id="grounding-context">Grounding Context</h2>
+      <p>
+        <strong>Codebase Context.</strong> OPDS catalog generator (Bun + nginx, Docker). <code>/data</code> mirrors <code>/books</code>;
+        each book gets <code>entry.xml</code>, <code>cover.jpg</code>, <code>thumb.jpg</code>, and a symlink to the source file. One
+        <code>FeedModel</code> per folder renders <code>feed.xml</code> (OPDS reader apps) and <code>index.html</code> (browsers) at sync
+        time. Browser popups are hash + CSS <code>:target</code> and work with no JS; <code>main.js</code> is progressive enhancement.
+        <code>static/</code> artifacts are generated by <code>build:ui</code>, committed, and freshness-gated in CI. No CSP headers today;
+        no viewer/reader code exists; nginx serves book files with <code>Content-Disposition: attachment</code> (pinned by an e2e test) and
+        implicitly supports range requests (<code>sendfile on</code>).
+      </p>
+      <p>
+        <strong>Past learnings.</strong> The single-model-two-renderers pattern is deliberate and extensible; renderers stay pure TS (no
+        Bun/node imports) so they run in the Bun handler, the Vite playground, and browser tests; every new generated file in
+        <code>/data</code> needs dual watcher safety (data-adapter classification + <code>watcher.sh</code> regex).
+      </p>
+      <p>
+        <strong>External research (high value).</strong> Kavita is the reference comp: its Nov 2025 reader overhaul + annotation system
+        signals users want progress/annotations, not just page-turning.
+        <a href="https://github.com/futurepress/epub.js">epub.js (futurepress)</a> is effectively unmaintained;
+        <a href="https://intity.github.io/epub-js">intity/epub-js</a> is an active fork but needs webpack;
+        <a href="https://github.com/johnfactotum/foliate-js">foliate-js</a> is the standout for self-hosted no-CDN setups (native ESM, zero
+        build, MIT, EPUB/MOBI/AZW3/FB2/CBZ + experimental PDF adapter, powers Foliate in production, unstable API, pin via submodule).
+        pdf.js: build on the display layer (<code>pdf.mjs</code> + worker + <code>cmaps/</code>), not Mozilla's viewer.html. Baking book
+        bytes into HTML: base64 inflates ~33-37%, 2MB data-URI ceilings exist, and SingleFile deliberately avoids base64-ing binaries.
+        Inline the JS library, never the book.
+      </p>
+
+      <h2 id="topic-axes">Topic Axes</h2>
+      <ul>
+        <li><strong>view-entry-ui</strong>: where "view" lives: card/popup markup, hash + <code>:target</code>, progressive enhancement</li>
+        <li><strong>viewer-runtime-bundling</strong>: library choice, build:ui pipeline, static/ artifacts, licensing/vendoring</li>
+        <li><strong>byte-delivery-nginx</strong>: getting book bytes to browser JS: headers, range requests, routing, rate limits</li>
+        <li>
+          <strong>viewer-page-generation</strong>: per-book viewer.html vs one shared page, renderer purity, sync cascade, watcher safety
+        </li>
+        <li><strong>reading-experience-state</strong>: pagination, progress persistence, annotations, format coverage beyond PDF/EPUB</li>
+      </ul>
+
+      <h2 id="ranked-ideas">Ranked Ideas</h2>
+      <div class="jump">
+        <span class="eyebrow">Jump to</span>
+        <ol>
+          <li><a href="#idea1">One shared reader shell, powered by foliate-js</a></li>
+          <li><a href="#idea2">CSP + scripting-disabled EPUB as the gating prerequisite</a></li>
+          <li><a href="#idea3">A format capability matrix decides where "View" appears</a></li>
+          <li><a href="#idea4">Byte delivery is already done: verify it, don't build it</a></li>
+          <li><a href="#idea5">A zero-JS reading tier: server-derived chapters and page images</a></li>
+          <li><a href="#idea6">Quick-Look previews as the shippable v1</a></li>
+          <li><a href="#idea7">Reading progress in localStorage, keyed by stable entry id</a></li>
+        </ol>
+      </div>
+
+      <article class="idea" id="idea1">
+        <div class="ideahead">
+          <span class="idchip">1</span>
+          <h3>One shared reader shell, powered by foliate-js</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">viewer-page-generation</span>
+          <span class="chip conf-high">Confidence 80%</span>
+          <span class="chip cx">Complexity Medium</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Ship exactly one static reader page (built by <code>build:ui</code>, committed to <code>static/</code> like
+            <code>main.js</code>), opened full-page as <code>/static/read.html#/sci-fi/Dune.epub</code>. One runtime: foliate-js (vendored
+            as a pinned git submodule; native ESM, so no webpack enters the repo) covers EPUB/MOBI/AZW3/FB2/CBZ <em>and PDF</em> through its
+            pdf.js adapter — validated by hand on a complex PDF in the foliate demo. pdf.js remains a vendored dependency of the adapter
+            (<code>pdf.mjs</code> + worker + <code>cmaps/</code>, its own hashed asset directory), lazy-loaded only when a PDF opens. The
+            engines are inlined/vendored (the repo already inlines focus-trap + tabbable); the book's bytes are never baked in; they're
+            fetched from the existing acquisition URL. The "View" button is a plain anchor added inside <code>renderDownloads()</code>,
+            which already has <code>href</code> and MIME type in scope. Iterate on the shell in the Vite playground against real cassette
+            books, same loop the HTML renderer already uses.
+          </dd>
+          <dt>Axis</dt>
+          <dd>viewer-page-generation (absorbs runtime-bundling decisions)</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>direct:</code> <code>src/render/feed-html.ts:165-174</code>: <code>renderDownloads()</code> maps
+            <code>entry.acquisitions</code> with <code>a.href</code> and <code>formatFromMime(a.type)</code> already in scope;
+            <code>ui/scripts/build-ui.ts</code>: single <code>Bun.build</code> pass with focus-trap/tabbable inlined (the vendoring
+            precedent). <code>external:</code> foliate-js: native ESM, zero build step, MIT, EPUB/MOBI/AZW3/FB2/CBZ + experimental PDF,
+            powers Foliate in production; epub.js unmaintained; pdf.js display layer is Mozilla's stable public API.
+            <code>direct:</code> base64-baking rejected on evidence: 33-37% inflation, 2MB data-URI ceilings, SingleFile precedent (web
+            research digest). <code>external:</code> foliate-js README: the zip.js loader supports HTTP range requests (EPUBs can stream
+            partially from nginx with no server-side unpacking), and the library ships <code>progress.js</code>, <code>search.js</code>,
+            <code>overlayer.js</code> (annotations), and an <code>opds.js</code> OPDS 1.x feed parser the shell can point at
+            <code>feed.xml</code> directly.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            This is the direct build path for the user's ask, with three deliberate corrections to the opening sketch: one shared page
+            instead of a generated file per book (zero new watcher-safety surface, zero cascade changes; every per-book artifact
+            historically required dual watcher-safety work); foliate-js instead of the unmaintained epub.js (8 of 13 catalog formats from
+            one dependency, PDF included, vs 2 formats from two libraries); and "single file" applied to the reader chrome only, never the
+            book bytes (preserves range-request streaming for large scans). The full-page surface (not the metadata popup) is deliberate:
+            the popup's CSS and focus trap are tuned for a short-lived modal, not sustained reading.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            foliate-js has an explicitly unstable API (submodule pinning is mandatory, upgrades are manual diffs); the PDF adapter is
+            "proof-of-concept, highly experimental" in the authors' own words, so it needs a playground smoke test on real catalog PDFs
+            pinned into CI, with the direct pdf.js display layer as the cheap fallback if a regression lands; pdf.js's worker + cmaps can't
+            ride the current single-bundle pattern, forcing the repo's first hashed-immutable asset directory (a new caching pattern next to
+            the deliberately no-cache <code>style.css</code>/<code>main.js</code>). The contrasted fork (per-book
+            <code>viewer.html</code> generated by a third renderer in the cascade) buys deep self-containment (<code>cp -r</code> a book
+            folder and it reads) at the cost of a per-artifact watcher-safety surface; it lost on cost, not on merit.
+          </dd>
+        </dl>
+        <figure>
+          <svg
+            viewBox="0 0 760 240"
+            role="img"
+            aria-label="One shared reader page fetching book bytes, contrasted with N generated per-book files"
+          >
+            <text x="10" y="20" font-size="12" font-weight="700" fill="#0b5a4a">SHARED SHELL (proposed)</text>
+            <rect x="10" y="32" width="200" height="46" rx="8" fill="#e7f2ee" stroke="#0f6f5c" />
+            <text x="110" y="52" font-size="12" text-anchor="middle" fill="#1c1b18">/static/read.html</text>
+            <text x="110" y="68" font-size="10" text-anchor="middle" fill="#6b675e">one committed artifact</text>
+            <rect x="10" y="120" width="95" height="40" rx="8" fill="#fff" stroke="#e3dfd6" />
+            <text x="57" y="138" font-size="10" text-anchor="middle" fill="#1c1b18">foliate-js</text>
+            <text x="57" y="151" font-size="9" text-anchor="middle" fill="#6b675e">epub mobi fb2 cbz</text>
+            <rect x="115" y="120" width="95" height="40" rx="8" fill="#fff" stroke="#e3dfd6" />
+            <text x="162" y="138" font-size="10" text-anchor="middle" fill="#1c1b18">pdf.js (adapter)</text>
+            <text x="162" y="151" font-size="9" text-anchor="middle" fill="#6b675e">PDF only, lazy</text>
+            <line x1="80" y1="78" x2="57" y2="120" stroke="#6b675e" marker-end="url(#a)" />
+            <line x1="140" y1="78" x2="162" y2="120" stroke="#6b675e" marker-end="url(#a)" />
+            <text x="110" y="103" font-size="9" fill="#6b675e" text-anchor="middle">lazy import by extension</text>
+            <rect x="10" y="185" width="200" height="40" rx="8" fill="#fff" stroke="#e3dfd6" />
+            <text x="110" y="202" font-size="10" text-anchor="middle" fill="#1c1b18">fetch /sci-fi/Dune.epub</text>
+            <text x="110" y="215" font-size="9" text-anchor="middle" fill="#6b675e">existing acquisition URL, range-capable</text>
+            <line x1="110" y1="160" x2="110" y2="185" stroke="#6b675e" marker-end="url(#a)" />
+            <text x="390" y="20" font-size="12" font-weight="700" fill="#7c4a00">PER-BOOK FILES (user sketch, rejected fork)</text>
+            <g>
+              <rect x="410" y="44" width="170" height="40" rx="8" fill="#fbf1e2" stroke="#e3dfd6" />
+              <rect x="400" y="38" width="170" height="40" rx="8" fill="#fbf1e2" stroke="#e3dfd6" />
+              <rect x="390" y="32" width="170" height="40" rx="8" fill="#fbf1e2" stroke="#9a5b00" />
+              <text x="475" y="49" font-size="10" text-anchor="middle" fill="#1c1b18">viewer.html × every book</text>
+              <text x="475" y="63" font-size="9" text-anchor="middle" fill="#7c4a00">bytes baked in: +33-37% base64</text>
+            </g>
+            <text x="390" y="110" font-size="10" fill="#7c4a00">costs per artifact:</text>
+            <text x="390" y="128" font-size="10" fill="#6b675e">• watcher-safety classification + regex</text>
+            <text x="390" y="145" font-size="10" fill="#6b675e">• re-render all books on every lib upgrade</text>
+            <text x="390" y="162" font-size="10" fill="#6b675e">• loses range streaming for large PDFs</text>
+            <defs>
+              <marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 z" fill="#6b675e" />
+              </marker>
+            </defs>
+          </svg>
+          <figcaption>
+            One shared shell picks an engine and fetches bytes; the per-book variant multiplies every cost by library size.
+          </figcaption>
+        </figure>
+      </article>
+
+      <article class="idea" id="idea2">
+        <div class="ideahead">
+          <span class="idchip">2</span>
+          <h3>CSP + scripting-disabled EPUB as the gating prerequisite</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">viewer-runtime-bundling</span>
+          <span class="chip conf-high">Confidence 90%</span>
+          <span class="chip cx">Complexity Low</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Before any EPUB rendering ships, add a strict <code>Content-Security-Policy</code> header in nginx scoped to the viewer surface
+            (<code>script-src 'self'</code> + worker allowances for pdf.js), configure the reader with EPUB scripting disabled, and confine
+            book HTML to a sandboxed iframe. Treat it like email clients treat sender HTML: hostile by default.
+          </dd>
+          <dt>Axis</dt>
+          <dd>viewer-runtime-bundling</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>external:</code> foliate-js's authors flag scripted EPUB content as fundamentally unsafe to sandbox (WebKit bug 218086
+            defeats iframe sandboxing) and mandate strict CSP blocking all non-<code>'self'</code> scripts. <code>direct:</code> the repo
+            ships zero CSP headers today (<code>nginx.conf.template</code>), and the viewer would run same-origin with the
+            Basic-Auth-protected <code>/resync</code> endpoint.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            An EPUB is a zip of arbitrary HTML+JS. Rendering untrusted books same-origin without CSP turns every downloaded ebook into a
+            potential XSS vector against the host, including credentialed endpoints. This is the one decision that is catastrophically
+            expensive to retrofit and costs about two nginx lines to do up front. The verifier ranked it the most important gate in the set:
+            it should precede, not follow, ideas 1 and 5.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            CSP must be scoped carefully so it doesn't break the existing no-CSP catalog pages; pdf.js needs <code>worker-src</code> (and
+            version-dependent wasm) allowances, so the policy needs one e2e test of its own to avoid silent viewer breakage on upgrades.
+          </dd>
+        </dl>
+      </article>
+
+      <article class="idea" id="idea3">
+        <div class="ideahead">
+          <span class="idchip">3</span>
+          <h3>A format capability matrix decides where "View" appears</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">view-entry-ui</span>
+          <span class="chip conf-high">Confidence 85%</span>
+          <span class="chip cx">Complexity Low</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Jellyfin doesn't have one playback strategy; it has a direct-play/transcode matrix per item. Do the same: a
+            <code>VIEWABLE_FORMATS</code> registry co-located with <code>MIME_TYPES</code> in <code>src/types.ts</code> maps each of the 13
+            extensions to a viewing strategy: <em>client engine</em> (foliate/pdf.js formats), <em>server-derived</em> (idea 5's page images
+            for DJVU/CBR), or <em>download-only</em>. <code>renderDownloads()</code> consults it, so "View" appears only where it actually
+            works.
+          </dd>
+          <dt>Axis</dt>
+          <dd>view-entry-ui</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>direct:</code> <code>src/types.ts:16-31</code>: the MIME table is already the single registry nginx and format handlers
+            both consume, and <code>formatFromMime()</code> (<code>feed-html.ts:17-30</code>) already branches per MIME at render time.
+            <code>external:</code> Jellyfin/Plex direct-play-vs-transcode matrices are the canonical answer to "heterogeneous formats, one
+            client surface"; foliate-js covers neither DJVU nor CBR.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            The classic failure mode here is shipping "a viewer" that means "an EPUB viewer": a blanket View button that renders a blank
+            pane for djvu/fb2 users is a worse first impression than today's forced download. A one-registry-line-per-format matrix makes
+            coverage a designed, reviewed property. When idea 5 later adds a server-derived path for DJVU, flipping its row turns the button
+            on with zero render-logic changes.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            The matrix is honest but visible: users of download-only formats can see their books are second-class. Keeping the matrix
+            truthful requires updating it in the same PR as any engine change: cheap, but a convention to enforce.
+          </dd>
+        </dl>
+      </article>
+
+      <article class="idea" id="idea4">
+        <div class="ideahead">
+          <span class="idchip">4</span>
+          <h3>Byte delivery is already done: verify it, don't build it</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">byte-delivery-nginx</span>
+          <span class="chip conf-high">Confidence 85%</span>
+          <span class="chip cx">Complexity Low</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Three facts collapse the assumed nginx workstream to near-zero. (1) <code>Content-Disposition: attachment</code> only governs
+            navigation/save-as; <code>fetch()</code> and XHR receive the body regardless, so pdf.js/foliate-js can consume the existing
+            acquisition URLs untouched, and the e2e-pinned attachment contract survives. (2) Range requests are implicitly on (<code
+              >sendfile on</code
+            >), but that's an inference, so add one e2e case asserting <code>206 Partial Content</code> for a <code>Range:</code> request
+            against a real book before betting streaming on it; the same mechanism seeds OPDS-PSE comic page-streaming later. (3) The only
+            thing the header actually blocks is the browser's <em>native</em> PDF viewer via navigation; an optional
+            <code>?disposition=inline</code> nginx map (S3's pattern) restores that as a zero-JS day-1 rung.
+          </dd>
+          <dt>Axis</dt>
+          <dd>byte-delivery-nginx</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>reasoned:</code> RFC 6266 scopes Content-Disposition to user-agent presentation/save handling on navigation; no browser
+            applies it to programmatic fetches; verified as a platform fact by the fresh-context reviewer. <code>direct:</code>
+            <code>nginx.conf.template:72-81</code> (the unconditional attachment header), <code>test/e2e/nginx.test.ts:74-83</code> (pins
+            the header on GET but never exercises fetch or Range). <code>external:</code> S3's
+            <code>response-content-disposition</code> query param: canonical prior art for caller-chosen disposition on the same object.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            Multiple ideation frames independently proposed nginx header surgery to "unblock" the viewer; the verification pass showed that
+            entire workstream solves a non-problem for JS viewers. Stating this explicitly changes every estimate: the viewer's
+            byte-delivery layer is finished before it starts, pending one cheap 206 check. Also flagged:
+            <code>RATE_LIMIT_MB</code> throttles viewer fetches identically to downloads (a deliberate check, not a surprise).
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            If the 206 check fails on the book location block, large scanned PDFs must fully download before first paint; that outcome would
+            reshape idea 1's PDF story, which is exactly why the check precedes library commitment.
+          </dd>
+        </dl>
+        <figure>
+          <svg viewBox="0 0 760 170" role="img" aria-label="Navigation is blocked by the attachment header; fetch is not">
+            <rect x="10" y="60" width="150" height="46" rx="8" fill="#fff" stroke="#e3dfd6" />
+            <text x="85" y="80" font-size="11" text-anchor="middle" fill="#1c1b18">browser</text>
+            <text x="85" y="95" font-size="9" text-anchor="middle" fill="#6b675e">/sci-fi/Dune.pdf</text>
+            <rect x="560" y="60" width="180" height="46" rx="8" fill="#fff" stroke="#e3dfd6" />
+            <text x="650" y="80" font-size="11" text-anchor="middle" fill="#1c1b18">nginx /data</text>
+            <text x="650" y="95" font-size="9" text-anchor="middle" fill="#6b675e">Content-Disposition: attachment</text>
+            <line x1="160" y1="70" x2="560" y2="70" stroke="#9a5b00" marker-end="url(#b)" />
+            <text x="360" y="58" font-size="10" text-anchor="middle" fill="#7c4a00" font-weight="600">
+              navigation → save-as dialog (blocked)
+            </text>
+            <line x1="160" y1="98" x2="560" y2="98" stroke="#0f6f5c" marker-end="url(#c)" />
+            <text x="360" y="118" font-size="10" text-anchor="middle" fill="#0b5a4a" font-weight="600">
+              fetch() / pdf.js range requests → bytes flow, header inert
+            </text>
+            <text x="360" y="140" font-size="9" text-anchor="middle" fill="#6b675e">
+              one new e2e case: Range: bytes=0-1023 ⇒ expect 206
+            </text>
+            <defs>
+              <marker id="b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 z" fill="#9a5b00" />
+              </marker>
+              <marker id="c" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 z" fill="#0f6f5c" />
+              </marker>
+            </defs>
+          </svg>
+          <figcaption>
+            The attachment header blocks only navigation. Programmatic fetch, which every JS viewer uses, is unaffected.
+          </figcaption>
+        </figure>
+      </article>
+
+      <article class="idea" id="idea5">
+        <div class="ideahead">
+          <span class="idchip">5</span>
+          <h3>A zero-JS reading tier: server-derived chapters and page images</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">reading-experience-state</span>
+          <span class="chip conf-med">Confidence 60%</span>
+          <span class="chip cx">Complexity High</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Apply the project's progressive-enhancement identity to reading itself. At sync time, format handlers derive readable artifacts
+            the way they already derive covers: sanitized chapter HTML for text formats (softened by a later finding: foliate's zip.js
+            loader can range-stream EPUBs client-side, so server-side unzip is now the zero-JS tier's story, not the only streaming story),
+            and pre-rendered page-image pyramids (IIIF Level-0 pattern) for DJVU/CBR/scanned PDFs using the <code>ddjvu</code>/<code
+              >pdftoppm</code
+            >
+            tools already in the Docker image. The base tier is plain HTML with prev/next anchors: readable on e-ink browsers (Kindle/Kobo,
+            arguably this catalog's most natural browser audience), over 2G, and under full CSP lockdown. Idea 1's JS engines become the
+            enhancement layer on top, exactly as <code>main.js</code> enhances the popup today.
+          </dd>
+          <dt>Axis</dt>
+          <dd>reading-experience-state</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>direct:</code> the repo's documented interaction contract: popups work with no JS, <code>main.js</code> is progressive
+            enhancement (CLAUDE.md); <code>src/formats/pdf.ts:94</code> and <code>src/formats/djvu.ts:101</code> invoke
+            <code>pdftoppm</code>/<code>ddjvu</code> per book today. Corrected per verification: those calls are hardcoded to page 1 for
+            covers; the CLI tools support arbitrary page ranges, but page-range rendering is new code, not a flag flip.
+            <code>reasoned:</code> server-side extraction also converts the EPUB security problem (idea 2) from "sandbox untrusted JS in the
+            client" to "sanitize once on the server", which is strictly safer.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            This is the only path that reaches the format tail (DJVU has no browser library at all) and the only one that serves
+            JS-incapable reading devices. It reframes the roadmap question from "which JS library" to "who reads in a browser", and it makes
+            the viewer an extension of the architecture's core bet (pre-compute at sync, serve statically) rather than a SPA bolted onto a
+            static site.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            The big-ticket item: disk cost (page images for scanned books are large), slower syncs, new per-book artifacts requiring the
+            dual watcher-safety dance, and real new code in every format handler. Honest sequencing: idea 6 is this idea's cheap first
+            increment; full chapter/page derivation only makes sense if previews prove demand.
+          </dd>
+        </dl>
+        <figure>
+          <svg viewBox="0 0 760 190" role="img" aria-label="Two-tier reading: static base tier for all clients, JS enhancement on top">
+            <rect x="40" y="120" width="680" height="50" rx="8" fill="#e7f2ee" stroke="#0f6f5c" />
+            <text x="380" y="141" font-size="11" text-anchor="middle" fill="#0b5a4a" font-weight="700">
+              BASE TIER: static HTML + page images, derived at sync
+            </text>
+            <text x="380" y="158" font-size="10" text-anchor="middle" fill="#1c1b18">
+              works: e-ink browsers · 2G · no-JS · CSP-locked · curl
+            </text>
+            <rect x="150" y="40" width="460" height="50" rx="8" fill="#eaeff7" stroke="#2f4a7a" />
+            <text x="380" y="61" font-size="11" text-anchor="middle" fill="#2f4a7a" font-weight="700">
+              ENHANCEMENT TIER: foliate-js / pdf.js reader shell
+            </text>
+            <text x="380" y="78" font-size="10" text-anchor="middle" fill="#1c1b18">adds: reflow pagination · keyboard nav · progress</text>
+            <line x1="380" y1="90" x2="380" y2="120" stroke="#6b675e" marker-end="url(#d)" />
+            <text x="470" y="108" font-size="9" fill="#6b675e">layers on top, never required</text>
+            <defs>
+              <marker id="d" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <path d="M0,0 L7,3 L0,6 z" fill="#6b675e" />
+              </marker>
+            </defs>
+          </svg>
+          <figcaption>
+            The same layering main.js uses today, applied to reading: everything works at the base tier; JS makes it nicer.
+          </figcaption>
+        </figure>
+      </article>
+
+      <article class="idea" id="idea6">
+        <div class="ideahead">
+          <span class="idchip">6</span>
+          <h3>Quick-Look previews as the shippable v1</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">reading-experience-state</span>
+          <span class="chip conf-med">Confidence 70%</span>
+          <span class="chip cx">Complexity Medium</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Break the assumption that "view" must mean the whole book. A catalog's browsing job is "is this the book I want?", answered by a
+            bounded preview: first chapter of an EPUB/FB2, first ~5 pages of a PDF/DJVU as images. Add an optional
+            <code>getPreview()</code> to <code>FormatHandler</code> (mirroring macOS Quick Look's index-time generators), write the artifact
+            next to <code>entry.xml</code>, and surface a "Preview" affordance in the existing <code>:target</code> popup via sandboxed
+            iframe. Because previews are kilobytes by construction, every delivery concern (data-URI ceilings, range tuning, rate limits)
+            disappears, and one page-range rendering primitive serves both this and idea 5's full pyramids later.
+          </dd>
+          <dt>Axis</dt>
+          <dd>reading-experience-state</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>direct:</code> <code>src/formats/types.ts:14-17</code>: <code>FormatHandler</code> is exactly <code>getMetadata()</code> +
+            <code>getCover()</code>; the per-book derived-artifact mechanism (cover extraction, cascade write site in
+            <code>book-sync.ts:105-106</code>) is proven. Corrected per verification: current <code>pdftoppm</code>/<code>ddjvu</code> calls
+            are page-1-only cover code; page-range extraction is new work in each handler, not "changing one flag."
+            <code>external:</code> macOS Quick Look's decoupling of preview generation from display.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            Cheapest genuine increment that tests user appetite for in-browser reading before any reader architecture locks in, ships value
+            for all 13 formats (including the ones no JS library reads), and de-risks the roadmap: if previews go unused, the full reader
+            was the wrong bet; if they're loved, their artifacts are reusable substrate for idea 5.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            It's not the reader the user asked for; it must be framed as a sequencing choice, not a substitute. New per-book artifacts need
+            the watcher-safety additions; preview extraction adds sync time per book.
+          </dd>
+        </dl>
+      </article>
+
+      <article class="idea" id="idea7">
+        <div class="ideahead">
+          <span class="idchip">7</span>
+          <h3>Reading progress in localStorage, keyed by stable entry id</h3>
+        </div>
+        <div class="chips">
+          <span class="chip">reading-experience-state</span>
+          <span class="chip conf-med">Confidence 65%</span>
+          <span class="chip cx">Complexity Medium</span>
+        </div>
+        <dl class="fields">
+          <dt>Description</dt>
+          <dd>
+            Podcast apps solved position-sync under this exact constraint: the server is dumb static files, so position lives client-side
+            and the list wears the state. The reader shell writes <code>{position, percent, updatedAt}</code> to localStorage keyed by the
+            entry's atom <code>id</code>; reopening resumes; <code>main.js</code> (as pure enhancement) badges catalog cards with progress
+            and a "continue reading" affordance. No server state, no new artifacts, degrades to nothing without JS.
+          </dd>
+          <dt>Axis</dt>
+          <dd>reading-experience-state</dd>
+          <dt>Basis</dt>
+          <dd>
+            <code>direct:</code> <code>FeedEntry.id</code> exists (<code>feed-model.ts:16</code>, populated from the source atom
+            <code>&lt;id&gt;</code>) but, per a verification finding, the popup anchors actually use positional
+            <code>book-${index}</code> (<code>feed-html.ts:114</code>). <strong>Named prerequisite:</strong> re-key the hash scheme from
+            index to stable id (and confirm id stability across resyncs) before building on it. <code>external:</code> Kavita's 2025 reader
+            overhaul shipped progress/annotations as the headline, the community signal for what separates a demo from a reader.
+          </dd>
+          <dt>Rationale</dt>
+          <dd>
+            A viewer without resume is a demo; with resume it's a reader people return to. This is the smallest credible slice of the
+            feature the reference comp spent years on, fully reversible, and its arrival is the right moment to introduce the project's
+            first client-side persistent state, a precedent worth a deliberate yes rather than an accidental one.
+          </dd>
+          <dt>Downsides</dt>
+          <dd>
+            Per-browser only (honest labeling needed: no cross-device sync); the hash-rekey prerequisite touches deep-link semantics that
+            existing users may have bookmarked; localStorage is invisible to the server, so "recently read" can never appear in feeds
+            without a philosophy change.
+          </dd>
+        </dl>
+      </article>
+
+      <div class="callout info">
+        <span class="eyebrow">Sequencing note</span>
+        <p style="margin:.3rem 0 0">
+          A natural ladder emerged across frames: <strong>4</strong> (verify 206, optional zero-JS inline-PDF rung) →
+          <strong>2</strong> (CSP gate) → <strong>3</strong> (matrix) + <strong>1</strong> (reader shell) → <strong>7</strong> (progress) →
+          <strong>6/5</strong> (previews, then the zero-JS tier if demand proves out). Ideas 6 and 5 can also lead if "preview first, reader
+          later" is the preferred risk posture.
+        </p>
+      </div>
+
+      <h2 id="rejection-summary">Rejection Summary</h2>
+      <div class="wide">
+        <table>
+          <tr>
+            <th>Idea</th>
+            <th>Reason rejected</th>
+          </tr>
+          <tr>
+            <td>View-first hierarchy (cover click opens reader, download demoted)</td>
+            <td>
+              Scope overrun: reorders the catalog's primary action, a product-identity change beyond "add a view button"; backed only by
+              comp positioning, no repo evidence.
+            </td>
+          </tr>
+          <tr>
+            <td>Portable shelf (/data as copy-out offline library, file:// support)</td>
+            <td>
+              Scope overrun as framed: a distribution feature, not a viewing feature; demoted to a passive constraint (prefer relative URLs
+              in new artifacts).
+            </td>
+          </tr>
+          <tr>
+            <td>Standalone <code>?inline</code> nginx header variant to "unblock" JS viewers</td>
+            <td>
+              Premise refuted: fetch() ignores Content-Disposition, so JS viewers need no header change; surviving zero-JS native-PDF value
+              folded into idea 4.
+            </td>
+          </tr>
+          <tr>
+            <td>Per-book viewer.html via third renderer in the cascade</td>
+            <td>
+              Costlier fork of idea 1: every per-book artifact adds watcher-safety surface and re-render-on-upgrade cost; kept as the named
+              contrast inside idea 1.
+            </td>
+          </tr>
+          <tr>
+            <td>Reader as a new <code>#read-book-N</code> state of the existing popup</td>
+            <td>
+              Interaction-shape mismatch: popup CSS (<code>overflow:none</code>) and focus trap are tuned for a short-lived metadata modal,
+              not sustained reading; full-page surface won inside idea 1.
+            </td>
+          </tr>
+          <tr>
+            <td>"Reader shell" mega-bundle (shared page + matrix + hash links + progress as one package)</td>
+            <td>
+              Two of four components carried unstated gaps (popup-as-reader mismatch; hash-rekey prerequisite); superseded by ideas 1, 3, 7
+              with prerequisites named.
+            </td>
+          </tr>
+          <tr>
+            <td>Single HTML file with book bytes baked in (user's opening sketch, literal form)</td>
+            <td>
+              Refuted on evidence: base64 inflates 33-37%, 2MB data-URI ceilings, kills range streaming; the self-contained instinct
+              survives as "inline the reader JS, never the book" inside idea 1.
+            </td>
+          </tr>
+          <tr>
+            <td>epub-js (intity fork) as the EPUB engine</td>
+            <td>
+              Duplicates a stronger option: requires JSZip + webpack (a bundler the repo deliberately avoids) and covers 1 format where
+              foliate-js covers 7; futurepress original is unmaintained.
+            </td>
+          </tr>
+          <tr>
+            <td>Hashed immutable per-engine asset dirs; playground as viewer test bench</td>
+            <td>Not rejected; absorbed into idea 1 as implementation-level decisions (asset layout, dev loop).</td>
+          </tr>
+          <tr>
+            <td>PDF-dedicated pdf.js display-layer lane (separate from foliate)</td>
+            <td>
+              Dropped after hands-on validation: foliate's pdf.js adapter handled a complex PDF in the demo; single-runtime bet taken,
+              direct pdf.js display layer kept as the named fallback inside idea 1.
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <footer class="composition-signal">
+        Composed 2026-07-14 by ce-ideate from the user's focus prompt ("add to files pdf and epub viewers…") · 48 raw ideas, 5 frames,
+        fresh-context verification pass · repo: opds-generator
+      </footer>
+    </main>
+  </body>
+</html>

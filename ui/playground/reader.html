@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reader Shell Smoke</title>
+    <!-- Dev only: the vendored foliate runtime is served straight from the submodule
+         via Vite's fs allowlist. Production serves the hashed static/foliate-<hash>/ dir. -->
+    <meta name="foliate-base" content="__FOLIATE_BASE__" />
+    <style>
+      .smoke-bar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background: color-mix(in srgb, canvas 80%, gray);
+        font: 14px system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      #reader,
+      #reader-error {
+        flex: 1;
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="smoke-bar">
+      <label
+        >Fixture:
+        <select id="fixture"></select
+      ></label>
+      <span id="hint">Pick a fixture, then check it against ui/reader/SMOKE.md</span>
+    </div>
+    <noscript>This reader needs JavaScript.</noscript>
+    <div id="reader" class="reader" hidden>
+      <header class="reader__bar">
+        <a id="reader-return" class="reader__return" href="/">Catalog</a>
+        <button id="reader-toc-toggle" class="reader__toc-toggle" type="button" aria-expanded="false" aria-controls="reader-toc" hidden>
+          Contents
+        </button>
+        <span id="reader-title" class="reader__title"></span>
+        <a id="reader-download" class="reader__download" hidden>Download</a>
+      </header>
+      <nav id="reader-toc" class="reader__toc" hidden aria-label="Table of contents"></nav>
+      <main id="reader-view" class="reader__view"></main>
+      <footer class="reader__footer">
+        <button id="reader-prev" class="reader__nav-btn" type="button" aria-label="Previous page" hidden>&#8592;</button>
+        <span id="reader-position" class="reader__position"></span>
+        <button id="reader-next" class="reader__nav-btn" type="button" aria-label="Next page" hidden>&#8594;</button>
+      </footer>
+    </div>
+    <div id="reader-error" class="reader-fallback" hidden>
+      <p id="reader-error-message"></p>
+      <p><a id="reader-error-return" href="/">Back to catalog</a></p>
+    </div>
+    <script type="module" src="./reader-preview.ts"></script>
+  </body>
+</html>
