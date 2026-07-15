@@ -92,7 +92,7 @@ async function main(): Promise<void> {
     console.log(`fixtures:pull → ${name}  (${cassette.relative}, ${cassette.entries} entries)`);
     written++;
   }
-  console.log(`fixtures:pull wrote ${written} cassette(s); edge-cases.xml is hand-authored and left untouched`);
+  console.log(`fixtures:pull wrote ${written} cassette(s); edge-cases.xml and hostile.xml are hand-authored and left untouched`);
 }
 
 await main();

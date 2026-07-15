@@ -139,5 +139,19 @@
     "builtin": true
   },
   "globals": {},
-  "ignorePatterns": ["static/main.js"]
+  "ignorePatterns": ["static/main.js"],
+  "overrides": [
+    {
+      "files": ["src/render/*.ts"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "Bun",
+            "message": "src/render/* must stay browser-importable (KTD-7): no Bun globals."
+          }
+        ]
+      }
+    }
+  ]
 }

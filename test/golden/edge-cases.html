@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edge &amp; Corner Cases</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/favicon/site.webmanifest" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__left">
+        <nav class="header__breadcrumb">
+        <a class="header__home" href="/" aria-label="Home">
+          <svg xmlns="http://www.w3.org/2000/svg" class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+          </svg>
+        </a>
+        </nav>
+        <h1 class="header__title">Edge &amp; Corner Cases</h1>
+      </div>
+    </header>
+    <main class="books-grid" data-element=".card__title a">
+      <div>
+        <article class="card card--folder">
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Sub &lt;folder&gt;</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Sub &lt;folder&gt;</span></div></div>
+        <div class="book" aria-hidden="true"><div class="book__cover"><span>Sub &lt;folder&gt;</span></div></div>
+        <div class="card__info">
+          <h3 class="card__title"><a href="/edge/Sub/">Sub &lt;folder&gt;</a></h3>
+          <p class="card__description">📚 2</p>
+        </div>
+        </article>
+      </div>
+      <div>
+        <article class="card card--book">
+          <div class="book" aria-hidden="true">
+            <div class="book__cover"><span>Book Without Cover</span></div>
+          </div>
+          <div class="card__info">
+            <h3 class="card__title"><a href="#book-1">Book Without Cover</a></h3>
+          </div>
+        </article>
+        <div class="popup" id="book-1">
+          <div class="popup__content">
+            <div class="popup__cover" aria-hidden="true">
+              <div class="book"><div class="book__cover"><span>Book Without Cover</span></div></div>
+            </div>
+            <div class="popup__info">
+              <a class="popup__close-button" href="#"><span>Close</span></a>
+              <hgroup>
+                <h2 class="popup__title">Book Without Cover</h2>
+              </hgroup>
+              <div class="popup__footer">
+                <div class="popup__meta">
+                  <span>TXT · 1.2 KB</span>
+                </div>
+                <div class="popup__downloads">
+                  <a href="/edge/no-cover.txt/file" class="popup__download-btn">TXT</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <article class="card card--book">
+          <div class="book" aria-hidden="true">
+            <div class="book__cover"><img src="/edge/no-author.epub/thumb.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" loading="lazy" /></div>
+          </div>
+          <div class="card__info">
+            <h3 class="card__title"><a href="#book-2">Tom &amp; Jerry: &lt;Adventures&gt;</a></h3>
+          </div>
+        </article>
+        <div class="popup" id="book-2">
+          <div class="popup__content">
+            <div class="popup__cover" aria-hidden="true">
+              <div class="book"><div class="book__cover"><img src="/edge/no-author.epub/cover.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" /></div></div>
+            </div>
+            <div class="popup__info">
+              <a class="popup__close-button" href="#"><span>Close</span></a>
+              <hgroup>
+                <h2 class="popup__title">Tom &amp; Jerry: &lt;Adventures&gt;</h2>
+              </hgroup>
+              <div class="popup__footer">
+                <div class="popup__meta">
+                  <span>humor, kids</span>
+                  <span>EPUB · 4.0 MB</span>
+                </div>
+                <div class="popup__downloads">
+                  <a href="/edge/no-author.epub/file" class="popup__download-btn">EPUB</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script src="/static/main.js"></script>
+  </body>
+</html>

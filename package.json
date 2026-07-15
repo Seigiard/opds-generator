@@ -21,12 +21,16 @@
     "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && (bun test test/e2e; rc=$?; docker compose -f docker-compose.e2e.yml down; exit $rc)",
     "build:ui": "bun ui/scripts/build-ui.ts",
     "build:ui:check": "bun run build:ui && git diff --exit-code static/",
+    "render:golden": "bun ui/scripts/render-golden.ts",
+    "render:check": "bun run render:golden && git diff --exit-code test/golden/ && git ls-files --others --exclude-standard test/golden/ | (! grep .)",
+    "render:pure": "bun ui/scripts/render-purity.ts",
     "dev:ui": "vite --config ui/vite.config.ts",
     "fixtures:pull": "bun ui/scripts/fixtures-pull.ts",
-    "test:all": "bun run build:ui:check && bun run test && bun run test:e2e"
+    "test:all": "bun run build:ui:check && bun run render:check && bun run render:pure && bun run test && bun run test:e2e"
   },
   "dependencies": {
     "fast-xml-parser": "^5.10.0",
+    "hono": "^4.12.30",
     "knip": "^5.88.1",
     "neverthrow": "^8.2.0",
     "node-unrar-js": "^2.0.2",
