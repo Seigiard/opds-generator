@@ -24,6 +24,12 @@ async function waitForServer(): Promise<void> {
   await waitFor("/test/");
 }
 
+// Decode the handful of HTML entities that appear in escaped attribute values, as a
+// browser does before it uses the URL (paths are otherwise percent-encoded).
+function htmlDecode(value: string): string {
+  return value.replaceAll("&#39;", "'").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+}
+
 // Check if /resync is enabled
 async function isResyncEnabled(): Promise<boolean> {
   const response = await fetch(`${BASE_URL}/resync`);
@@ -307,6 +313,17 @@ describe("nginx integration", () => {
           expect((cardRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
         }
 
+        // Every generated View link must point at the shared reader page and carry a
+        // book path that actually resolves — a broken View button would 404 the book.
+        // The href is an HTML attribute, so entity-decode it the way a browser would
+        // before navigating (apostrophes render as &#39; in the markup).
+        for (const m of html.matchAll(/href="([^"]+)" class="popup__view-btn"/g)) {
+          const viewHref = htmlDecode(m[1]!);
+          expect(viewHref.startsWith("/static/read.html#/")).toBe(true);
+          const bookPath = viewHref.slice("/static/read.html#".length);
+          assets.add(bookPath);
+        }
+
         for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) queue.push(m[1]!);
         const image = xml.match(/opds-spec\.org\/image"\s+href="([^"]+)"/);
         if (image) assets.add(image[1]!);
@@ -348,6 +365,40 @@ describe("nginx integration", () => {
         headers: { Authorization: `Basic ${credentials}` },
       });
       expect(response.status).toBe(401);
+    });
+
+    test("CSRF guard: a browser navigation to /resync is rejected before auth (403, not 401)", async () => {
+      // #given /resync is enabled
+      const enabled = await isResyncEnabled();
+      if (!enabled) {
+        console.log("Skipping: /resync not configured");
+        return;
+      }
+      // #when a request arrives with browser-navigation fetch metadata (as a malicious
+      // book frame's meta-refresh/window.location would carry), even with valid auth
+      const credentials = Buffer.from("admin:secret").toString("base64");
+      const response = await fetch(`${BASE_URL}/resync`, {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "same-origin",
+        },
+      });
+      // #then it is blocked in the rewrite phase, before the resync ever runs
+      expect(response.status).toBe(403);
+    });
+
+    test("CSRF guard: a cross-site request to /resync is rejected (403)", async () => {
+      const enabled = await isResyncEnabled();
+      if (!enabled) {
+        console.log("Skipping: /resync not configured");
+        return;
+      }
+      const credentials = Buffer.from("admin:secret").toString("base64");
+      const response = await fetch(`${BASE_URL}/resync`, {
+        headers: { Authorization: `Basic ${credentials}`, "Sec-Fetch-Site": "cross-site" },
+      });
+      expect(response.status).toBe(403);
     });
 
     // This test triggers resync - keep it last
