@@ -45,7 +45,7 @@
             <h3 class="card__title"><a href="#book-1">Book Without Cover</a></h3>
           </div>
         </article>
-        <div class="popup" id="book-1">
+        <dialog class="popup" id="book-1" aria-labelledby="book-1-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
               <div class="book"><div class="book__cover"><span>Book Without Cover</span></div></div>
@@ -53,7 +53,7 @@
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
               <hgroup>
-                <h2 class="popup__title">Book Without Cover</h2>
+                <h2 class="popup__title" id="book-1-title">Book Without Cover</h2>
               </hgroup>
               <div class="popup__footer">
                 <div class="popup__meta">
@@ -65,7 +65,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       </div>
       <div>
         <article class="card card--book">
@@ -76,7 +76,7 @@
             <h3 class="card__title"><a href="#book-2">Tom &amp; Jerry: &lt;Adventures&gt;</a></h3>
           </div>
         </article>
-        <div class="popup" id="book-2">
+        <dialog class="popup" id="book-2" aria-labelledby="book-2-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
               <div class="book"><div class="book__cover"><img src="/edge/no-author.epub/cover.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" /></div></div>
@@ -84,7 +84,7 @@
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
               <hgroup>
-                <h2 class="popup__title">Tom &amp; Jerry: &lt;Adventures&gt;</h2>
+                <h2 class="popup__title" id="book-2-title">Tom &amp; Jerry: &lt;Adventures&gt;</h2>
               </hgroup>
               <div class="popup__footer">
                 <div class="popup__meta">
@@ -97,7 +97,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       </div>
     </main>
     <script src="/static/main.js"></script>

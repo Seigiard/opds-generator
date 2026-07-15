@@ -157,7 +157,7 @@ function renderBook(entry: FeedEntry, index: number): HtmlEscapedString {
             <h3 class="card__title"><a href="#${popupId}">${entry.title}</a></h3>${author}
           </div>
         </article>
-        <div class="popup" id="${popupId}">
+        <dialog class="popup" id="${popupId}" aria-labelledby="${popupId}-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
               <div class="book"><div class="book__cover">${popupCover}</div></div>
@@ -165,13 +165,13 @@ function renderBook(entry: FeedEntry, index: number): HtmlEscapedString {
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
               <hgroup>
-                <h2 class="popup__title">${entry.title}</h2>${popupAuthor}
+                <h2 class="popup__title" id="${popupId}-title">${entry.title}</h2>${popupAuthor}
               </hgroup>${popupDescription}
               <div class="popup__footer">${renderMeta(entry)}${renderDownloads(entry)}
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
       </div>`;
 }
 
