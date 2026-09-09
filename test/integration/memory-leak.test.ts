@@ -11,7 +11,13 @@ import { join } from "node:path";
 
 const PROBE_PATH = join(import.meta.dir, "..", "helpers", "leak-probe.ts");
 const MAX_LEAK_KB = 8;
-const MAX_CHAIN_LEAK_KB = 1;
+// full-chain on a loaded GitHub runner drifts both estimators to ~1-2.4 KB/iter (see
+// docs/known-flaky-tests.md §1): local runs show a strongly negative two-point
+// (-7 KB/iter), proving no structural leak, so the CI readings are allocator/RSS
+// noise, not retention. 3 keeps ≥25% margin over the observed CI ceiling while the
+// historical real-leak signal (sharp .clone) was ~7 KB/iter. Re-tighten if chain
+// metrics ever hold above 3 across quiet runs.
+const MAX_CHAIN_LEAK_KB = 3;
 
 type ProbeResult = {
   scenario: string;

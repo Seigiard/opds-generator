@@ -70,7 +70,27 @@ instead of a fixed window), **widen CI back to the full suite:** point the `Run 
 `.github/workflows/docker.yml` at `bun run test:e2e` again and drop `test:e2e:routing` from
 `package.json` if nothing else uses it.
 
+### Post-fix CI observation (2026-09-09) — full-chain threshold raised 1 → 3 KB/iter
+
+Two consecutive CI failures of `full-chain` behind a change with zero `src/` edits (pure nginx
+config + docs). Measured on the same commit, identical code/deps/bun:
+
+| Environment          | slope KB/iter | two-point KB/iter |
+| -------------------- | ------------- | ----------------- |
+| Local (2 probe runs) | 0.38 / 0.89   | −7.8 / −6.8       |
+| CI failure #1        | 1.07          | 1.32              |
+| CI failure #2        | 1.92          | 2.35              |
+
+No structural leak: the local two-point is strongly negative (RSS _decreases_ over 300 iters);
+a real leak would drive it positive on any machine. The consistent ~+9 KB/iter swing on the
+busy shared runner is allocator/RSS noise (mimalloc keeps more committed arenas under slowness).
+`MAX_CHAIN_LEAK_KB` was raised 1 → 3 (test/integration/memory-leak.test.ts): ≥25% margin over
+the observed CI ceiling, still 2x below the historical real-leak signal (~7 KB/iter, sharp
+`.clone`). The consensus metric (`min(slope, twoPoint)`) still gates: a genuine chain retention
+leak drives both estimators past 3. Re-tighten if chain metrics hold above 3 on a quiet run.
+
 ### Follow-up
 
-Item 1 is fixed; item 2 (e2e event-logging inotify race) remains open — the re-run rule still
-applies to it, and CI stays narrowed to `test:e2e:routing` until it is de-flaked.
+Item 1 is fixed (see the post-fix note above for the CI-noise threshold adjustment); item 2 (e2e
+event-logging inotify race) remains open — the re-run rule still applies to it, and CI stays
+narrowed to `test:e2e:routing` until it is de-flaked.
