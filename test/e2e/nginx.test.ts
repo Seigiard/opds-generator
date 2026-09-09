@@ -48,10 +48,14 @@ describe("nginx integration", () => {
       expect(response.headers.get("location")).toBe("/index.html");
     });
 
-    test("GET /opds redirects to /feed.xml (readers get feeds)", async () => {
+    test("GET /opds serves the root feed as XML (readers get feeds, no 302/html body)", async () => {
       const response = await fetch(`${BASE_URL}/opds`, { redirect: "manual" });
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe("/feed.xml");
+      expect(response.status).toBe(200);
+      const ct = response.headers.get("content-type") || "";
+      expect(ct).toContain("xml");
+      const body = await response.text();
+      expect(body).toContain('<?xml version="1.0"');
+      expect(body).toContain("<feed");
     });
   });
 
@@ -246,10 +250,13 @@ describe("nginx integration", () => {
       expect(response.status).toBe(404);
     });
 
-    test("GET /opds/ (trailing slash) redirects to /feed.xml like /opds", async () => {
+    test("GET /opds/ (trailing slash) serves the root feed as XML like /opds", async () => {
       const response = await fetch(`${BASE_URL}/opds/`, { redirect: "manual" });
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe("/feed.xml");
+      expect(response.status).toBe(200);
+      const ct = response.headers.get("content-type") || "";
+      expect(ct).toContain("xml");
+      const body = await response.text();
+      expect(body).toContain("<feed");
     });
   });
 

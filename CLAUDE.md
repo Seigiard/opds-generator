@@ -191,7 +191,7 @@ Book detail popups use hash + CSS `:target` (works with no JS). `main.js` is pro
 nginx:80 (external)                      Bun:3000 (localhost only)
 ├── / → 302 /index.html (browsers)       ├── POST /events/books ← books watcher
 ├── /<folder>/ → index.html (browsers)   ├── POST /events/data ← data watcher
-├── /opds → 302 /feed.xml (readers)      └── POST /resync ← nginx
+├── /opds → root feed.xml as 200 XML (readers) └── POST /resync ← nginx
 ├── /<folder>/feed.xml → feed (readers)
 ├── /static/* → /app/static
 ├── /resync → auth → proxy

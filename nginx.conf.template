@@ -36,13 +36,20 @@ http {
             return 302 /index.html;
         }
 
-        # /opds redirect to feed.xml
+        # /opds serves the root feed directly (200 XML), no 302: strict OPDS
+        # readers reject the redirect's text/html body with "incorrect content".
         location = /opds {
-            return 302 /feed.xml;
+            root /data;
+            try_files /feed.xml =404;
+            add_header Cache-Control "no-cache";
+            error_page 404 = @check_initializing;
         }
 
         location = /opds/ {
-            return 302 /feed.xml;
+            root /data;
+            try_files /feed.xml =404;
+            add_header Cache-Control "no-cache";
+            error_page 404 = @check_initializing;
         }
 
         # Static assets from /static folder

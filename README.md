@@ -106,7 +106,7 @@ docker compose up -d --build
 | ---------------------- | -------- | -------------------------------------------- |
 | `GET /`                | Browser  | Redirect to /index.html (HTML catalog)       |
 | `GET /{path}/`         | Browser  | Subcatalog rendered as HTML (index.html)     |
-| `GET /opds`            | Reader   | Redirect to /feed.xml                        |
+| `GET /opds`            | Reader   | Root catalog (OPDS feed, 200 XML)            |
 | `GET /feed.xml`        | Reader   | Root catalog (OPDS feed)                     |
 | `GET /{path}/feed.xml` | Reader   | Subcatalog feed                              |
 | `GET /{book}/file`     | Both     | Download book file (symlink)                 |
