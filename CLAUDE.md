@@ -18,6 +18,8 @@ OPDS catalog generator for locally stored ebooks. Watches `/books` directory, ex
 
 ## Task Completion Checklist
 
+Anti-slop is vendored under `tools/oxlint/anti-slop/`. Its `UPSTREAM.md` records the source revision. Update Oxlint and `@oxlint/plugins` together at matching exact versions. The plugin is excluded from application typechecking and formatting.
+
 After completing any task:
 
 ```bash

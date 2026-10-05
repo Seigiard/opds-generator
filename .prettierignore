@@ -10,3 +10,6 @@ ui/vendor/
 
 # Byte-exact golden renders — written by render:golden, diffed by render:check; never normalize
 test/golden/
+
+# Vendored lint rules retain upstream formatting.
+tools/oxlint/anti-slop/
