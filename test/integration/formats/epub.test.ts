@@ -61,10 +61,7 @@ describe("EPUB Handler Integration", () => {
   });
 
   describe("edge cases", () => {
-    for (const extraRootfile of [
-      '<rootfile full-path="other.xml" media-type="application/not-opf"/>',
-      "<rootfile/>",
-    ]) {
+    for (const extraRootfile of ['<rootfile full-path="other.xml" media-type="application/not-opf"/>', "<rootfile/>"]) {
       test(`keeps the real OPF when container rootfiles also contains ${extraRootfile}`, async () => {
         // #given the original EPUB plus an unrelated or empty rootfile candidate
         await withEpubVariant(

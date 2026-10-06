@@ -4,10 +4,7 @@ import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import * as v from "valibot";
 
-export const bookCleanup = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const bookCleanup = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "BookDeleted") return ok([]);
 
   const { parent, name } = event;

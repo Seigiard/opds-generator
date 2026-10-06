@@ -9,18 +9,13 @@ const FOLIATE_DIR = join(import.meta.dir, "../../../ui/vendor/foliate-js");
 // re-review whenever a submodule bump changes the iframe posture or the pdf.js eval
 // setting. See ui/vendor/VENDOR.md.
 describe("vendored foliate-js security posture", () => {
-  test.each(["paginator.js", "fixed-layout.js"])(
-    "%s iframe sandbox attribute is exactly the reviewed token set",
-    async (file) => {
-      const source = await Bun.file(join(FOLIATE_DIR, file)).text();
+  test.each(["paginator.js", "fixed-layout.js"])("%s iframe sandbox attribute is exactly the reviewed token set", async (file) => {
+    const source = await Bun.file(join(FOLIATE_DIR, file)).text();
 
-      const sandboxes = [...source.matchAll(/setAttribute\('sandbox', '([^']*)'\)/g)].map(
-        (m) => m[1],
-      );
+    const sandboxes = [...source.matchAll(/setAttribute\('sandbox', '([^']*)'\)/g)].map((m) => m[1]);
 
-      expect(sandboxes).toEqual(["allow-same-origin allow-scripts"]);
-    },
-  );
+    expect(sandboxes).toEqual(["allow-same-origin allow-scripts"]);
+  });
 
   test("pdf adapter keeps isEvalSupported: false (KTD-6: never 'unsafe-eval')", async () => {
     const source = await Bun.file(join(FOLIATE_DIR, "pdf.js")).text();

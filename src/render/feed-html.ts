@@ -38,10 +38,7 @@ function safeHref(href: string): string {
   if (trimmed.startsWith("#") || trimmed.startsWith("/")) return trimmed;
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
 
-  if (scheme)
-    return scheme[1]!.toLowerCase() === "http" || scheme[1]!.toLowerCase() === "https"
-      ? trimmed
-      : "#";
+  if (scheme) return scheme[1]!.toLowerCase() === "http" || scheme[1]!.toLowerCase() === "https" ? trimmed : "#";
 
   return trimmed;
 }
@@ -61,13 +58,7 @@ export function formatFromMime(type: string): string {
 
   if (t.includes("djvu")) return "DJVU";
 
-  if (
-    t.includes("comicbook") ||
-    t.includes("cbz") ||
-    t.includes("cbr") ||
-    t.includes("7z") ||
-    t.includes("tar")
-  ) {
+  if (t.includes("comicbook") || t.includes("cbz") || t.includes("cbr") || t.includes("7z") || t.includes("tar")) {
     return "Comic";
   }
 
@@ -86,9 +77,7 @@ export function renderHtml(model: FeedModel): string {
   let bookIndex = 0;
 
   const cards = interleave(
-    model.entries.map((entry) =>
-      entry.kind === "folder" ? renderFolder(entry) : renderBook(entry, ++bookIndex),
-    ),
+    model.entries.map((entry) => (entry.kind === "folder" ? renderFolder(entry) : renderBook(entry, ++bookIndex))),
     "\n",
   );
 
@@ -133,11 +122,7 @@ function renderHeader(model: FeedModel): HtmlEscapedString {
     </header>`;
 }
 
-export function renderCover(
-  entry: FeedEntry,
-  src: string | undefined,
-  lazy: boolean,
-): HtmlEscapedString {
+export function renderCover(entry: FeedEntry, src: string | undefined, lazy: boolean): HtmlEscapedString {
   if (src) {
     const loading = lazy ? frag` loading="lazy"` : "";
 

@@ -15,11 +15,7 @@ const DOT_SEGMENT = /^(\.|%2e)+$/i;
  * The returned fetchPath is rebuilt from decoded segments via encodeURIComponent, so
  * no percent-encoding chosen by the attacker survives to the wire.
  */
-export function parseFragment(
-  rawHash: string,
-  viewable: ReadonlySet<string>,
-  bookExtensions: readonly string[],
-): FragmentResult {
+export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bookExtensions: readonly string[]): FragmentResult {
   const raw = rawHash.startsWith("#") ? rawHash.slice(1) : rawHash;
 
   if (!raw.startsWith("/")) return INVALID;
@@ -79,10 +75,7 @@ export function parseFragment(
   // folder sits above the book-data dir, so a trailing book-named dir is dropped too.
   let folderSegments = encoded.slice(0, -1);
 
-  if (
-    folderSegments.length > 0 &&
-    bookExtensions.some((e) => parent.toLowerCase().endsWith(`.${e}`))
-  ) {
+  if (folderSegments.length > 0 && bookExtensions.some((e) => parent.toLowerCase().endsWith(`.${e}`))) {
     folderSegments = folderSegments.slice(0, -1);
   }
 

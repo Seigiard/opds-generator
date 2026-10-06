@@ -2,11 +2,7 @@ import { ok, err, type Result } from "neverthrow";
 import { join, relative } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
-import {
-  encodeUrlPath,
-  formatFolderDescription,
-  normalizeFilenameTitle,
-} from "../../utils/processor.ts";
+import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
 import type { HandlerDeps, FileSystemService } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, INDEX_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
@@ -82,10 +78,7 @@ const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
 
-export const folderMetaSync = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderMetaSyncRequested") return ok([]);
 
   const folderDataDir = event.path;
@@ -117,11 +110,7 @@ export const folderMetaSync = async (
   return generateFeed(deps, normalizedDir, relativePath);
 };
 
-async function generateFeed(
-  deps: HandlerDeps,
-  normalizedDir: string,
-  relativePath: string,
-): Promise<Result<readonly EventType[], Error>> {
+async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePath: string): Promise<Result<readonly EventType[], Error>> {
   deps.logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
   let folderEntries: EntryWithTitle[];
@@ -150,13 +139,11 @@ async function generateFeed(
   const feedOutputPath = join(normalizedDir, FEED_FILE);
   const rawFolderName = relativePath.split("/").pop() || "Catalog";
 
-  const folderName =
-    rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
+  const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
 
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
 
-  const selfHref =
-    relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+  const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
   const model = buildFeedModel({
     id: feedId,
@@ -191,10 +178,7 @@ async function generateFeed(
     if (relativePath !== "") {
       const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);
 
-      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(
-        selfHref,
-        "navigation",
-      );
+      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
 
       const description = formatFolderDescription(folderEntries.length, bookEntries.length);
 

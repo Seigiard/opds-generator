@@ -17,9 +17,7 @@ export class Gridnav {
     this.selector = list.getAttribute("data-element") || ".card__title a";
     this.items = Array.from(list.querySelectorAll<HTMLElement>(this.selector));
 
-    const amount = list.getAttribute("data-amount")
-      ? Number(list.getAttribute("data-amount"))
-      : null;
+    const amount = list.getAttribute("data-amount") ? Number(list.getAttribute("data-amount")) : null;
 
     this.keyMoves = {
       ArrowRight: 1,

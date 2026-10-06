@@ -39,10 +39,7 @@ describe("folderEntryXmlChanged handler", () => {
 
   test("returns only parent FolderMetaSyncRequested event", async () => {
     // #when
-    const result = await folderEntryXmlChanged(
-      folderEntryXmlChangedEvent("/data/Fiction/Author"),
-      deps,
-    );
+    const result = await folderEntryXmlChanged(folderEntryXmlChangedEvent("/data/Fiction/Author"), deps);
 
     // #then
     expect(result.isOk()).toBe(true);
@@ -62,10 +59,7 @@ describe("folderEntryXmlChanged handler", () => {
 
   test("handles deeply nested folders", async () => {
     // #when
-    const result = await folderEntryXmlChanged(
-      folderEntryXmlChangedEvent("/data/Fiction/SciFi/Author"),
-      deps,
-    );
+    const result = await folderEntryXmlChanged(folderEntryXmlChangedEvent("/data/Fiction/SciFi/Author"), deps);
 
     // #then
     expect(result.isOk()).toBe(true);
@@ -75,10 +69,7 @@ describe("folderEntryXmlChanged handler", () => {
 
   test("handles trailing slash in path", async () => {
     // #when
-    const result = await folderEntryXmlChanged(
-      folderEntryXmlChangedEvent("/data/Fiction/Author/"),
-      deps,
-    );
+    const result = await folderEntryXmlChanged(folderEntryXmlChangedEvent("/data/Fiction/Author/"), deps);
 
     // #then
     expect(result.isOk()).toBe(true);

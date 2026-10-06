@@ -53,10 +53,7 @@ describe("FB2 Handler Integration", () => {
         try {
           const source = await Bun.file(join(FIXTURES_DIR, "Test Book - Test Author.fb2")).text();
 
-          const xml = source.replace(
-            /<author>[\s\S]*?<\/author>/,
-            `<author><nickname>${nickname}</nickname></author>`,
-          );
+          const xml = source.replace(/<author>[\s\S]*?<\/author>/, `<author><nickname>${nickname}</nickname></author>`);
 
           if (xml === source) throw new Error("FB2 fixture has no author to replace");
           const path = join(dir, "nickname.fb2");

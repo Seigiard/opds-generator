@@ -14,9 +14,7 @@ export function normalizeFilenameTitle(filename: string): string {
   const hyphens = (filename.match(/-/g) || []).length;
   const underscores = (filename.match(/_/g) || []).length;
 
-  let result = filename
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  let result = filename.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
 
   if (hyphens > underscores) {
     result = result.replace(/-+/g, " ");
@@ -29,10 +27,7 @@ export function normalizeFilenameTitle(filename: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-export function formatFolderDescription(
-  folderCount: number,
-  bookCount: number,
-): string | undefined {
+export function formatFolderDescription(folderCount: number, bookCount: number): string | undefined {
   if (folderCount === 0 && bookCount === 0) return undefined;
 
   if (folderCount === 0) return `📚 ${bookCount}`;

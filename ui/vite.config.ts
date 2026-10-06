@@ -23,11 +23,7 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [
-        postcssRandomFunction(),
-        autoprefixer(),
-        postcssNesting({ edition: "2021", noIsPseudoSelector: true }),
-      ],
+      plugins: [postcssRandomFunction(), autoprefixer(), postcssNesting({ edition: "2021", noIsPseudoSelector: true })],
     },
   },
 });

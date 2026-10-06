@@ -15,11 +15,7 @@ const parser = new XMLParser({
   isArray: (name) => name === "entry" || name === "link" || name === "dc:subject",
 });
 
-const esc = (s: XmlValue) =>
-  String(s ?? "").replace(
-    /[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
-  );
+const esc = (s: XmlValue) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 const FORMAT: [RegExp, string][] = [
   [/epub/, "EPUB"],
@@ -94,10 +90,7 @@ function walk(dir: string) {
   } catch {}
 
   if (hasFeed) {
-    Bun.write(
-      join(dir, "index.html"),
-      renderFeed(require("node:fs").readFileSync(feedPath, "utf8")),
-    );
+    Bun.write(join(dir, "index.html"), renderFeed(require("node:fs").readFileSync(feedPath, "utf8")));
     count++;
   }
 

@@ -3,10 +3,7 @@ import { dirname, relative } from "node:path";
 import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 
-export const folderEntryXmlChanged = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const folderEntryXmlChanged = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderEntryXmlChanged") return ok([]);
 
   const folderDataDir = event.parent;

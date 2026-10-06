@@ -83,8 +83,7 @@ export function entryFromFragment(xml: string): FeedEntry {
 
   const links = toLinks(e.link);
 
-  const findHref = (rel: string): string | undefined =>
-    links.find((l) => l["@_rel"] === rel)?.["@_href"];
+  const findHref = (rel: string): string | undefined => links.find((l) => l["@_rel"] === rel)?.["@_href"];
 
   const acquisitions = links
     .filter((l) => l["@_rel"]?.includes("acquisition"))

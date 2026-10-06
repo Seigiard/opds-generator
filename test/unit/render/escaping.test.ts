@@ -2,19 +2,9 @@ import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 import { XMLValidator } from "fast-xml-parser";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
-import {
-  renderCover,
-  renderDownloads,
-  renderHtml,
-  renderMeta,
-} from "../../../src/render/feed-html.ts";
+import { renderCover, renderDownloads, renderHtml, renderMeta } from "../../../src/render/feed-html.ts";
 import type { FeedEntry, FeedModel } from "../../../src/render/feed-model.ts";
-import {
-  byClass,
-  collectAttributes,
-  flattenElements,
-  parseHtml,
-} from "../../helpers/html-query.ts";
+import { byClass, collectAttributes, flattenElements, parseHtml } from "../../helpers/html-query.ts";
 
 const FEEDS_DIR = join(import.meta.dir, "../../fixtures/feeds");
 
@@ -34,8 +24,7 @@ const renderCassette = async (name: string) => renderHtml(parseFeed(await readFe
 
 const stripDoctype = (html: string) => html.replace(/^<!DOCTYPE html>\s*/i, "");
 
-const hrefLikeAttrs = (html: string) =>
-  collectAttributes(html).filter((a) => a.name === "href" || a.name === "src");
+const hrefLikeAttrs = (html: string) => collectAttributes(html).filter((a) => a.name === "href" || a.name === "src");
 
 describe("escaping contract (hostile cassette)", () => {
   test("zero-JS invariant: no on*= attributes in any cassette output", async () => {
@@ -87,9 +76,7 @@ describe("escaping contract (hostile cassette)", () => {
     const html = await renderCassette("hostile.xml");
 
     // #then it stays inside the alt attribute value; no onmouseover attribute exists
-    const onmouseover = collectAttributes(html).filter(
-      (a) => a.name.toLowerCase() === "onmouseover",
-    );
+    const onmouseover = collectAttributes(html).filter((a) => a.name.toLowerCase() === "onmouseover");
 
     expect(onmouseover).toEqual([]);
   });
@@ -117,9 +104,7 @@ describe("escaping contract (hostile cassette)", () => {
     const html = await renderCassette("hostile.xml");
 
     // #then no href/src attribute survives with a javascript: scheme
-    const dangerous = hrefLikeAttrs(html).filter((a) =>
-      a.value.toLowerCase().startsWith("javascript:"),
-    );
+    const dangerous = hrefLikeAttrs(html).filter((a) => a.value.toLowerCase().startsWith("javascript:"));
 
     expect(dangerous).toEqual([]);
   });
@@ -174,14 +159,8 @@ describe("exported components auto-escape and guard hrefs", () => {
 
   test("renderDownloads: a hostile viewable acquisition emits no View link — the fragment never carries a scheme payload", () => {
     // #given viewable-format acquisitions with javascript:/data: hrefs
-    for (const href of [
-      "javascript:alert(1)",
-      "data:text/html,<script>1</script>",
-      "https://evil.example/x.epub",
-    ]) {
-      const downloads = String(
-        renderDownloads(bookEntry({ acquisitions: [{ href, type: "application/epub+zip" }] })),
-      );
+    for (const href of ["javascript:alert(1)", "data:text/html,<script>1</script>", "https://evil.example/x.epub"]) {
+      const downloads = String(renderDownloads(bookEntry({ acquisitions: [{ href, type: "application/epub+zip" }] })));
 
       // #then no View link is rendered at all — only root-relative book paths reach the reader fragment
       expect(downloads).not.toContain("popup__view-btn");
@@ -219,11 +198,7 @@ describe("exported components auto-escape and guard hrefs", () => {
     });
 
     test(`renderDownloads: neutralizes a ${label}-obfuscated javascript: acquisition href`, () => {
-      const downloads = String(
-        renderDownloads(
-          bookEntry({ acquisitions: [{ href: payload, type: "application/epub+zip" }] }),
-        ),
-      );
+      const downloads = String(renderDownloads(bookEntry({ acquisitions: [{ href: payload, type: "application/epub+zip" }] })));
 
       expect(downloads).toContain('href="#"');
       expect(downloads.toLowerCase()).not.toContain("script:alert");

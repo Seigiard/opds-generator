@@ -210,8 +210,7 @@ describe("Cascade Flow Integration", () => {
     const second = await readFile(join(libData, "feed.xml"), "utf-8");
 
     // #then output is stable modulo volatile <updated> timestamps
-    const normalize = (xml: string) =>
-      xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+    const normalize = (xml: string) => xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
 
     expect(normalize(first)).toBe(normalize(second));
     // and no XSLT stylesheet PI is emitted (post-flip); acquisition kind is present
@@ -220,9 +219,7 @@ describe("Cascade Flow Integration", () => {
     // and fragments are spliced verbatim (book after folder)
     expect(first).toContain("urn:opds:book:book.epub");
     expect(first).toContain('<link rel="subsection" href="/lib/Sub/feed.xml"');
-    expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(
-      first.indexOf("urn:opds:book:book.epub"),
-    );
+    expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(first.indexOf("urn:opds:book:book.epub"));
     // and the subfolder's own _entry.xml is untouched by the parent sync
     expect(subEntryAfter).toBe(subEntry);
   });
@@ -294,10 +291,7 @@ describe("Cascade Flow Integration", () => {
     };
 
     // #when folderMetaSync runs
-    const result = await folderMetaSync(
-      { _tag: "FolderMetaSyncRequested", path: libData },
-      failingDeps,
-    );
+    const result = await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, failingDeps);
 
     // #then the feed is written, the failure is logged, and the handler still succeeds
     expect(result.isOk()).toBe(true);
@@ -357,10 +351,7 @@ describe("Cascade Flow Integration", () => {
     const rootFeed = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
     const authorFeed = await readFile(join(DATA_DIR, "Author", "feed.xml"), "utf-8");
 
-    const bookEntry = await readFile(
-      join(DATA_DIR, "Author", "Test Book - Test Author.epub", "entry.xml"),
-      "utf-8",
-    );
+    const bookEntry = await readFile(join(DATA_DIR, "Author", "Test Book - Test Author.epub", "entry.xml"), "utf-8");
 
     // Root feed has navigation link to Author
     expect(rootFeed).toContain("Author");

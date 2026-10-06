@@ -3,16 +3,7 @@ import * as v from "valibot";
 
 const POPUP_HASH = /^#book-/;
 
-const NAV_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "KeyW",
-  "KeyA",
-  "KeyS",
-  "KeyD",
-]);
+const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 function popupIsOpen(): boolean {
   return POPUP_HASH.test(location.hash);
@@ -97,8 +88,7 @@ export function initGlobal(): void {
 
     if (target instanceof Element && target.matches(selector)) return;
 
-    if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]"))
-      return;
+    if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]")) return;
     const first = grid.querySelector<HTMLElement>(selector);
 
     if (first) {

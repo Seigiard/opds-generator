@@ -32,9 +32,7 @@ async function warmup(fn: () => Promise<void>, count = 200): Promise<void> {
 function measureLeak(label: string, before: number, after: number, iters: number): number {
   const totalMb = after - before;
   const perIterKb = (totalMb * 1024) / iters;
-  console.log(
-    `  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iters} iters)`,
-  );
+  console.log(`  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iters} iters)`);
 
   return perIterKb;
 }

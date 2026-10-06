@@ -8,15 +8,7 @@ export interface XmlFields {
 }
 
 const valueSchema: v.GenericSchema<XmlValue> = v.lazy(() =>
-  v.union([
-    v.string(),
-    v.number(),
-    v.boolean(),
-    v.null(),
-    v.undefined(),
-    v.array(valueSchema),
-    v.record(v.string(), valueSchema),
-  ]),
+  v.union([v.string(), v.number(), v.boolean(), v.null(), v.undefined(), v.array(valueSchema), v.record(v.string(), valueSchema)]),
 );
 
 export const xmlFieldsSchema = v.record(v.string(), valueSchema);

@@ -20,11 +20,7 @@ const ITERATIONS = 100;
 
 const MAX_LEAK_KB = 5;
 
-const BOOK_FILES = [
-  "Test Book - Test Author.pdf",
-  "bobby_make_believe_sample.cbz",
-  "Test Book - Test Author.epub",
-];
+const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
 
 const asyncDeps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
@@ -136,9 +132,7 @@ describe("Full handler memory leak (target: 0 KB/iter)", () => {
     const after = getRssMb();
     const totalMb = after - before;
     const perIterKb = (totalMb * 1024) / ITERATIONS;
-    console.log(
-      `  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`,
-    );
+    console.log(`  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`);
     expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
   }, 180000);
 });

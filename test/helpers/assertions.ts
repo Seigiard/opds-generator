@@ -69,12 +69,7 @@ export function assertContainsElement(xml: string, elementName: string): void {
   }
 }
 
-export function assertXmlAttribute(
-  xml: string,
-  element: string,
-  attr: string,
-  value: string,
-): void {
+export function assertXmlAttribute(xml: string, element: string, attr: string, value: string): void {
   const regex = new RegExp(`<${element}[^>]*${attr}=["']${value}["']`);
 
   if (!regex.test(xml)) {

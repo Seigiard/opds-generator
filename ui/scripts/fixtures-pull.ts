@@ -38,9 +38,7 @@ function describe(xml: string, path: string): Omit<Cassette, "path" | "relative"
   const titles = [...xml.matchAll(/<title>([\s\S]*?)<\/title>/g)].map((m) => m[1] ?? "");
   const books = [...xml.matchAll(/<entry>[\s\S]*?<\/entry>/g)].map((m) => m[0]);
 
-  const hasBookWithoutCover = books.some(
-    (b) => b.includes("acquisition") && !b.includes("opds-spec.org/image"),
-  );
+  const hasBookWithoutCover = books.some((b) => b.includes("acquisition") && !b.includes("opds-spec.org/image"));
 
   return {
     entries,
@@ -51,11 +49,7 @@ function describe(xml: string, path: string): Omit<Cassette, "path" | "relative"
   };
 }
 
-function pick(
-  cassettes: Cassette[],
-  predicate: (c: Cassette) => boolean,
-  rank: (c: Cassette) => number,
-): Cassette | undefined {
+function pick(cassettes: Cassette[], predicate: (c: Cassette) => boolean, rank: (c: Cassette) => number): Cassette | undefined {
   return cassettes
     .filter(predicate)
     .sort((a, b) => rank(b) - rank(a) || a.relative.localeCompare(b.relative))
@@ -108,9 +102,7 @@ async function main(): Promise<void> {
     written++;
   }
 
-  console.log(
-    `fixtures:pull wrote ${written} cassette(s); edge-cases.xml and hostile.xml are hand-authored and left untouched`,
-  );
+  console.log(`fixtures:pull wrote ${written} cassette(s); edge-cases.xml and hostile.xml are hand-authored and left untouched`);
 }
 
 await main();
