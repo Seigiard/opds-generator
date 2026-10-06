@@ -1,5 +1,10 @@
 import { describe, test, expect } from "bun:test";
-import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../../src/utils/opds.ts";
+import {
+  stripXmlDeclaration,
+  naturalSort,
+  extractTitle,
+  extractAuthor,
+} from "../../../src/utils/opds.ts";
 
 describe("utils/opds", () => {
   describe("stripXmlDeclaration", () => {
@@ -82,6 +87,7 @@ describe("utils/opds", () => {
           Multiline Title
         </title>
       </entry>`;
+
       expect(extractTitle(xml)).toBe("Multiline Title");
     });
 
@@ -91,7 +97,9 @@ describe("utils/opds", () => {
     });
 
     test("decodes all standard entities", () => {
-      const xml = "<entry><title>&lt;tag&gt; &quot;quoted&quot; &apos;apostrophe&apos;</title></entry>";
+      const xml =
+        "<entry><title>&lt;tag&gt; &quot;quoted&quot; &apos;apostrophe&apos;</title></entry>";
+
       expect(extractTitle(xml)).toBe("<tag> \"quoted\" 'apostrophe'");
     });
 
@@ -136,6 +144,7 @@ describe("utils/opds", () => {
       const xml = `<entry><author>
         <name>  Spaced Author  </name>
       </author></entry>`;
+
       expect(extractAuthor(xml)).toBe("Spaced Author");
     });
 

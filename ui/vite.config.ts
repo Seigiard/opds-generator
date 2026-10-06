@@ -5,6 +5,7 @@ import autoprefixer from "autoprefixer";
 import postcssNesting from "postcss-nesting";
 
 const repoRoot = resolve(import.meta.dirname, "..");
+
 const foliateBase = `/@fs/${resolve(import.meta.dirname, "vendor", "foliate-js")}`;
 
 // The reader smoke page (reader.html) loads the vendored foliate runtime straight from
@@ -22,7 +23,11 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [postcssRandomFunction(), autoprefixer(), postcssNesting({ edition: "2021", noIsPseudoSelector: true })],
+      plugins: [
+        postcssRandomFunction(),
+        autoprefixer(),
+        postcssNesting({ edition: "2021", noIsPseudoSelector: true }),
+      ],
     },
   },
 });

@@ -1,6 +1,13 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
-import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
+import {
+  createXmlParser,
+  getString,
+  getFirstString,
+  getStringArray,
+  cleanDescription,
+  parseDate,
+} from "./utils.ts";
 import { logHandlerError } from "../logging/index.ts";
 
 const xmlParser = createXmlParser(["subject", "creator", "item", "meta"]);
@@ -50,12 +57,14 @@ interface ContainerXML {
 
 function findOpfPath(containerData: ContainerXML): string | undefined {
   const rootfiles = containerData.container?.rootfiles?.rootfile;
+
   if (!rootfiles) return undefined;
 
   const files = Array.isArray(rootfiles) ? rootfiles : [rootfiles];
 
   // Prefer OPF by media-type
   const opf = files.find((f) => f["@_media-type"] === "application/oebps-package+xml");
+
   if (opf?.["@_full-path"]) return opf["@_full-path"];
 
   // Fallback to first with full-path
@@ -64,6 +73,7 @@ function findOpfPath(containerData: ContainerXML): string | undefined {
 
 function extractMetadata(opfData: OPFPackage): BookMetadata {
   const meta = opfData.package.metadata;
+
   return {
     title: getString(meta.title) ?? "",
     author: getFirstString(meta.creator),
@@ -83,22 +93,30 @@ function findCoverPath(opfData: OPFPackage, opfDir: string): string | undefined 
   // 1. EPUB 2.0: <meta name="cover" content="cover-id"/>
   const metas = meta.meta ?? [];
   const coverMeta = metas.find((m) => m["@_name"] === "cover");
+
   if (coverMeta) {
     const coverId = coverMeta["@_content"];
     const item = manifest.find((i) => i["@_id"] === coverId);
+
     if (item) return opfDir + item["@_href"];
   }
 
   // 2. EPUB 3.0: <item properties="cover-image"/>
   const coverItem = manifest.find((i) => i["@_properties"]?.includes("cover-image"));
+
   if (coverItem) return opfDir + coverItem["@_href"];
 
   return undefined;
 }
 
-async function findCoverWithFallback(opfData: OPFPackage, opfDir: string, filePath: string): Promise<string | undefined> {
+async function findCoverWithFallback(
+  opfData: OPFPackage,
+  opfDir: string,
+  filePath: string,
+): Promise<string | undefined> {
   // 1. Try metadata (EPUB 2.0 + 3.0)
   const metaCover = findCoverPath(opfData, opfDir);
+
   if (metaCover) return metaCover;
 
   // 2. Search by filename
@@ -107,27 +125,33 @@ async function findCoverWithFallback(opfData: OPFPackage, opfDir: string, filePa
 
   // 2a. File named "cover.*"
   const namedCover = images.find((e) => /cover\.(jpe?g|png|gif|webp)$/i.test(e.toLowerCase()));
+
   if (namedCover) return namedCover;
 
   // 2b. File containing "cover" in name
   const containsCover = images.find((e) => e.toLowerCase().includes("cover"));
+
   if (containsCover) return containsCover;
 
   // 3. First image as last fallback
   const sorted = images.sort();
+
   return sorted[0];
 }
 
 async function createEpubHandler(filePath: string): Promise<FormatHandler | null> {
   try {
     const container = await readEntryText(filePath, "META-INF/container.xml");
+
     if (!container) return null;
 
     const containerData = xmlParser.parse(container) as ContainerXML;
     const opfPath = findOpfPath(containerData);
+
     if (!opfPath) return null;
 
     const opf = await readEntryText(filePath, opfPath);
+
     if (!opf) return null;
 
     const opfData = xmlParser.parse(opf) as OPFPackage;
@@ -142,11 +166,13 @@ async function createEpubHandler(filePath: string): Promise<FormatHandler | null
       },
       async getCover() {
         if (!coverPath) return null;
+
         return readEntry(filePath, coverPath);
       },
     };
   } catch (error) {
     logHandlerError("EPUB", filePath, error);
+
     return null;
   }
 }

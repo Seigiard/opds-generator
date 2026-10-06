@@ -1,6 +1,7 @@
 import type { LogLevel, LogEntry, LogContext } from "./types.ts";
 
 const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
+
 const currentLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) || "info";
 
 function shouldLog(level: LogLevel): boolean {
@@ -37,6 +38,7 @@ export const log = {
     if (!shouldLog("error")) return;
 
     const errorCtx: LogContext = { ...ctx };
+
     if (err instanceof Error) {
       errorCtx.error = err.message;
       errorCtx.error_stack = err.stack;
@@ -53,6 +55,7 @@ export const log = {
 export function logHandlerError(tag: string, filePath: string, error: unknown): void {
   if (error instanceof Error && error.message.includes("Executable not found")) {
     log.debug(tag, "External tool not available", { file: filePath, tool: error.message });
+
     return;
   }
 

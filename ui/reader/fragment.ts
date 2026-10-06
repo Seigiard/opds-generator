@@ -15,28 +15,40 @@ const DOT_SEGMENT = /^(\.|%2e)+$/i;
  * The returned fetchPath is rebuilt from decoded segments via encodeURIComponent, so
  * no percent-encoding chosen by the attacker survives to the wire.
  */
-export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bookExtensions: readonly string[]): FragmentResult {
+export function parseFragment(
+  rawHash: string,
+  viewable: ReadonlySet<string>,
+  bookExtensions: readonly string[],
+): FragmentResult {
   const raw = rawHash.startsWith("#") ? rawHash.slice(1) : rawHash;
+
   if (!raw.startsWith("/")) return INVALID;
+
   if (raw.startsWith("//")) return INVALID;
+
   if (raw.includes("\\")) return INVALID;
 
   let decoded: string;
+
   try {
     decoded = decodeURIComponent(raw);
   } catch {
     return INVALID;
   }
+
   if (decoded.includes("\\")) return INVALID;
 
   const segments = decoded.slice(1).split("/");
+
   if (segments.length < 2) return INVALID;
+
   for (const segment of segments) {
     if (segment === "" || DOT_SEGMENT.test(segment)) return INVALID;
   }
 
   const extOf = (name: string): string | null => {
     const dot = name.lastIndexOf(".");
+
     return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : null;
   };
 
@@ -49,6 +61,7 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
   const leafExt = extOf(leaf);
   const isLegacyFileLeaf = leafExt === null && leaf === "file";
   const ext = leafExt ?? (isLegacyFileLeaf ? extOf(parent) : null);
+
   if (ext === null) return INVALID;
   const filename = isLegacyFileLeaf ? parent : leaf;
 
@@ -59,16 +72,23 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
   // the origin it is given to, byte-identical, or it never reaches fetch().
   const base = "https://reader.invalid";
   const url = new URL(fetchPath, base);
+
   if (url.origin !== base || url.pathname !== fetchPath) return INVALID;
 
   // The data mirror doubles the book name (/folder/Book.epub/Book.epub): the browsable
   // folder sits above the book-data dir, so a trailing book-named dir is dropped too.
   let folderSegments = encoded.slice(0, -1);
-  if (folderSegments.length > 0 && bookExtensions.some((e) => parent.toLowerCase().endsWith(`.${e}`))) {
+
+  if (
+    folderSegments.length > 0 &&
+    bookExtensions.some((e) => parent.toLowerCase().endsWith(`.${e}`))
+  ) {
     folderSegments = folderSegments.slice(0, -1);
   }
+
   const folderPath = folderSegments.length > 0 ? `/${folderSegments.join("/")}/` : "/";
 
   if (!viewable.has(ext)) return { kind: "unsupported", folderPath, ext };
+
   return { kind: "ok", fetchPath, folderPath, filename, ext };
 }

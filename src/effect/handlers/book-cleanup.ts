@@ -3,7 +3,10 @@ import { dirname, join, relative } from "node:path";
 import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 
-export const bookCleanup = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
+export const bookCleanup = async (
+  event: EventType,
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "BookDeleted") return ok([]);
 
   const { parent, name } = event;
@@ -25,5 +28,6 @@ export const bookCleanup = async (event: EventType, deps: HandlerDeps): Promise<
 
   deps.logger.info("BookCleanup", "Done", { path: relativePath });
   const parentDataDir = dirname(bookDataDir);
+
   return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const);
 };

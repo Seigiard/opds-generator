@@ -36,11 +36,17 @@ const createMockLogger = (): MockLogger => ({
 });
 
 const mockFs = createMockFs();
+
 const mockLogger = createMockLogger();
 
 const asyncDeps: HandlerDeps = {
   config: { filesPath: "/test/books", dataPath: "/test/data", port: 8080, reconcileInterval: 1800 },
-  logger: { info: (tag, msg) => mockLogger.infoCalls.push({ tag, msg }), warn: () => {}, error: () => {}, debug: () => {} },
+  logger: {
+    info: (tag, msg) => mockLogger.infoCalls.push({ tag, msg }),
+    warn: () => {},
+    error: () => {},
+    debug: () => {},
+  },
   fs: {
     mkdir: async (path, options) => {
       mockFs.mkdirCalls.push({ path, options });
@@ -124,9 +130,11 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
   describe("sync flow simulation", () => {
     test("processes multiple folders sequentially", async () => {
       const folders = ["Fiction", "NonFiction", "Comics"];
+
       for (const folder of folders) {
         await folderSync(folderCreatedEvent("/test/books/", folder), asyncDeps);
       }
+
       const entryWrites = mockFs.writeCalls.filter((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrites).toHaveLength(3);
     });

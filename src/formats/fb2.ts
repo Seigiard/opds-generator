@@ -43,33 +43,44 @@ interface FB2Document {
 function formatAuthor(author: FB2Author): string {
   const parts = [author["first-name"], author["middle-name"], author["last-name"]];
   const name = parts.filter(Boolean).join(" ");
+
   return name || author.nickname || "";
 }
 
 function extractCoverId(href: string | undefined): string | undefined {
   if (!href) return undefined;
+
   return href.startsWith("#") ? href.slice(1) : href;
 }
 
 function extractTextFromNode(node: unknown): string {
   if (!node) return "";
+
   if (typeof node === "string") return node;
+
   if (typeof node === "number") return String(node);
+
   if (Array.isArray(node)) return node.map(extractTextFromNode).join(" ");
+
   if (typeof node === "object") {
     const texts: string[] = [];
+
     for (const value of Object.values(node as Record<string, unknown>)) {
       const text = extractTextFromNode(value);
+
       if (text) texts.push(text);
     }
+
     return texts.join(" ");
   }
+
   return "";
 }
 
 function getAnnotationText(annotation: unknown): string | undefined {
   if (!annotation) return undefined;
   const text = extractTextFromNode(annotation).trim();
+
   return text || undefined;
 }
 
@@ -78,7 +89,9 @@ function extractMetadata(doc: FB2Document): BookMetadata {
   const pub = doc.FictionBook.description?.["publish-info"];
 
   const dateVal = info?.date;
-  const dateStr = typeof dateVal === "object" ? (dateVal?.["@_value"] ?? dateVal?.["#text"]) : dateVal;
+
+  const dateStr =
+    typeof dateVal === "object" ? (dateVal?.["@_value"] ?? dateVal?.["#text"]) : dateVal;
 
   return {
     title: getString(info?.["book-title"]) ?? "",
@@ -95,10 +108,12 @@ function extractMetadata(doc: FB2Document): BookMetadata {
 function getCoverBuffer(doc: FB2Document, coverId: string): Buffer | null {
   const binaries = doc.FictionBook.binary ?? [];
   const cover = binaries.find((b) => b["@_id"] === coverId);
+
   if (!cover?.["#text"]) return null;
 
   try {
     const base64 = cover["#text"].replace(/\s/g, "");
+
     return Buffer.from(base64, "base64");
   } catch {
     return null;
@@ -111,7 +126,9 @@ async function readFb2Content(filePath: string): Promise<string | null> {
   if (ext === "fbz" || filePath.toLowerCase().endsWith(".fb2.zip")) {
     const entries = await listEntries(filePath);
     const fb2Entry = entries.find((e) => e.toLowerCase().endsWith(".fb2"));
+
     if (!fb2Entry) return null;
+
     return readEntryText(filePath, fb2Entry);
   }
 
@@ -121,6 +138,7 @@ async function readFb2Content(filePath: string): Promise<string | null> {
 async function createFb2Handler(filePath: string): Promise<FormatHandler | null> {
   try {
     const content = await readFb2Content(filePath);
+
     if (!content) return null;
 
     const doc = xmlParser.parse(content) as FB2Document;
@@ -137,11 +155,13 @@ async function createFb2Handler(filePath: string): Promise<FormatHandler | null>
       },
       async getCover() {
         if (!coverId) return null;
+
         return getCoverBuffer(doc, coverId);
       },
     };
   } catch (error) {
     logHandlerError("FB2", filePath, error);
+
     return null;
   }
 }

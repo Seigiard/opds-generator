@@ -1,7 +1,17 @@
 import { Gridnav } from "./gridnav.ts";
 
 const POPUP_HASH = /^#book-/;
-const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
+
+const NAV_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+]);
 
 function popupIsOpen(): boolean {
   return POPUP_HASH.test(location.hash);
@@ -20,20 +30,24 @@ let closing = false;
 
 function closePopup(): void {
   if (!popupIsOpen() || closing) return;
+
   if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
     // A deep-link entry has nothing behind it. location.replace navigates without
     // adding a history entry; empty-fragment navigation resets scroll, so restore it.
     const { scrollX, scrollY } = window;
     location.replace("#");
     scrollTo(scrollX, scrollY);
+
     return;
   }
+
   closing = true;
   history.back();
 }
 
 function popupDialog(id: string): HTMLDialogElement | null {
   const el = id ? document.getElementById(id) : null;
+
   return el instanceof HTMLDialogElement && el.classList.contains("popup") ? el : null;
 }
 
@@ -55,6 +69,7 @@ function syncPopup(): void {
   if (open && open !== target) {
     const closedId = open.id;
     open.close();
+
     if (!target) restoreTrigger(closedId);
   }
 
@@ -72,12 +87,16 @@ export function initGlobal(): void {
   document.addEventListener("keydown", (e) => {
     if (!NAV_KEYS.has(e.code) || popupIsOpen()) return;
     const grid = document.querySelector<HTMLElement>(".books-grid");
+
     if (!grid) return;
     const selector = grid.getAttribute("data-element") || ".card__title a";
     const target = e.target as HTMLElement;
+
     if (target.matches?.(selector)) return;
+
     if (target.closest?.("input, textarea, select, [contenteditable]")) return;
     const first = grid.querySelector<HTMLElement>(selector);
+
     if (first) {
       e.preventDefault();
       first.focus();
@@ -86,6 +105,7 @@ export function initGlobal(): void {
 
   document.addEventListener("click", (e) => {
     const close = (e.target as HTMLElement).closest?.(".popup__close-button");
+
     if (close) {
       e.preventDefault();
       closePopup();

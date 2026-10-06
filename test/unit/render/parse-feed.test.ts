@@ -4,10 +4,20 @@ import { parseFeed } from "../../../src/render/parse-feed.ts";
 import { renderXml } from "../../../src/render/feed-xml.ts";
 
 const FEEDS_DIR = join(import.meta.dir, "../../fixtures/feeds");
-const REAL_CASSETTES = ["root.xml", "nonfiction-cyrillic.xml", "cyrillic-book.xml", "large-folder.xml", "deep-nested.xml"];
+
+const REAL_CASSETTES = [
+  "root.xml",
+  "nonfiction-cyrillic.xml",
+  "cyrillic-book.xml",
+  "large-folder.xml",
+  "deep-nested.xml",
+];
 
 const readFeed = (name: string) => Bun.file(join(FEEDS_DIR, name)).text();
-const normalizeUpdated = (xml: string) => xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+
+const normalizeUpdated = (xml: string) =>
+  xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+
 const stripStylesheetPi = (xml: string) => xml.replace(/^\s*<\?xml-stylesheet[^>]*\?>\n/m, "");
 
 describe("parseFeed", () => {
@@ -57,6 +67,7 @@ describe("parseFeed", () => {
     <link rel="http://opds-spec.org/acquisition/open-access" href="/a/file" type="application/pdf"/>
   </entry>
 </feed>`;
+
     // #when parsed
     const model = parseFeed(xml);
     // #then the attributed entry is not silently dropped

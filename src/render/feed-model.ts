@@ -1,7 +1,9 @@
 import { createXmlParser, getString, getStringArray } from "../formats/utils.ts";
 
 const IMAGE_REL = "http://opds-spec.org/image";
+
 const THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail";
+
 const SUBSECTION_REL = "subsection";
 
 export interface AcquisitionLink {
@@ -50,11 +52,13 @@ const entryParser = createXmlParser(["link", "subject"]);
 
 export function toLinks(value: unknown): RawLink[] {
   if (!value) return [];
+
   return (Array.isArray(value) ? value : [value]) as RawLink[];
 }
 
 export function entryFromFragment(xml: string): FeedEntry {
   let e: Record<string, unknown>;
+
   try {
     const parsed = entryParser.parse(xml) as { entry?: Record<string, unknown> };
     e = parsed.entry ?? {};
@@ -65,7 +69,10 @@ export function entryFromFragment(xml: string): FeedEntry {
   }
 
   const links = toLinks(e.link);
-  const findHref = (rel: string): string | undefined => links.find((l) => l["@_rel"] === rel)?.["@_href"];
+
+  const findHref = (rel: string): string | undefined =>
+    links.find((l) => l["@_rel"] === rel)?.["@_href"];
+
   const acquisitions = links
     .filter((l) => l["@_rel"]?.includes("acquisition"))
     .map((l) => ({ href: l["@_href"] ?? "", type: l["@_type"] ?? "" }))
@@ -74,7 +81,10 @@ export function entryFromFragment(xml: string): FeedEntry {
   const subsectionHref = findHref(SUBSECTION_REL);
   const kind: FeedEntry["kind"] = subsectionHref ? "folder" : "book";
 
-  const author = e.author && typeof e.author === "object" ? getString((e.author as { name?: unknown }).name) : undefined;
+  const author =
+    e.author && typeof e.author === "object"
+      ? getString((e.author as { name?: unknown }).name)
+      : undefined;
 
   return {
     xml,

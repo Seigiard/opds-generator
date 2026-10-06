@@ -13,7 +13,11 @@ const parser = new XMLParser({
   isArray: (name) => name === "entry" || name === "link" || name === "dc:subject",
 });
 
-const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const esc = (s: unknown) =>
+  String(s ?? "").replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
+  );
 
 const FORMAT: [RegExp, string][] = [
   [/epub/, "EPUB"],
@@ -25,24 +29,31 @@ const FORMAT: [RegExp, string][] = [
   [/comicbook|cbz|cbr|7z|tar/, "Comic"],
   [/text\/plain/, "TXT"],
 ];
+
 const fmt = (type = "") => FORMAT.find(([re]) => re.test(type))?.[1] ?? "Download";
 
 type Link = { "@_rel"?: string; "@_href"?: string; "@_type"?: string };
+
 const links = (o: any): Link[] => (o?.link ?? []) as Link[];
+
 const rel = (o: any, r: string) => links(o).find((l) => l["@_rel"] === r);
 
 function renderEntry(e: any): string {
   const title = esc(e.title);
   const sub = rel(e, "subsection");
+
   if (sub) {
     const dirHref = (sub["@_href"] ?? "").replace(/feed\.xml$/, "");
+
     return `<div><article class="card card--folder">
       ${`<div class="book" aria-hidden="true"><div class="book__cover"><span>${title}</span></div></div>`.repeat(3)}
       <div class="card__info"><h3 class="card__title"><a href="${esc(dirHref)}">${title}</a></h3>
       ${e.summary ? `<p>${esc(e.summary)}</p>` : ""}</div></article></div>`;
   }
+
   const thumb = rel(e, "http://opds-spec.org/image/thumbnail");
   const acq = links(e).filter((l) => (l["@_rel"] ?? "").includes("acquisition"));
+
   return `<div><article class="card card--book">
     <div class="book" aria-hidden="true"><div class="book__cover">
       ${thumb ? `<img src="${esc(thumb["@_href"])}" alt="${title}" loading="lazy"/>` : `<span>${title}</span>`}
@@ -59,6 +70,7 @@ function renderFeed(xml: string): string {
   const start = rel(feed, "start")?.["@_href"];
   const self = rel(feed, "self")?.["@_href"];
   const isRoot = !start || start === self;
+
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>${title}</title><link rel="stylesheet" href="/static/style.css"/></head><body>
@@ -70,20 +82,30 @@ ${isRoot ? "" : `<a class="header__home" href="/" aria-label="Home"><svg xmlns="
 }
 
 let count = 0;
+
 function walk(dir: string) {
   const feedPath = join(dir, "feed.xml");
   let hasFeed = false;
+
   try {
     hasFeed = lstatSync(feedPath).isFile();
   } catch {}
+
   if (hasFeed) {
-    Bun.write(join(dir, "index.html"), renderFeed(require("node:fs").readFileSync(feedPath, "utf8")));
+    Bun.write(
+      join(dir, "index.html"),
+      renderFeed(require("node:fs").readFileSync(feedPath, "utf8")),
+    );
     count++;
   }
+
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
+
     if (lstatSync(p).isDirectory()) walk(p);
   }
 }
+
 walk(DATA);
+
 console.log(`rendered ${count} index.html`);

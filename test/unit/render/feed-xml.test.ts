@@ -81,6 +81,7 @@ describe("renderXml", () => {
   <id>urn:opds:book:dollar</id>
   <title>Price $&amp; Value $' $\`</title>
 </entry>`;
+
     // #when rendered
     const xml = renderXml(rootModel([fragment]));
     // #then the fragment survives unmangled
@@ -97,6 +98,7 @@ describe("renderXml", () => {
       startHref: "/feed.xml",
       fragments: [BOOK_FRAGMENT],
     });
+
     const xml = renderXml(model);
     expect(xml).toContain('<link rel="self" href="/pdf/feed.xml"');
     expect(xml).toContain("kind=acquisition");
@@ -116,7 +118,9 @@ describe("entryFromFragment", () => {
     expect(entry.subjects).toEqual(["test"]);
     expect(entry.cover).toBe("/manual-test.pdf/cover.jpg");
     expect(entry.thumbnail).toBe("/manual-test.pdf/thumb.jpg");
-    expect(entry.acquisitions).toEqual([{ href: "/manual-test.pdf/file", type: "application/pdf" }]);
+    expect(entry.acquisitions).toEqual([
+      { href: "/manual-test.pdf/file", type: "application/pdf" },
+    ]);
     expect(entry.xml).toBe(BOOK_FRAGMENT);
   });
 
@@ -149,6 +153,7 @@ describe("entryFromFragment", () => {
   <dc:subject>classic</dc:subject>
   <link rel="http://opds-spec.org/acquisition/open-access" href="/x/file" type="application/epub+zip"/>
 </entry>`;
+
     const entry = entryFromFragment(fragment);
     expect(entry.subjects).toEqual(["fiction", "classic"]);
   });

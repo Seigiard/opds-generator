@@ -16,7 +16,12 @@ import type { EventType } from "../../../src/effect/types.ts";
 
 function createTestContext(): AppContext {
   return {
-    config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
+    config: {
+      filesPath: "/test/files",
+      dataPath: "/test/data",
+      port: 3000,
+      reconcileInterval: 1800,
+    },
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
     fs: {
       mkdir: async () => {},
@@ -33,7 +38,11 @@ function createTestContext(): AppContext {
     queue: new SimpleQueue<EventType>(),
     handlers: (() => {
       const map = new Map<string, any>();
-      return { get: (tag: string) => map.get(tag), register: (tag: string, handler: any) => map.set(tag, handler) };
+
+      return {
+        get: (tag: string) => map.get(tag),
+        register: (tag: string, handler: any) => map.set(tag, handler),
+      };
     })(),
   };
 }
@@ -52,6 +61,7 @@ describe("Queue and Consumer Integration", () => {
 
     ctx.handlers.register("FolderMetaSyncRequested", async (event) => {
       processedEvents.push((event as { path: string }).path);
+
       return ok([]);
     });
 
@@ -86,7 +96,13 @@ describe("Queue and Consumer Integration", () => {
     ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
 
     expect(ctx.queue.size).toBe(2);
-    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
-    expect(await ctx.queue.take()).toEqual({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    expect(await ctx.queue.take()).toEqual({
+      _tag: "FolderMetaSyncRequested",
+      path: "/shared/other",
+    });
+    expect(await ctx.queue.take()).toEqual({
+      _tag: "FolderMetaSyncRequested",
+      path: "/shared/parent",
+    });
   });
 });

@@ -6,7 +6,9 @@ import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
 
 function classifyDataEvent(raw: RawDataEvent): EventType {
   if (raw.name === ENTRY_FILE) return { _tag: "EntryXmlChanged", parent: raw.parent };
+
   if (raw.name === FOLDER_ENTRY_FILE) return { _tag: "FolderEntryXmlChanged", parent: raw.parent };
+
   return { _tag: "Ignored" };
 }
 
@@ -34,6 +36,7 @@ export function adaptDataEvent(raw: RawDataEvent, dedup: DeduplicationService): 
       event_tag: "Ignored",
       path,
     });
+
     return null;
   }
 

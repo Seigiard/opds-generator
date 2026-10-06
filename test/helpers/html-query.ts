@@ -29,11 +29,14 @@ export function parseHtml(html: string): HtmlNode[] {
 /** Depth-first, document-order list of every element under `roots`. */
 export function allElements(roots: HtmlNode[]): HtmlNode[] {
   const out: HtmlNode[] = [];
+
   const visit = (node: HtmlNode): void => {
     out.push(node);
     node.children.forEach(visit);
   };
+
   roots.forEach(visit);
+
   return out;
 }
 
@@ -46,8 +49,12 @@ export function byClass(roots: HtmlNode[], className: string): HtmlNode[] {
 }
 
 /** All attribute name/value pairs across every element, in document order. */
-export function collectAttributes(html: string): Array<{ name: string; value: string; tag: string }> {
-  return flattenElements(html).flatMap((el) => Object.entries(el.attrs).map(([name, value]) => ({ name, value, tag: el.tag })));
+export function collectAttributes(
+  html: string,
+): Array<{ name: string; value: string; tag: string }> {
+  return flattenElements(html).flatMap((el) =>
+    Object.entries(el.attrs).map(([name, value]) => ({ name, value, tag: el.tag })),
+  );
 }
 
 interface OrderedNode {
@@ -57,11 +64,14 @@ interface OrderedNode {
 
 function build(nodes: OrderedNode[]): HtmlNode[] {
   const out: HtmlNode[] = [];
+
   for (const node of nodes) {
     const tag = Object.keys(node).find((k) => k !== ":@");
+
     if (!tag || tag === "#text") continue;
 
     const attrs: Record<string, string> = {};
+
     for (const [key, value] of Object.entries(node[":@"] ?? {})) {
       attrs[key.replace(/^@_/, "")] = String(value);
     }
@@ -69,18 +79,22 @@ function build(nodes: OrderedNode[]): HtmlNode[] {
     const rawChildren = (node[tag] as OrderedNode[]) ?? [];
     out.push({ tag, attrs, children: build(rawChildren), text: collectText(rawChildren) });
   }
+
   return out;
 }
 
 function collectText(nodes: OrderedNode[]): string {
   let text = "";
+
   for (const node of nodes) {
     if ("#text" in node) {
       text += String(node["#text"]);
     } else {
       const tag = Object.keys(node).find((k) => k !== ":@");
+
       if (tag) text += collectText((node[tag] as OrderedNode[]) ?? []);
     }
   }
+
   return text;
 }

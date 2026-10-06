@@ -42,6 +42,7 @@ async function parseDjvuMeta(filePath: string): Promise<DjvuMeta | null> {
 
   for (const line of metaOutput.split("\n")) {
     const tabIndex = line.indexOf("\t");
+
     if (tabIndex === -1) continue;
 
     const key = line.slice(0, tabIndex).trim();
@@ -67,6 +68,7 @@ async function parseDjvuMeta(filePath: string): Promise<DjvuMeta | null> {
 
   if (pagesExitCode === 0) {
     const pages = parseInt(pagesOutput.trim(), 10);
+
     if (!isNaN(pages)) meta.pages = pages;
   }
 
@@ -88,6 +90,7 @@ function parseCreationDate(dateStr: string | undefined): string | undefined {
   if (!dateStr) return undefined;
 
   const yearMatch = dateStr.match(/\b(19|20)\d{2}\b/);
+
   return yearMatch ? yearMatch[0] : undefined;
 }
 
@@ -104,6 +107,7 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
     });
 
     const ddjvuExitCode = await ddjvu.exited;
+
     if (ddjvuExitCode !== 0) return null;
 
     const data = await sharp(tiffPath)
@@ -126,9 +130,11 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
 async function createDjvuHandler(filePath: string): Promise<FormatHandler | null> {
   try {
     const file = Bun.file(filePath);
+
     if (!(await file.exists())) return null;
 
     const meta = await parseDjvuMeta(filePath);
+
     if (!meta) return null;
 
     const metadata: BookMetadata = {
@@ -150,6 +156,7 @@ async function createDjvuHandler(filePath: string): Promise<FormatHandler | null
     };
   } catch (error) {
     logHandlerError("DJVU", filePath, error);
+
     return null;
   }
 }

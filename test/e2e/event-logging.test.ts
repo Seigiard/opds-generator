@@ -4,7 +4,9 @@ const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
 // Container paths
 const BOOKS_DIR = "/books";
+
 const TEST_FOLDER = "test-events";
+
 const FIXTURE_PDF = "/books/test/Test Book - Test Author.pdf";
 
 interface LogEntry {
@@ -24,13 +26,27 @@ interface LogEntry {
 
 // Helper: execute command inside container
 async function execInContainer(cmd: string): Promise<string> {
-  const proc = Bun.spawn(["docker", "compose", "-f", "docker-compose.e2e.yml", "exec", "-T", "opds", "sh", "-c", cmd]);
+  const proc = Bun.spawn([
+    "docker",
+    "compose",
+    "-f",
+    "docker-compose.e2e.yml",
+    "exec",
+    "-T",
+    "opds",
+    "sh",
+    "-c",
+    cmd,
+  ]);
+
   const output = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
+
   if (exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text();
     throw new Error(`Command failed: ${cmd}\nExit code: ${exitCode}\nStderr: ${stderr}`);
   }
+
   return output;
 }
 
@@ -42,7 +58,18 @@ function stripAnsi(str: string): string {
 
 // Helper: get logs from docker container since timestamp
 async function getLogsSince(since: string): Promise<LogEntry[]> {
-  const proc = Bun.spawn(["docker", "compose", "-f", "docker-compose.e2e.yml", "logs", "--since", since, "--no-log-prefix", "opds"]);
+  const proc = Bun.spawn([
+    "docker",
+    "compose",
+    "-f",
+    "docker-compose.e2e.yml",
+    "logs",
+    "--since",
+    since,
+    "--no-log-prefix",
+    "opds",
+  ]);
+
   const output = await new Response(proc.stdout).text();
   await proc.exited;
 
@@ -70,6 +97,7 @@ async function waitForProcessing(ms: number = 2000): Promise<void> {
 async function dataExists(relativePath: string): Promise<boolean> {
   try {
     const response = await fetch(`${BASE_URL}/${relativePath}`);
+
     return response.ok;
   } catch {
     return false;
@@ -80,7 +108,9 @@ async function dataExists(relativePath: string): Promise<boolean> {
 function findEvents(logs: LogEntry[], eventTag: string, pathContains?: string): LogEntry[] {
   return logs.filter((e) => {
     if (e.event_tag !== eventTag) return false;
+
     if (pathContains && (!e.path || !e.path.includes(pathContains))) return false;
+
     return true;
   });
 }
@@ -89,8 +119,12 @@ function findEvents(logs: LogEntry[], eventTag: string, pathContains?: string): 
 function findHandlerEvents(logs: LogEntry[], eventTag: string, pathContains?: string): LogEntry[] {
   return logs.filter((e) => {
     if (e.event_tag !== eventTag) return false;
-    if (!e.event_type || !["handler_start", "handler_complete"].includes(e.event_type)) return false;
+
+    if (!e.event_type || !["handler_start", "handler_complete"].includes(e.event_type))
+      return false;
+
     if (pathContains && (!e.path || !e.path.includes(pathContains))) return false;
+
     return true;
   });
 }
@@ -154,7 +188,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Copy PDF to test folder inside container
-      await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf"`);
+      await execInContainer(
+        `cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf"`,
+      );
       await waitForProcessing(3000); // PDF processing takes longer
 
       const logs = await getLogsSince(before);
@@ -179,7 +215,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Copy another PDF inside container
-      await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book2.pdf"`);
+      await execInContainer(
+        `cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book2.pdf"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -203,7 +241,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Move book1 from test-events/ to root inside container
-      await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
+      await execInContainer(
+        `mv "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -221,7 +261,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Rename in root inside container
-      await execInContainer(`mv "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
+      await execInContainer(
+        `mv "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -239,7 +281,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Copy back inside container
-      await execInContainer(`cp "${BOOKS_DIR}/test-events-book3.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
+      await execInContainer(
+        `cp "${BOOKS_DIR}/test-events-book3.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -253,7 +297,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Delete both books inside container
-      await execInContainer(`rm "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
+      await execInContainer(
+        `rm "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -273,7 +319,9 @@ describe("Event Logging E2E", () => {
         const before = getDockerTimestamp();
 
         // Copy folder inside container
-        await execInContainer(`cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`);
+        await execInContainer(
+          `cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`,
+        );
         await waitForProcessing(5000);
 
         const logs = await getLogsSince(before);
@@ -293,7 +341,9 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Rename folder inside container
-      await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-copy" "${BOOKS_DIR}/${TEST_FOLDER}-duplicate"`);
+      await execInContainer(
+        `mv "${BOOKS_DIR}/${TEST_FOLDER}-copy" "${BOOKS_DIR}/${TEST_FOLDER}-duplicate"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
@@ -311,13 +361,18 @@ describe("Event Logging E2E", () => {
       const before = getDockerTimestamp();
 
       // Move -duplicate into test-events inside container
-      await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-duplicate" "${BOOKS_DIR}/${TEST_FOLDER}/${TEST_FOLDER}-duplicate"`);
+      await execInContainer(
+        `mv "${BOOKS_DIR}/${TEST_FOLDER}-duplicate" "${BOOKS_DIR}/${TEST_FOLDER}/${TEST_FOLDER}-duplicate"`,
+      );
       await waitForProcessing(3000);
 
       const logs = await getLogsSince(before);
 
       // Should have some folder events
-      const folderLogs = logs.filter((e) => e.event_tag?.includes("Folder") && e.path?.includes("duplicate"));
+      const folderLogs = logs.filter(
+        (e) => e.event_tag?.includes("Folder") && e.path?.includes("duplicate"),
+      );
+
       expect(folderLogs.length).toBeGreaterThan(0);
     });
   });

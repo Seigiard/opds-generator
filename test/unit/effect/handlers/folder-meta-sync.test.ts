@@ -7,7 +7,9 @@ import { tmpdir } from "node:os";
 import { mkdir, rm, stat, readFile, symlink, unlink, readdir } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-folder-meta-test-${Date.now()}`);
+
 const DATA_DIR = join(TEST_DIR, "data");
+
 const FILES_DIR = join(TEST_DIR, "files");
 
 const deps: HandlerDeps = {
@@ -21,11 +23,13 @@ const deps: HandlerDeps = {
     readdir: (path) => readdir(path),
     stat: async (path) => {
       const s = await stat(path);
+
       return { isDirectory: () => s.isDirectory(), size: s.size };
     },
     exists: async (path) => {
       try {
         await stat(path);
+
         return true;
       } catch {
         return false;
@@ -41,6 +45,7 @@ const deps: HandlerDeps = {
       try {
         await unlink(path);
       } catch {}
+
       await symlink(target, path);
     },
     unlink: (path) => unlink(path),
@@ -72,9 +77,11 @@ describe("folderMetaSync handler", () => {
   test("creates feed.xml in empty folder", async () => {
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const feedPath = join(DATA_DIR, "feed.xml");
+
     const exists = await stat(feedPath)
       .then(() => true)
       .catch(() => false);
+
     expect(exists).toBe(true);
   });
 
@@ -107,7 +114,10 @@ describe("folderMetaSync handler", () => {
   test("includes folder entries from subfolders", async () => {
     const subfolderPath = join(DATA_DIR, "Fiction");
     await mkdir(subfolderPath, { recursive: true });
-    await Bun.write(join(subfolderPath, "_entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>');
+    await Bun.write(
+      join(subfolderPath, "_entry.xml"),
+      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>',
+    );
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -117,7 +127,10 @@ describe("folderMetaSync handler", () => {
   test("includes book entries from subfolders", async () => {
     const bookPath = join(DATA_DIR, "book.epub");
     await mkdir(bookPath, { recursive: true });
-    await Bun.write(join(bookPath, "entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Test Book</title></entry>');
+    await Bun.write(
+      join(bookPath, "entry.xml"),
+      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Test Book</title></entry>',
+    );
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -127,7 +140,10 @@ describe("folderMetaSync handler", () => {
   test("sets feed as acquisition type when books present", async () => {
     const bookPath = join(DATA_DIR, "book.epub");
     await mkdir(bookPath, { recursive: true });
-    await Bun.write(join(bookPath, "entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Book</title></entry>');
+    await Bun.write(
+      join(bookPath, "entry.xml"),
+      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Book</title></entry>',
+    );
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -136,10 +152,14 @@ describe("folderMetaSync handler", () => {
 
   test("sorts folder entries naturally by title", async () => {
     const items = ["item10", "item2", "item1"];
+
     for (const item of items) {
       const itemPath = join(DATA_DIR, item);
       await mkdir(itemPath, { recursive: true });
-      await Bun.write(join(itemPath, "_entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>${item}</title></entry>`);
+      await Bun.write(
+        join(itemPath, "_entry.xml"),
+        `<entry xmlns="http://www.w3.org/2005/Atom"><title>${item}</title></entry>`,
+      );
     }
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
@@ -207,7 +227,10 @@ describe("folderMetaSync handler", () => {
       for (let i = 1; i <= 3; i++) {
         const bookPath = join(nestedPath, `book${i}.epub`);
         await mkdir(bookPath, { recursive: true });
-        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
+        await Bun.write(
+          join(bookPath, "entry.xml"),
+          `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`,
+        );
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
@@ -224,7 +247,10 @@ describe("folderMetaSync handler", () => {
       for (const name of ["SciFi", "Fantasy"]) {
         const subPath = join(nestedPath, name);
         await mkdir(subPath, { recursive: true });
-        await Bun.write(join(subPath, "_entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>${name}</title></entry>`);
+        await Bun.write(
+          join(subPath, "_entry.xml"),
+          `<entry xmlns="http://www.w3.org/2005/Atom"><title>${name}</title></entry>`,
+        );
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
@@ -240,12 +266,18 @@ describe("folderMetaSync handler", () => {
 
       const subPath = join(nestedPath, "Fiction");
       await mkdir(subPath, { recursive: true });
-      await Bun.write(join(subPath, "_entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>');
+      await Bun.write(
+        join(subPath, "_entry.xml"),
+        '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>',
+      );
 
       for (let i = 1; i <= 2; i++) {
         const bookPath = join(nestedPath, `book${i}.epub`);
         await mkdir(bookPath, { recursive: true });
-        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
+        await Bun.write(
+          join(bookPath, "entry.xml"),
+          `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`,
+        );
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
@@ -267,9 +299,11 @@ describe("folderMetaSync handler", () => {
     test("does not create _entry.xml for root folder", async () => {
       await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
       const entryPath = join(DATA_DIR, "_entry.xml");
+
       const exists = await stat(entryPath)
         .then(() => true)
         .catch(() => false);
+
       expect(exists).toBe(false);
     });
   });

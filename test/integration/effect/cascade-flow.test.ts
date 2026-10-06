@@ -9,8 +9,11 @@ import { tmpdir } from "node:os";
 import { mkdir, rm, stat, readFile, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-cascade-test-${Date.now()}`);
+
 const FILES_DIR = join(TEST_DIR, "files");
+
 const DATA_DIR = join(TEST_DIR, "data");
+
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
 const mockLogger = {
@@ -35,15 +38,18 @@ const asyncDeps: HandlerDeps = {
     rm: (path, options) => rm(path, options),
     readdir: async (path) => {
       const fs = await import("node:fs/promises");
+
       return fs.readdir(path);
     },
     stat: async (path) => {
       const s = await stat(path);
+
       return { isDirectory: () => s.isDirectory(), size: s.size };
     },
     exists: async (path) => {
       try {
         await stat(path);
+
         return true;
       } catch {
         return false;
@@ -86,9 +92,11 @@ describe("Cascade Flow Integration", () => {
     // Verify folder data directory and _entry.xml created
     const fictionDataPath = join(DATA_DIR, "Fiction");
     const entryXmlPath = join(fictionDataPath, "_entry.xml");
+
     const entryExists = await stat(entryXmlPath)
       .then(() => true)
       .catch(() => false);
+
     expect(entryExists).toBe(true);
 
     // Step 3: Copy real EPUB to files
@@ -98,7 +106,12 @@ describe("Cascade Flow Integration", () => {
     await Bun.write(testBookPath, epubContent);
 
     // Step 4: Process book creation event
-    const bookEvent: EventType = { _tag: "BookCreated", parent: fictionPath, name: "Test Book - Test Author.epub" };
+    const bookEvent: EventType = {
+      _tag: "BookCreated",
+      parent: fictionPath,
+      name: "Test Book - Test Author.epub",
+    };
+
     await bookSync(bookEvent, asyncDeps);
 
     // Verify book data directory created with entry.xml, cover, symlink
@@ -170,6 +183,7 @@ describe("Cascade Flow Integration", () => {
   </author>
   <link rel="http://opds-spec.org/acquisition/open-access" href="/lib/book.epub/file" type="application/epub+zip"/>
 </entry>`;
+
     const subEntry = `<?xml version="1.0"?>
 <entry>
   <id>urn:opds:catalog:lib/Sub</id>
@@ -178,6 +192,7 @@ describe("Cascade Flow Integration", () => {
   <summary type="text">📚 1</summary>
   <link rel="subsection" href="/lib/Sub/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>`;
+
     await Bun.write(join(bookDir, "entry.xml"), bookEntry);
     await Bun.write(join(subDir, "_entry.xml"), subEntry);
 
@@ -190,7 +205,9 @@ describe("Cascade Flow Integration", () => {
     const second = await readFile(join(libData, "feed.xml"), "utf-8");
 
     // #then output is stable modulo volatile <updated> timestamps
-    const normalize = (xml: string) => xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+    const normalize = (xml: string) =>
+      xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+
     expect(normalize(first)).toBe(normalize(second));
     // and no XSLT stylesheet PI is emitted (post-flip); acquisition kind is present
     expect(first).not.toContain("xml-stylesheet");
@@ -198,7 +215,9 @@ describe("Cascade Flow Integration", () => {
     // and fragments are spliced verbatim (book after folder)
     expect(first).toContain("urn:opds:book:book.epub");
     expect(first).toContain('<link rel="subsection" href="/lib/Sub/feed.xml"');
-    expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(first.indexOf("urn:opds:book:book.epub"));
+    expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(
+      first.indexOf("urn:opds:book:book.epub"),
+    );
     // and the subfolder's own _entry.xml is untouched by the parent sync
     expect(subEntryAfter).toBe(subEntry);
   });
@@ -256,6 +275,7 @@ describe("Cascade Flow Integration", () => {
     const libData = join(DATA_DIR, "lib");
     await mkdir(libData, { recursive: true });
     const errors: string[] = [];
+
     const failingDeps: HandlerDeps = {
       ...asyncDeps,
       logger: { ...asyncDeps.logger, error: (_tag, msg) => errors.push(msg) },
@@ -269,7 +289,10 @@ describe("Cascade Flow Integration", () => {
     };
 
     // #when folderMetaSync runs
-    const result = await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, failingDeps);
+    const result = await folderMetaSync(
+      { _tag: "FolderMetaSyncRequested", path: libData },
+      failingDeps,
+    );
 
     // #then the feed is written, the failure is logged, and the handler still succeeds
     expect(result.isOk()).toBe(true);
@@ -307,10 +330,19 @@ describe("Cascade Flow Integration", () => {
     const folderEvent: EventType = { _tag: "FolderCreated", parent: FILES_DIR, name: "Author" };
     await folderSync(folderEvent, asyncDeps);
 
-    const bookEvent: EventType = { _tag: "BookCreated", parent: authorPath, name: "Test Book - Test Author.epub" };
+    const bookEvent: EventType = {
+      _tag: "BookCreated",
+      parent: authorPath,
+      name: "Test Book - Test Author.epub",
+    };
+
     await bookSync(bookEvent, asyncDeps);
 
-    const folderMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: join(DATA_DIR, "Author") };
+    const folderMetaEvent: EventType = {
+      _tag: "FolderMetaSyncRequested",
+      path: join(DATA_DIR, "Author"),
+    };
+
     await folderMetaSync(folderMetaEvent, asyncDeps);
 
     const rootMetaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: DATA_DIR };
@@ -319,7 +351,11 @@ describe("Cascade Flow Integration", () => {
     // Verify complete OPDS structure
     const rootFeed = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
     const authorFeed = await readFile(join(DATA_DIR, "Author", "feed.xml"), "utf-8");
-    const bookEntry = await readFile(join(DATA_DIR, "Author", "Test Book - Test Author.epub", "entry.xml"), "utf-8");
+
+    const bookEntry = await readFile(
+      join(DATA_DIR, "Author", "Test Book - Test Author.epub", "entry.xml"),
+      "utf-8",
+    );
 
     // Root feed has navigation link to Author
     expect(rootFeed).toContain("Author");

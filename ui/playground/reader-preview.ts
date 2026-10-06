@@ -11,6 +11,7 @@ const fixtures = import.meta.glob("./fixtures/*.epub", {
 }) as Record<string, string>;
 
 const select = document.getElementById("fixture") as HTMLSelectElement;
+
 const paths = Object.keys(fixtures).sort();
 
 for (const path of paths) {
@@ -22,7 +23,9 @@ for (const path of paths) {
 
 // ?fixture=<name> deep-links a specific book (used by the SMOKE.md checklist).
 const wanted = new URLSearchParams(location.search).get("fixture");
+
 const initial = paths.find((p) => p.endsWith(`/${wanted}`)) ?? paths[0];
+
 if (initial) select.value = initial;
 
 async function open(path: string): Promise<void> {
@@ -36,4 +39,5 @@ select.addEventListener("change", () => {
   const name = select.value.split("/").pop() ?? "";
   location.search = `?fixture=${encodeURIComponent(name)}`;
 });
+
 if (select.value) void open(select.value);

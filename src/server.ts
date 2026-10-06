@@ -23,6 +23,7 @@ import { scanFiles, createSyncPlan } from "./scanner.ts";
 const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8_000;
 
 let isReady = false;
+
 let isSyncing = false;
 
 function registerHandlers(ctx: AppContext): void {
@@ -42,6 +43,7 @@ async function doSync(ctx: AppContext): Promise<void> {
   await mkdir(config.dataPath, { recursive: true });
 
   const feedPath = join(config.dataPath, FEED_FILE);
+
   if (!(await Bun.file(feedPath).exists())) {
     const seedModel = buildFeedModel({
       id: "urn:opds:catalog:root",
@@ -52,6 +54,7 @@ async function doSync(ctx: AppContext): Promise<void> {
       startHref: `/${FEED_FILE}`,
       fragments: [],
     });
+
     await Bun.write(feedPath, renderXml(seedModel));
     log.info("InitialSync", "Seed feed.xml created");
   }
@@ -75,6 +78,7 @@ async function doSync(ctx: AppContext): Promise<void> {
 
 async function initialSync(ctx: AppContext): Promise<void> {
   isSyncing = true;
+
   try {
     await doSync(ctx);
   } finally {
@@ -84,10 +88,13 @@ async function initialSync(ctx: AppContext): Promise<void> {
 
 async function resync(ctx: AppContext): Promise<void> {
   isSyncing = true;
+
   try {
     log.info("Resync", "Starting full resync");
     const entries = await readdir(config.dataPath);
-    await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
+    await Promise.all(
+      entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })),
+    );
     log.info("Resync", "Cleared data directory");
     await doSync(ctx);
   } finally {
@@ -111,8 +118,10 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promise<void> {
   const intervalMs = config.reconcileInterval * 1000;
+
   while (!signal.aborted) {
     await sleep(intervalMs, signal).catch(() => {});
+
     if (signal.aborted) break;
 
     if (isSyncing) {
@@ -128,11 +137,13 @@ async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promis
     try {
       log.info("Reconciliation", "Starting periodic reconciliation");
       isSyncing = true;
+
       try {
         await doSync(ctx);
       } finally {
         isSyncing = false;
       }
+
       log.info("Reconciliation", "Completed");
     } catch (error) {
       log.error("Reconciliation", "Failed", error);
@@ -161,44 +172,60 @@ async function main(): Promise<void> {
 
         if (req.method === "POST" && url.pathname === "/events/books") {
           if (!isReady) return new Response("Queue not ready", { status: 503 });
+
           try {
             const body = await req.json();
+
             if (!isRawBooksEvent(body)) {
               log.warn("Server", "Invalid books event schema", { body });
+
               return new Response("Invalid event", { status: 400 });
             }
+
             const event = adaptBooksEvent(body, ctx.dedup);
+
             if (event === null) return new Response("Deduplicated", { status: 202 });
             ctx.queue.enqueue(event);
+
             return new Response("OK", { status: 202 });
           } catch (error) {
             log.error("Server", "Failed to process books event", error);
+
             return new Response("Error", { status: 500 });
           }
         }
 
         if (req.method === "POST" && url.pathname === "/events/data") {
           if (!isReady) return new Response("Queue not ready", { status: 503 });
+
           try {
             const body = await req.json();
+
             if (!isRawDataEvent(body)) {
               log.warn("Server", "Invalid data event schema", { body });
+
               return new Response("Invalid event", { status: 400 });
             }
+
             const event = adaptDataEvent(body, ctx.dedup);
+
             if (event === null) return new Response("Deduplicated", { status: 202 });
             ctx.queue.enqueue(event);
+
             return new Response("OK", { status: 202 });
           } catch (error) {
             log.error("Server", "Failed to process data event", error);
+
             return new Response("Error", { status: 500 });
           }
         }
 
         if (req.method === "POST" && url.pathname === "/resync") {
           if (!isReady) return new Response("Queue not ready", { status: 503 });
+
           if (isSyncing) return new Response("Sync already in progress", { status: 409 });
           resync(ctx).catch((error) => log.error("Server", "Resync failed", error));
+
           return new Response("Resync started", { status: 202 });
         }
 
@@ -211,6 +238,7 @@ async function main(): Promise<void> {
     await initialSync(ctx);
 
     let reconcileTask: Promise<void> | null = null;
+
     if (config.reconcileInterval > 0) {
       reconcileTask = startReconciliation(ctx, controller.signal);
       log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
@@ -221,7 +249,10 @@ async function main(): Promise<void> {
       server.stop();
       controller.abort();
       const timeout = new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS));
-      await Promise.race([Promise.allSettled([consumerTask, reconcileTask].filter(Boolean)), timeout]);
+      await Promise.race([
+        Promise.allSettled([consumerTask, reconcileTask].filter(Boolean)),
+        timeout,
+      ]);
       process.exit(0);
     };
 

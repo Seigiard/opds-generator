@@ -68,7 +68,11 @@ describe("scanner", () => {
     });
 
     test("handles multiple subfolders", () => {
-      const files = [createFileInfo("Fiction/Book1.epub"), createFileInfo("NonFiction/Book2.pdf"), createFileInfo("Comics/Issue1.cbz")];
+      const files = [
+        createFileInfo("Fiction/Book1.epub"),
+        createFileInfo("NonFiction/Book2.pdf"),
+        createFileInfo("Comics/Issue1.cbz"),
+      ];
 
       const result = buildFolderStructure(files);
       const root = result.find((f) => f.path === "");
@@ -124,7 +128,10 @@ describe("scanner", () => {
 
   describe("computeHash", () => {
     test("returns consistent hash for same files", () => {
-      const files = [createFileInfo("book1.epub", 1000, 1700000000000), createFileInfo("book2.pdf", 2000, 1700000001000)];
+      const files = [
+        createFileInfo("book1.epub", 1000, 1700000000000),
+        createFileInfo("book2.pdf", 2000, 1700000001000),
+      ];
 
       const hash1 = computeHash(files);
       const hash2 = computeHash(files);
