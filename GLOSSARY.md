@@ -29,3 +29,30 @@ A periodic scan that repairs drift between the books directory and the catalogue
 **Resync**:
 A scan that is requested on demand, by an operator or by the books watcher after it lost events. It repairs the catalogue in place and never clears it first. By default it reprocesses only changed books; a **forced resync** reprocesses every book.
 _Avoid_: Full resync, wipe
+
+## Catalogue processing
+
+**Watcher event**:
+A raw notice from a directory watcher that something changed in the books directory or the catalogue. It becomes catalogue work, or nothing.
+_Avoid_: Event (alone)
+
+**Catalogue work**:
+One unit of work that updates the catalogue, such as processing a book or refreshing a folder's metadata.
+_Avoid_: Event, item, task, job
+
+**Pending**:
+Catalogue work that was accepted and has not started.
+
+**Active**:
+Catalogue work that runs now. At most one piece of catalogue work is active at a time.
+
+**Cascade**:
+Catalogue work that a piece of catalogue work produces when it succeeds. Failed work produces no cascade.
+
+**Coalescing**:
+A request to refresh a folder's metadata that arrives while the same request is pending adds no new work. The pending request moves behind the work queued after it.
+_Avoid_: Dedup, merging
+
+**Watcher dedup**:
+A watcher event that repeats one seen less than half a second earlier is dropped. It applies only to watcher events, never to work from a scan.
+_Avoid_: Coalescing
