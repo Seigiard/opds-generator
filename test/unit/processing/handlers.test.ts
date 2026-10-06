@@ -108,7 +108,7 @@ const asyncDeps: HandlerDeps = {
   },
 };
 
-describe("Effect Handlers", () => {
+describe("Processing Handlers", () => {
   beforeEach(() => {
     mockFs.reset();
     mockLogger.reset();
