@@ -38,6 +38,8 @@ If you change `ui/styles/*`, `ui/gridnav/*`, or the renderer, run `bun run build
 
 `bun run fix` must produce 0 warnings and 0 errors. Fix all lint/format issues before committing.
 
+`.oxfmtrc.json` pins the 140-column formatting width so local checks and CI use the same width without relying on a developer's home `.editorconfig`.
+
 CI quality gates run as separate steps in `.github/workflows/docker.yml` so failures identify the check that failed. CI runs routing e2e only; the known-flaky event-logging e2e remains local in `test:all`.
 
 **MANDATORY:** Run `bun run test` and verify 0 failures BEFORE every commit. Never commit untested code. If tests fail — fix first, then commit.
