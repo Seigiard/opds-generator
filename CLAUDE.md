@@ -348,6 +348,7 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 
 - `sharp` includes its own TypeScript definitions; do not add `@types/sharp`.
 - `effect` is pinned to `4.0.1` and limited to command/resource ownership. Rebuild the Docker test image after changing it. Historical Effect memory findings in `docs/memory-leak-investigation.md` describe the old runtime; current behavior is checked by the Docker memory suites.
+- Before investigating native RSS test failures, read `docs/memory-oracle-investigation.md` (follow-up #13). Its experimental patch is research material; the existing memory-test workload and limits remain in force.
 - `valibot` validates watcher events, parsed XML values, and reader event details at their input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract; format and render helpers consume that contract. Rebuild the Docker test image after changing this runtime dependency.
 - `knip.json` is the active Knip configuration. Its entry list includes the vendored anti-slop entry point so Knip sees the plugin's development dependency imports.
 - `detect-libc` is pulled transitively by `sharp`; do not add it as a direct dependency unless app code imports it.

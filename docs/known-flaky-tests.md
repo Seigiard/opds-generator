@@ -46,9 +46,14 @@ clone, not the libvips cache. ~7 KB retained per book ≈ ~150 MB across a 21K-b
 likely contributor to the residual RSS growth in `project_memory_leak_investigation`. Fixed by
 dropping `.clone()` for two independent pipelines (decodes the buffer twice; cost negligible).
 
-**Note:** `test/integration/memory-leak-handler.test.ts` (`< 5 KB/iter` over 100 iters) still
-uses an in-process two-point delta and shares weaknesses (1)/(2). It has not been observed
-flaking; if it does, port it to the probe pattern instead of re-running.
+**Handler-chain follow-up (2026-10-06):** the original test failed at `10.12 KB/iter`
+in the shared process, while the same workload alone measured `−17.48 KB/iter`.
+Extended diagnostics also found red short windows while long-run RSS decreased;
+allocator settings influenced the result but did not stabilize all memory suites.
+This remains unresolved in [#13](https://github.com/Seigiard/opds-generator/issues/13).
+The observations, reproduction launcher and unaccepted experimental patch are recorded
+in [memory-oracle-investigation.md](memory-oracle-investigation.md).
+The existing test workload, assertions and limits remain unchanged.
 
 ### 2. e2e — `Event Logging Phase 4: copy folder triggers FolderCreated + BookCreated`
 
