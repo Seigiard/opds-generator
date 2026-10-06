@@ -4,7 +4,7 @@ import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/effect/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, readdir, stat, readFile, lstat, symlink, unlink } from "node:fs/promises";
+import { mkdir, rm, readdir, stat, readFile, readlink, lstat, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-book-sync-test-${Date.now()}`);
 
@@ -78,6 +78,62 @@ describe("bookSync handler", () => {
     const result = await bookSync(event, deps);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()).toEqual([]);
+  });
+
+  test("cancellation preserves the previous entry and does not create a download link", async () => {
+    // #given
+    const controller = new AbortController();
+    const reason = new Error("shutdown");
+    const bookDir = join(DATA_DIR, "test.epub");
+    await Bun.write(join(FILES_DIR, "test.epub"), "invalid epub");
+    await mkdir(bookDir);
+    await Bun.write(join(bookDir, "entry.xml"), "previous entry");
+
+    const cancellableDeps: HandlerDeps = {
+      ...deps,
+      signal: controller.signal,
+      fs: {
+        ...deps.fs,
+        mkdir: async (path, options) => {
+          await deps.fs.mkdir(path, options);
+          controller.abort(reason);
+        },
+      },
+    };
+
+    // #when
+    const result = await bookSync(bookCreatedEvent("test.epub"), cancellableDeps);
+    // #then
+    expect({
+      error: result._unsafeUnwrapErr(),
+      entry: await Bun.file(join(bookDir, "entry.xml")).text(),
+      linkExists: await Bun.file(join(bookDir, "test.epub")).exists(),
+    }).toEqual({ error: reason, entry: "previous entry", linkExists: false });
+  });
+
+  test("finishes download publication when cancellation arrives during entry write", async () => {
+    // #given
+    const controller = new AbortController();
+    const bookPath = join(FILES_DIR, "test.txt");
+    await Bun.write(bookPath, "source book");
+
+    const cancellingDeps: HandlerDeps = {
+      ...deps,
+      signal: controller.signal,
+      fs: {
+        ...deps.fs,
+        atomicWrite: async (path, content) => {
+          await deps.fs.atomicWrite(path, content);
+          controller.abort(new Error("shutdown"));
+        },
+      },
+    };
+
+    // #when
+    const result = await bookSync(bookCreatedEvent("test.txt"), cancellingDeps);
+    // #then
+    expect(result.isOk()).toBe(true);
+    expect(await readlink(join(DATA_DIR, "test.txt", "test.txt"))).toBe(bookPath);
   });
 
   test("creates data directory for book", async () => {

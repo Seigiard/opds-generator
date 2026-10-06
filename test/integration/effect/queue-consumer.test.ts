@@ -13,6 +13,10 @@ import { buildContext } from "../../../src/context.ts";
 import { getEventPath, startConsumer } from "../../../src/effect/consumer.ts";
 import type { AppContext } from "../../../src/context.ts";
 import type { EventType } from "../../../src/effect/types.ts";
+import { spawnWithTimeout } from "../../../src/utils/process.ts";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 function createTestContext(): AppContext {
   return {
@@ -48,6 +52,98 @@ function createTestContext(): AppContext {
 }
 
 describe("Queue and Consumer Integration", () => {
+  test("shutdown cancels active command work without reporting a handler failure", async () => {
+    // #given
+    const directory = await mkdtemp(join(tmpdir(), "consumer-command-"));
+    const ready = join(directory, "pid");
+    const ctx = createTestContext();
+    const controller = new AbortController();
+    const reason = new Error("shutdown");
+    const errors: string[] = [];
+    ctx.logger.error = (_tag, message) => {
+      errors.push(message);
+    };
+
+    let failure = "";
+    let pid: number | undefined;
+    ctx.handlers.register("BookCreated", async (_event, deps) => {
+      try {
+        await spawnWithTimeout({
+          command: [
+            process.execPath,
+            "-e",
+            `
+            require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+            setInterval(() => {}, 100);
+          `,
+          ],
+          timeout: 3000,
+          signal: deps.signal,
+        });
+      } catch (error) {
+        failure = String(error);
+        throw error;
+      }
+
+      return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+    });
+    const consumerTask = startConsumer(ctx, controller.signal);
+
+    try {
+      ctx.queue.enqueue({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
+      const deadline = Date.now() + 3000;
+
+      while (!(await Bun.file(ready).exists())) {
+        if (Date.now() >= deadline) throw new Error("Child did not become ready");
+        await Bun.sleep(10);
+      }
+
+      pid = Number(await Bun.file(ready).text());
+      // #when
+      controller.abort(reason);
+      await consumerTask;
+      let alive = true;
+
+      try {
+        process.kill(pid, 0);
+      } catch {
+        alive = false;
+      }
+
+      // #then
+      expect({ failure, alive, errors }).toEqual({ failure: "Error: shutdown", alive: false, errors: [] });
+    } finally {
+      controller.abort(reason);
+      await consumerTask;
+
+      if (pid !== undefined) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // The command has normally been reaped by the consumer.
+        }
+      }
+
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("shutdown discards cascades returned by an active handler", async () => {
+    // #given
+    const ctx = createTestContext();
+    const controller = new AbortController();
+    ctx.handlers.register("BookCreated", async () => {
+      controller.abort();
+
+      return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+    });
+    ctx.queue.enqueue({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
+    // #when
+    await startConsumer(ctx, controller.signal);
+    // #then
+    expect(ctx.queue.size).toBe(0);
+  });
+
   test("formats parent/name event paths without duplicate slashes", () => {
     const path = getEventPath({ _tag: "FolderCreated", parent: "/books/comics/", name: "Marvel" });
 

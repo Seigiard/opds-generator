@@ -16,7 +16,7 @@ export interface FormatHandler {
   getCover(): Promise<Buffer | null>;
 }
 
-export type FormatHandlerFactory = (filePath: string) => Promise<FormatHandler | null>;
+export type FormatHandlerFactory = (filePath: string, signal?: AbortSignal) => Promise<FormatHandler | null>;
 
 export interface FormatHandlerRegistration {
   extensions: string[];

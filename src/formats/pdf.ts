@@ -1,6 +1,7 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
+import { spawnWithTimeout, spawnWithTimeoutText } from "../utils/process.ts";
 
 const SOURCE_FILE_EXTENSIONS = /\.(indd|qxd|docx?|odt|rtf|pages|tex|pub|wpd|fm)$/i;
 
@@ -13,13 +14,8 @@ interface PdfInfo {
   pages?: number;
 }
 
-async function parsePdfInfo(filePath: string): Promise<PdfInfo | null> {
-  const proc = Bun.spawn(["pdfinfo", filePath], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [output, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+async function parsePdfInfo(filePath: string, signal?: AbortSignal): Promise<PdfInfo | null> {
+  const { stdout: output, exitCode } = await spawnWithTimeoutText({ command: ["pdfinfo", filePath], signal });
 
   if (exitCode !== 0) return null;
 
@@ -92,32 +88,25 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
-async function extractCover(filePath: string): Promise<Buffer | null> {
-  const proc = Bun.spawn(
-    ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
-    {
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-
-  const [data, exitCode] = await Promise.all([
-    new Response(proc.stdout).arrayBuffer(),
-    proc.exited,
-  ]);
+async function extractCover(filePath: string, signal?: AbortSignal): Promise<Buffer | null> {
+  const { stdout: data, exitCode } = await spawnWithTimeout({
+    command: ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
+    signal,
+  });
 
   if (exitCode !== 0 || data.byteLength === 0) return null;
 
   return Buffer.from(data);
 }
 
-async function createPdfHandler(filePath: string): Promise<FormatHandler | null> {
+async function createPdfHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
   try {
+    signal?.throwIfAborted();
     const file = Bun.file(filePath);
 
     if (!(await file.exists())) return null;
 
-    const info = await parsePdfInfo(filePath);
+    const info = await parsePdfInfo(filePath, signal);
 
     if (!info) return null;
 
@@ -136,10 +125,11 @@ async function createPdfHandler(filePath: string): Promise<FormatHandler | null>
       },
 
       async getCover() {
-        return extractCover(filePath);
+        return extractCover(filePath, signal);
       },
     };
   } catch (error) {
+    signal?.throwIfAborted();
     logHandlerError("PDF", filePath, error);
 
     return null;

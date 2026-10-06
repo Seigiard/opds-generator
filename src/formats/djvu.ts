@@ -2,9 +2,8 @@ import sharp from "sharp";
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnWithTimeout, spawnWithTimeoutText, withTemporaryDirectory } from "../utils/process.ts";
 
 interface DjvuMeta {
   title?: string;
@@ -18,23 +17,20 @@ function parseMetaValue(value: string): string {
   return value.replace(/^"(.*)"$/, "$1").trim();
 }
 
-async function parseDjvuMeta(filePath: string): Promise<DjvuMeta | null> {
-  const metaProc = Bun.spawn(["djvused", filePath, "-e", "print-meta"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const pagesProc = Bun.spawn(["djvused", filePath, "-e", "n"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [metaOutput, metaExitCode, pagesOutput, pagesExitCode] = await Promise.all([
-    new Response(metaProc.stdout).text(),
-    metaProc.exited,
-    new Response(pagesProc.stdout).text(),
-    pagesProc.exited,
+async function parseDjvuMeta(filePath: string, signal?: AbortSignal): Promise<DjvuMeta | null> {
+  const results = await Promise.allSettled([
+    spawnWithTimeoutText({ command: ["djvused", filePath, "-e", "print-meta"], signal }),
+    spawnWithTimeoutText({ command: ["djvused", filePath, "-e", "n"], signal }),
   ]);
+
+  signal?.throwIfAborted();
+  const [metaResult, pagesResult] = results;
+
+  if (metaResult.status === "rejected") throw metaResult.reason;
+
+  if (pagesResult.status === "rejected") throw pagesResult.reason;
+  const { stdout: metaOutput, exitCode: metaExitCode } = metaResult.value;
+  const { stdout: pagesOutput, exitCode: pagesExitCode } = pagesResult.value;
 
   if (metaExitCode !== 0 && pagesExitCode !== 0) return null;
 
@@ -94,46 +90,49 @@ function parseCreationDate(dateStr: string | undefined): string | undefined {
   return yearMatch ? yearMatch[0] : undefined;
 }
 
-async function extractCover(filePath: string): Promise<Buffer | null> {
-  let tempDir: string | null = null;
-
+async function extractCover(filePath: string, signal?: AbortSignal): Promise<Buffer | null> {
   try {
-    tempDir = await mkdtemp(join(tmpdir(), "djvu-"));
-    const tiffPath = join(tempDir, "page.tiff");
+    return await withTemporaryDirectory(
+      "djvu-",
+      async (tempDir) => {
+        signal?.throwIfAborted();
+        const tiffPath = join(tempDir, "page.tiff");
 
-    const ddjvu = Bun.spawn(["ddjvu", "-format=tiff", "-page=1", filePath, tiffPath], {
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+        const { exitCode: ddjvuExitCode } = await spawnWithTimeout({
+          command: ["ddjvu", "-format=tiff", "-page=1", filePath, tiffPath],
+          signal,
+        });
 
-    const ddjvuExitCode = await ddjvu.exited;
+        if (ddjvuExitCode !== 0) return null;
 
-    if (ddjvuExitCode !== 0) return null;
+        const data = await sharp(tiffPath)
+          .resize(COVER_MAX_SIZE, COVER_MAX_SIZE, { fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 90 })
+          .toBuffer();
 
-    const data = await sharp(tiffPath)
-      .resize(COVER_MAX_SIZE, COVER_MAX_SIZE, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 90 })
-      .toBuffer();
+        signal?.throwIfAborted();
 
-    if (data.byteLength === 0) return null;
+        if (data.byteLength === 0) return null;
 
-    return data;
+        return data;
+      },
+      signal,
+    );
   } catch {
+    signal?.throwIfAborted();
+
     return null;
-  } finally {
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
-    }
   }
 }
 
-async function createDjvuHandler(filePath: string): Promise<FormatHandler | null> {
+async function createDjvuHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
   try {
+    signal?.throwIfAborted();
     const file = Bun.file(filePath);
 
     if (!(await file.exists())) return null;
 
-    const meta = await parseDjvuMeta(filePath);
+    const meta = await parseDjvuMeta(filePath, signal);
 
     if (!meta) return null;
 
@@ -151,10 +150,11 @@ async function createDjvuHandler(filePath: string): Promise<FormatHandler | null
       },
 
       async getCover() {
-        return extractCover(filePath);
+        return extractCover(filePath, signal);
       },
     };
   } catch (error) {
+    signal?.throwIfAborted();
     logHandlerError("DJVU", filePath, error);
 
     return null;
