@@ -1,8 +1,7 @@
 import { createExtractorFromFile } from "node-unrar-js";
-import { mkdtemp, rm, readFile, open } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, open } from "node:fs/promises";
 import { join } from "node:path";
-import { spawnWithTimeout, spawnWithTimeoutText } from "./process.ts";
+import { spawnWithTimeout, spawnWithTimeoutText, withTemporaryDirectory } from "./process.ts";
 
 type ArchiveType = "zip" | "rar" | "7z" | "tar";
 
@@ -23,10 +22,7 @@ async function detectArchiveType(filePath: string): Promise<ArchiveType | null> 
     await fh.read(header, 0, 8, 0);
 
     // SAFETY: MAGIC_BYTES declares exactly the three non-tar archive keys above.
-    for (const [type, magic] of Object.entries(MAGIC_BYTES) as [
-      Exclude<ArchiveType, "tar">,
-      number[],
-    ][]) {
+    for (const [type, magic] of Object.entries(MAGIC_BYTES) as [Exclude<ArchiveType, "tar">, number[]][]) {
       if (magic.every((byte, i) => header[i] === byte)) {
         return type;
       }
@@ -47,18 +43,21 @@ async function detectArchiveType(filePath: string): Promise<ArchiveType | null> 
   }
 }
 
-async function listEntriesRar(filePath: string): Promise<string[]> {
+async function listEntriesRar(filePath: string, signal?: AbortSignal): Promise<string[]> {
   try {
     const extractor = await createExtractorFromFile({ filepath: filePath });
+    signal?.throwIfAborted();
     const list = extractor.getFileList();
 
     return [...list.fileHeaders].map((h) => h.name);
   } catch {
+    signal?.throwIfAborted();
+
     return [];
   }
 }
 
-async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): Promise<string[]> {
+async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar", signal?: AbortSignal): Promise<string[]> {
   const commands: Record<"zip" | "7z" | "tar", string[]> = {
     zip: ["zipinfo", "-1", filePath],
     "7z": ["7zz", "l", "-ba", "-slt", filePath],
@@ -66,7 +65,7 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): P
   };
 
   try {
-    const { stdout, exitCode, timedOut } = await spawnWithTimeoutText({ command: commands[type] });
+    const { stdout, exitCode, timedOut } = await spawnWithTimeoutText({ command: commands[type], signal });
 
     if (timedOut || exitCode !== 0) return [];
 
@@ -83,100 +82,116 @@ async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar"): P
       .split("\n")
       .filter((line) => line.length > 0 && !line.endsWith("/"));
   } catch {
+    signal?.throwIfAborted();
+
     return [];
   }
 }
 
-export async function listEntries(filePath: string): Promise<string[]> {
+export async function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
+  signal?.throwIfAborted();
   const type = await detectArchiveType(filePath);
+  signal?.throwIfAborted();
 
   if (!type) return [];
 
   if (type === "rar") {
-    return listEntriesRar(filePath);
+    return listEntriesRar(filePath, signal);
   }
 
-  return listEntriesShell(filePath, type);
+  return listEntriesShell(filePath, type, signal);
 }
 
-async function readEntryTar(filePath: string, entryPath: string): Promise<Buffer | null> {
+async function readEntryTar(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
   try {
     const { stdout, exitCode, timedOut } = await spawnWithTimeout({
       command: ["tar", "-xOf", filePath, entryPath],
+      signal,
     });
 
     if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
 
     return Buffer.from(stdout);
   } catch {
+    signal?.throwIfAborted();
+
     return null;
   }
 }
 
-async function readEntryRar(filePath: string, entryPath: string): Promise<Buffer | null> {
-  let tempDir: string | null = null;
-
+async function readEntryRar(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
   try {
-    tempDir = await mkdtemp(join(tmpdir(), "rar-"));
+    return await withTemporaryDirectory(
+      "rar-",
+      async (tempDir) => {
+        signal?.throwIfAborted();
 
-    const extractor = await createExtractorFromFile({
-      filepath: filePath,
-      targetPath: tempDir,
-    });
+        const extractor = await createExtractorFromFile({
+          filepath: filePath,
+          targetPath: tempDir,
+        });
 
-    const { files } = extractor.extract({ files: [entryPath] });
-    const results = [...files];
-    const found = results.find((r) => r.fileHeader.name === entryPath);
+        signal?.throwIfAborted();
 
-    if (!found || found.fileHeader.flags.directory) return null;
+        const { files } = extractor.extract({ files: [entryPath] });
+        const results = [...files];
+        const found = results.find((r) => r.fileHeader.name === entryPath);
 
-    return Buffer.from(await readFile(join(tempDir, entryPath)));
+        if (!found || found.fileHeader.flags.directory) return null;
+
+        const data = Buffer.from(await readFile(join(tempDir, entryPath)));
+        signal?.throwIfAborted();
+
+        return data;
+      },
+      signal,
+    );
   } catch {
+    signal?.throwIfAborted();
+
     return null;
-  } finally {
-    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-async function readEntryShell(
-  filePath: string,
-  entryPath: string,
-  type: "zip" | "7z",
-): Promise<Buffer | null> {
+async function readEntryShell(filePath: string, entryPath: string, type: "zip" | "7z", signal?: AbortSignal): Promise<Buffer | null> {
   const commands: Record<"zip" | "7z", string[]> = {
     zip: ["unzip", "-p", filePath, entryPath],
     "7z": ["7zz", "e", "-so", filePath, entryPath],
   };
 
   try {
-    const { stdout, exitCode, timedOut } = await spawnWithTimeout({ command: commands[type] });
+    const { stdout, exitCode, timedOut } = await spawnWithTimeout({ command: commands[type], signal });
 
     if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
 
     return Buffer.from(stdout);
   } catch {
+    signal?.throwIfAborted();
+
     return null;
   }
 }
 
-export async function readEntry(filePath: string, entryPath: string): Promise<Buffer | null> {
+export async function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
+  signal?.throwIfAborted();
   const type = await detectArchiveType(filePath);
+  signal?.throwIfAborted();
 
   if (!type) return null;
 
   if (type === "rar") {
-    return readEntryRar(filePath, entryPath);
+    return readEntryRar(filePath, entryPath, signal);
   }
 
   if (type === "tar") {
-    return readEntryTar(filePath, entryPath);
+    return readEntryTar(filePath, entryPath, signal);
   }
 
-  return readEntryShell(filePath, entryPath, type);
+  return readEntryShell(filePath, entryPath, type, signal);
 }
 
-export async function readEntryText(filePath: string, entryPath: string): Promise<string | null> {
-  const buffer = await readEntry(filePath, entryPath);
+export async function readEntryText(filePath: string, entryPath: string, signal?: AbortSignal): Promise<string | null> {
+  const buffer = await readEntry(filePath, entryPath, signal);
 
   return buffer ? buffer.toString("utf-8") : null;
 }

@@ -54,9 +54,7 @@ export async function assertDirectoryContains(dir: string, expectedFiles: string
 
   for (const expected of expectedFiles) {
     if (!files.includes(expected)) {
-      throw new Error(
-        `Expected directory ${dir} to contain ${expected}, found: ${files.join(", ")}`,
-      );
+      throw new Error(`Expected directory ${dir} to contain ${expected}, found: ${files.join(", ")}`);
     }
   }
 }

@@ -2,6 +2,20 @@
 
 OPDS catalog generator for locally stored ebooks. Watches `/books` directory, extracts metadata from epub/fb2/mobi/pdf/djvu/cbz/txt, generates OPDS 1.2 feeds with covers and thumbnails. Browse in any OPDS-compatible reader.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues for `Seigiard/opds-generator`. Before reading or publishing tickets, read `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical triage labels. Before triaging or changing labels, read `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` and `docs/adr/`. Before exploring domain concepts or architecture, read `docs/agents/domain.md`.
+
 ## Quick Reference
 
 | Instead of              | Use                         |
@@ -225,7 +239,29 @@ Audience split is by URL structure, not content negotiation: readers follow the 
 | `queue`             | SimpleQueue: enqueue, enqueueMany, take, size         |
 | `handlers`          | Map<tag, AsyncHandler>                                |
 
-Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">`.
+Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal: AbortSignal`. The consumer supplies its shutdown signal; `bookSync` forwards it to format factories and archive commands.
+
+### Command and temporary-resource ownership
+
+`src/utils/process.ts` owns command execution through Effect 4 scopes. `spawnWithTimeout` and `spawnWithTimeoutText` keep a Promise interface; `withTemporaryDirectory` owns temporary inputs used by DJVU/sharp and RAR extraction. Event processing remains `neverthrow` + async/await.
+
+- Commands default to 15 seconds each, with an optional `timeout` override. Timeout or cancellation sends SIGTERM, waits up to 1 second, then sends SIGKILL and waits for exit. Timeout returns empty stdout, `exitCode: -1`, and `timedOut: true`; cancellation rejects with the caller's abort reason after release.
+- Stdout stays file-backed and stderr is ignored. Acquire fd, child, and output resources inside the scope so spawn failure also releases them. PDF/DJVU commands use this module instead of direct spawns.
+- Temporary-directory callbacks must await all work that uses their files. Their Promise is uninterruptible so native sharp/unrar work can finish before cleanup; commands inside the callback observe its captured caller signal.
+- Format factories accept an optional shutdown signal. Cancellation is distinct from extraction failure: rethrow it through fallback catches, and check it before catalogue publication. Existing `entry.xml` remains untouched when cancellation occurs before publication; image files may already have been refreshed. Once entry/link publication starts, finish both writes so a fresh entry cannot lack its download link.
+- Shutdown signals are installed before initial sync. The existing 8-second hard deadline remains; expiry logs unfinished work/cleanup before process exit.
+
+### Effect anti-slop rules
+
+The vendored `anti-slop-effect` plugin is registered in `.oxlintrc.json`. Its five rules run at `error` on the Effect-owned command implementation (`src/utils/process.ts`):
+
+- `no-manual-effect-error-tag`: use `Effect.catchTag`/`catchTags` and `catchReason`/`catchReasons` instead of manual tag checks inside broad Effect catch handlers.
+- `no-manual-tag-comparison`: use `Match` or `Predicate.isTagged` instead of branching on `_tag`.
+- `no-manual-tagged-construction`: use Schema/Data tagged-value constructors instead of literal `_tag` objects.
+- `no-service-constructor-imports`: keep project-local `make<CapabilityName>` construction local instead of importing it into runtime Effect modules. Test/spec imports are exempt; package aliases are not enforced.
+- `prefer-effect-match`: use Effect's `Match` instead of chained literal ternaries over the same value.
+
+When another module adopts Effect, add its path to this override. Plain async/neverthrow event modules retain their existing discriminated unions. Keep resource acquisition/release scoped, preserve native-work lifetime during interruption, and preserve original errors at the Promise interface.
 
 ### Key Patterns
 
@@ -311,6 +347,8 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 ### Dependency Notes
 
 - `sharp` includes its own TypeScript definitions; do not add `@types/sharp`.
+- `effect` is pinned to `4.0.1` and limited to command/resource ownership. Rebuild the Docker test image after changing it. Historical Effect memory findings in `docs/memory-leak-investigation.md` describe the old runtime; current behavior is checked by the Docker memory suites.
+- Before investigating native RSS test failures, read `docs/memory-oracle-investigation.md` (#13). Memory gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per queue or consumer event, unchanged) plus exact JS-object growth (< 0.5 per operation). `memory-oracle-calibration.test.ts` proves both go red on retained memory; never raise a limit to pass a red run. The handler-chain RSS gate is weak at its limit (known limit, documented there).
 - `valibot` validates watcher events, parsed XML values, and reader event details at their input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract; format and render helpers consume that contract. Rebuild the Docker test image after changing this runtime dependency.
 - `knip.json` is the active Knip configuration. Its entry list includes the vendored anti-slop entry point so Knip sees the plugin's development dependency imports.
 - `detect-libc` is pulled transitively by `sharp`; do not add it as a direct dependency unless app code imports it.

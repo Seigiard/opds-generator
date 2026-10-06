@@ -3,13 +3,7 @@ import { createXmlParser, getString, getStringArray, cleanDescription } from "./
 import { logHandlerError } from "../logging/index.ts";
 import { listEntries, readEntryText } from "../utils/archive.ts";
 import * as v from "valibot";
-import {
-  xmlFields,
-  xmlFieldsSchema,
-  xmlStringSchema,
-  xmlNumberSchema,
-  xmlBooleanSchema,
-} from "./xml-value.ts";
+import { xmlFields, xmlFieldsSchema, xmlStringSchema, xmlNumberSchema, xmlBooleanSchema } from "./xml-value.ts";
 import type { XmlValue, XmlFields } from "./xml-value.ts";
 
 const xmlParser = createXmlParser(["author", "genre", "binary"]);
@@ -19,12 +13,7 @@ function formatAuthor(author: XmlFields): string {
   const name = parts.filter(Boolean).join(" ");
   const nickname = author.nickname;
 
-  return (
-    name ||
-    (nickname && v.is(v.union([xmlStringSchema, xmlNumberSchema, xmlBooleanSchema]), nickname)
-      ? String(nickname)
-      : "")
-  );
+  return name || (nickname && v.is(v.union([xmlStringSchema, xmlNumberSchema, xmlBooleanSchema]), nickname) ? String(nickname) : "");
 }
 
 function extractCoverId(href: string | undefined): string | undefined {
@@ -104,24 +93,26 @@ function getCoverBuffer(book: XmlFields, coverId: string): Buffer | null {
   }
 }
 
-async function readFb2Content(filePath: string): Promise<string | null> {
+async function readFb2Content(filePath: string, signal?: AbortSignal): Promise<string | null> {
   const ext = filePath.split(".").pop()?.toLowerCase();
 
   if (ext === "fbz" || filePath.toLowerCase().endsWith(".fb2.zip")) {
-    const entries = await listEntries(filePath);
+    const entries = await listEntries(filePath, signal);
     const fb2Entry = entries.find((e) => e.toLowerCase().endsWith(".fb2"));
 
     if (!fb2Entry) return null;
 
-    return readEntryText(filePath, fb2Entry);
+    return readEntryText(filePath, fb2Entry, signal);
   }
 
   return Bun.file(filePath).text();
 }
 
-async function createFb2Handler(filePath: string): Promise<FormatHandler | null> {
+async function createFb2Handler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
   try {
-    const content = await readFb2Content(filePath);
+    signal?.throwIfAborted();
+    const content = await readFb2Content(filePath, signal);
+    signal?.throwIfAborted();
 
     if (!content) return null;
 
@@ -146,6 +137,7 @@ async function createFb2Handler(filePath: string): Promise<FormatHandler | null>
       },
     };
   } catch (error) {
+    signal?.throwIfAborted();
     logHandlerError("FB2", filePath, error);
 
     return null;

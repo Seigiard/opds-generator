@@ -5,11 +5,7 @@ import { log } from "../logging/index.ts";
 
 export { COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../constants.ts";
 
-export async function saveBufferAsImage(
-  buffer: Buffer,
-  destPath: string,
-  maxSize: number,
-): Promise<boolean> {
+export async function saveBufferAsImage(buffer: Buffer, destPath: string, maxSize: number): Promise<boolean> {
   try {
     await mkdir(dirname(destPath), { recursive: true });
     await sharp(buffer)
@@ -34,10 +30,7 @@ export async function saveCoverAndThumbnail(
   thumbMaxSize: number,
 ): Promise<boolean> {
   try {
-    await Promise.all([
-      mkdir(dirname(coverPath), { recursive: true }),
-      mkdir(dirname(thumbPath), { recursive: true }),
-    ]);
+    await Promise.all([mkdir(dirname(coverPath), { recursive: true }), mkdir(dirname(thumbPath), { recursive: true })]);
 
     // Two independent pipelines instead of a shared pipeline + .clone(): cloning
     // retains ~7 KB of native memory per call (A/B-measured via the memory-leak

@@ -118,9 +118,7 @@ describe("entryFromFragment", () => {
     expect(entry.subjects).toEqual(["test"]);
     expect(entry.cover).toBe("/manual-test.pdf/cover.jpg");
     expect(entry.thumbnail).toBe("/manual-test.pdf/thumb.jpg");
-    expect(entry.acquisitions).toEqual([
-      { href: "/manual-test.pdf/file", type: "application/pdf" },
-    ]);
+    expect(entry.acquisitions).toEqual([{ href: "/manual-test.pdf/file", type: "application/pdf" }]);
     expect(entry.xml).toBe(BOOK_FRAGMENT);
   });
 

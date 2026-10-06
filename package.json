@@ -30,6 +30,7 @@
     "test:all": "bun run build:ui:check && bun run render:check && bun run render:pure && bun run test && bun run test:e2e"
   },
   "dependencies": {
+    "effect": "4.0.1",
     "fast-xml-parser": "^5.10.0",
     "hono": "^4.12.30",
     "knip": "^5.88.1",

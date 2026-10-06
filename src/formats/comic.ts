@@ -1,12 +1,6 @@
 import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
 import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
-import {
-  createXmlParser,
-  getFirstString,
-  getStringArray,
-  cleanDescription,
-  parseDate,
-} from "./utils.ts";
+import { createXmlParser, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 import { log, logHandlerError } from "../logging/index.ts";
 import * as v from "valibot";
 import { xmlFields, xmlFieldsSchema, xmlStringSchema, xmlNumberSchema } from "./xml-value.ts";
@@ -42,11 +36,7 @@ function parseGenresString(genre?: string): string[] | undefined {
   return genres.length > 0 ? genres : undefined;
 }
 
-function formatSeries(
-  series?: string,
-  volume?: string | number,
-  number?: string | number,
-): string | undefined {
+function formatSeries(series?: string, volume?: string | number, number?: string | number): string | undefined {
   const parts: string[] = [];
 
   if (series) parts.push(series);
@@ -75,12 +65,13 @@ function seriesPart(val: XmlValue) {
 async function parseComicInfo(
   filePath: string,
   entries: string[],
+  signal?: AbortSignal,
 ): Promise<{ metadata: BookMetadata; pages?: ComicInfoPage[] } | null> {
   const comicInfoPath = entries.find((e) => e.toLowerCase() === "comicinfo.xml");
 
   if (!comicInfoPath) return null;
 
-  const content = await readEntryText(filePath, comicInfoPath);
+  const content = await readEntryText(filePath, comicInfoPath, signal);
 
   if (!content) return null;
 
@@ -96,21 +87,14 @@ async function parseComicInfo(
 
     const metadata: BookMetadata = {
       title: toStringOrUndefined(info.Title) || toStringOrUndefined(info.Series) || "",
-      author:
-        toStringOrUndefined(info.Writer) ||
-        toStringOrUndefined(info.Penciller) ||
-        toStringOrUndefined(info.CoverArtist),
+      author: toStringOrUndefined(info.Writer) || toStringOrUndefined(info.Penciller) || toStringOrUndefined(info.CoverArtist),
       description: cleanDescription(toStringOrUndefined(info.Summary)),
       publisher: toStringOrUndefined(info.Publisher),
       issued: formatDateFromNumbers(year, month),
       language: toStringOrUndefined(info.LanguageISO),
       subjects: parseGenresString(toStringOrUndefined(info.Genre)),
       pageCount: pageCount && !isNaN(pageCount) ? pageCount : undefined,
-      series: formatSeries(
-        toStringOrUndefined(info.Series),
-        seriesPart(info.Volume),
-        seriesPart(info.Number),
-      ),
+      series: formatSeries(toStringOrUndefined(info.Series), seriesPart(info.Volume), seriesPart(info.Number)),
     };
 
     const rawPages = xmlFields(info.Pages)?.Page;
@@ -130,12 +114,12 @@ async function parseComicInfo(
   }
 }
 
-async function parseCoMet(filePath: string, entries: string[]): Promise<BookMetadata | null> {
+async function parseCoMet(filePath: string, entries: string[], signal?: AbortSignal): Promise<BookMetadata | null> {
   const cometPath = entries.find((e) => e.toLowerCase() === "comet.xml");
 
   if (!cometPath) return null;
 
-  const content = await readEntryText(filePath, cometPath);
+  const content = await readEntryText(filePath, cometPath, signal);
 
   if (!content) return null;
 
@@ -147,20 +131,13 @@ async function parseCoMet(filePath: string, entries: string[]): Promise<BookMeta
 
     return {
       title: toStringOrUndefined(comet.title) || toStringOrUndefined(comet.series) || "",
-      author:
-        getFirstString(comet.writer) ||
-        getFirstString(comet.creator) ||
-        getFirstString(comet.penciller),
+      author: getFirstString(comet.writer) || getFirstString(comet.creator) || getFirstString(comet.penciller),
       description: cleanDescription(toStringOrUndefined(comet.description)),
       publisher: toStringOrUndefined(comet.publisher),
       issued: parseDate(toStringOrUndefined(comet.date)),
       language: toStringOrUndefined(comet.language),
       subjects: getStringArray(comet.genre),
-      series: formatSeries(
-        toStringOrUndefined(comet.series),
-        seriesPart(comet.volume),
-        seriesPart(comet.issue),
-      ),
+      series: formatSeries(toStringOrUndefined(comet.series), seriesPart(comet.volume), seriesPart(comet.issue)),
       rights: toStringOrUndefined(comet.rights),
     };
   } catch (error) {
@@ -200,10 +177,7 @@ function mergeMetadata(...sources: (BookMetadata | null)[]): BookMetadata {
   return result;
 }
 
-function findCoverFromPages(
-  pages: ComicInfoPage[] | undefined,
-  images: string[],
-): string | undefined {
+function findCoverFromPages(pages: ComicInfoPage[] | undefined, images: string[]): string | undefined {
   if (!pages || pages.length === 0) return undefined;
 
   const frontCover = pages.find((p) => p["@_Type"] === "FrontCover");
@@ -250,23 +224,27 @@ function selectCoverImage(images: string[], pages?: ComicInfoPage[]): string | u
   return sorted[0];
 }
 
-async function createComicHandler(filePath: string): Promise<FormatHandler | null> {
+async function createComicHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
   try {
-    const entries = await listEntries(filePath);
+    const entries = await listEntries(filePath, signal);
 
     if (entries.length === 0) return null;
 
-    const images = entries.filter((e) =>
-      IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)),
-    );
+    const images = entries.filter((e) => IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)));
 
-    const [comicInfoResult, cometMetadata] = await Promise.all([
-      parseComicInfo(filePath, entries),
-      parseCoMet(filePath, entries),
+    const [comicInfoResult, cometMetadata] = await Promise.allSettled([
+      parseComicInfo(filePath, entries, signal),
+      parseCoMet(filePath, entries, signal),
     ]);
 
-    const metadata = mergeMetadata(comicInfoResult?.metadata ?? null, cometMetadata);
-    const pages = comicInfoResult?.pages;
+    signal?.throwIfAborted();
+
+    if (comicInfoResult.status === "rejected") throw comicInfoResult.reason;
+
+    if (cometMetadata.status === "rejected") throw cometMetadata.reason;
+
+    const metadata = mergeMetadata(comicInfoResult.value?.metadata ?? null, cometMetadata.value);
+    const pages = comicInfoResult.value?.pages;
 
     return {
       getMetadata() {
@@ -278,10 +256,11 @@ async function createComicHandler(filePath: string): Promise<FormatHandler | nul
 
         if (!coverPath) return null;
 
-        return readEntry(filePath, coverPath);
+        return readEntry(filePath, coverPath, signal);
       },
     };
   } catch (error) {
+    signal?.throwIfAborted();
     logHandlerError("Comic", filePath, error);
 
     return null;

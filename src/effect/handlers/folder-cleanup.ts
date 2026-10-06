@@ -4,10 +4,7 @@ import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import * as v from "valibot";
 
-export const folderCleanup = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const folderCleanup = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderDeleted") return ok([]);
 
   const { parent, name } = event;

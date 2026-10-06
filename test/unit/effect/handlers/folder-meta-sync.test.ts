@@ -114,10 +114,7 @@ describe("folderMetaSync handler", () => {
   test("includes folder entries from subfolders", async () => {
     const subfolderPath = join(DATA_DIR, "Fiction");
     await mkdir(subfolderPath, { recursive: true });
-    await Bun.write(
-      join(subfolderPath, "_entry.xml"),
-      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>',
-    );
+    await Bun.write(join(subfolderPath, "_entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>');
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -127,10 +124,7 @@ describe("folderMetaSync handler", () => {
   test("includes book entries from subfolders", async () => {
     const bookPath = join(DATA_DIR, "book.epub");
     await mkdir(bookPath, { recursive: true });
-    await Bun.write(
-      join(bookPath, "entry.xml"),
-      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Test Book</title></entry>',
-    );
+    await Bun.write(join(bookPath, "entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Test Book</title></entry>');
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -140,10 +134,7 @@ describe("folderMetaSync handler", () => {
   test("sets feed as acquisition type when books present", async () => {
     const bookPath = join(DATA_DIR, "book.epub");
     await mkdir(bookPath, { recursive: true });
-    await Bun.write(
-      join(bookPath, "entry.xml"),
-      '<entry xmlns="http://www.w3.org/2005/Atom"><title>Book</title></entry>',
-    );
+    await Bun.write(join(bookPath, "entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Book</title></entry>');
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
@@ -156,10 +147,7 @@ describe("folderMetaSync handler", () => {
     for (const item of items) {
       const itemPath = join(DATA_DIR, item);
       await mkdir(itemPath, { recursive: true });
-      await Bun.write(
-        join(itemPath, "_entry.xml"),
-        `<entry xmlns="http://www.w3.org/2005/Atom"><title>${item}</title></entry>`,
-      );
+      await Bun.write(join(itemPath, "_entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>${item}</title></entry>`);
     }
 
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
@@ -227,10 +215,7 @@ describe("folderMetaSync handler", () => {
       for (let i = 1; i <= 3; i++) {
         const bookPath = join(nestedPath, `book${i}.epub`);
         await mkdir(bookPath, { recursive: true });
-        await Bun.write(
-          join(bookPath, "entry.xml"),
-          `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`,
-        );
+        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
@@ -247,10 +232,7 @@ describe("folderMetaSync handler", () => {
       for (const name of ["SciFi", "Fantasy"]) {
         const subPath = join(nestedPath, name);
         await mkdir(subPath, { recursive: true });
-        await Bun.write(
-          join(subPath, "_entry.xml"),
-          `<entry xmlns="http://www.w3.org/2005/Atom"><title>${name}</title></entry>`,
-        );
+        await Bun.write(join(subPath, "_entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>${name}</title></entry>`);
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
@@ -266,18 +248,12 @@ describe("folderMetaSync handler", () => {
 
       const subPath = join(nestedPath, "Fiction");
       await mkdir(subPath, { recursive: true });
-      await Bun.write(
-        join(subPath, "_entry.xml"),
-        '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>',
-      );
+      await Bun.write(join(subPath, "_entry.xml"), '<entry xmlns="http://www.w3.org/2005/Atom"><title>Fiction</title></entry>');
 
       for (let i = 1; i <= 2; i++) {
         const bookPath = join(nestedPath, `book${i}.epub`);
         await mkdir(bookPath, { recursive: true });
-        await Bun.write(
-          join(bookPath, "entry.xml"),
-          `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`,
-        );
+        await Bun.write(join(bookPath, "entry.xml"), `<entry xmlns="http://www.w3.org/2005/Atom"><title>Book ${i}</title></entry>`);
       }
 
       await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);

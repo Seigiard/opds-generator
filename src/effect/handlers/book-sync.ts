@@ -14,18 +14,22 @@ async function extractMetadataAndCover(
   filePath: string,
   ext: string,
   bookDataDir: string,
+  signal?: AbortSignal,
 ): Promise<{ meta: BookMetadata; hasCover: boolean }> {
   const createHandler = getHandlerFactory(ext);
 
   if (!createHandler) return { meta: { title: "" }, hasCover: false };
 
   try {
-    const handler = await createHandler(filePath);
+    signal?.throwIfAborted();
+    const handler = await createHandler(filePath, signal);
+    signal?.throwIfAborted();
 
     if (!handler) return { meta: { title: "" }, hasCover: false };
 
     const meta = handler.getMetadata();
     let cover = await handler.getCover();
+    signal?.throwIfAborted();
     let hasCover = false;
 
     if (cover) {
@@ -38,6 +42,7 @@ async function extractMetadataAndCover(
           THUMBNAIL_MAX_SIZE,
         );
       } catch {
+        signal?.throwIfAborted();
         hasCover = false;
       }
 
@@ -46,14 +51,13 @@ async function extractMetadataAndCover(
 
     return { meta, hasCover };
   } catch {
+    signal?.throwIfAborted();
+
     return { meta: { title: "" }, hasCover: false };
   }
 }
 
-export const bookSync = async (
-  event: EventType,
-  deps: HandlerDeps,
-): Promise<Result<readonly EventType[], Error>> => {
+export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "BookCreated") return ok([]);
 
   const { parent, name } = event;
@@ -65,20 +69,12 @@ export const bookSync = async (
   deps.logger.info("BookSync", "Processing", { path: relativePath });
 
   try {
+    deps.signal?.throwIfAborted();
     const fileStat = await deps.fs.stat(filePath);
+    deps.signal?.throwIfAborted();
     await deps.fs.mkdir(bookDataDir, { recursive: true });
 
-    let meta: BookMetadata;
-    let hasCover: boolean;
-
-    try {
-      const result = await extractMetadataAndCover(filePath, ext, bookDataDir);
-      meta = result.meta;
-      hasCover = result.hasCover;
-    } catch {
-      meta = { title: "" };
-      hasCover = false;
-    }
+    const { meta, hasCover } = await extractMetadataAndCover(filePath, ext, bookDataDir, deps.signal);
 
     const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
     const title = meta.title || normalizeFilenameTitle(rawFilename);
@@ -117,6 +113,8 @@ export const bookSync = async (
 
     const entryXml = entry.toXml({ prettyPrint: true });
 
+    deps.signal?.throwIfAborted();
+    // Once publication starts, finish both writes so the scanner cannot mistake a partial book for a complete one.
     await deps.fs.atomicWrite(join(bookDataDir, ENTRY_FILE), entryXml);
     await deps.fs.symlink(filePath, join(bookDataDir, name));
 

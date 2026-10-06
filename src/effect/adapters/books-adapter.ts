@@ -28,23 +28,19 @@ function classifyBooksEvent(raw: RawBooksEvent): EventType {
 
   if (event === "CREATE" && !isDir) return { _tag: "Ignored" };
 
-  if (event === "CLOSE_WRITE")
-    return isValidBookExtension(name) ? { _tag: "BookCreated", parent, name } : { _tag: "Ignored" };
+  if (event === "CLOSE_WRITE") return isValidBookExtension(name) ? { _tag: "BookCreated", parent, name } : { _tag: "Ignored" };
 
   if (event === "DELETE" && isDir) return { _tag: "FolderDeleted", parent, name };
 
-  if (event === "DELETE" && !isDir)
-    return isValidBookExtension(name) ? { _tag: "BookDeleted", parent, name } : { _tag: "Ignored" };
+  if (event === "DELETE" && !isDir) return isValidBookExtension(name) ? { _tag: "BookDeleted", parent, name } : { _tag: "Ignored" };
 
   if (event === "MOVED_FROM" && isDir) return { _tag: "FolderDeleted", parent, name };
 
-  if (event === "MOVED_FROM" && !isDir)
-    return isValidBookExtension(name) ? { _tag: "BookDeleted", parent, name } : { _tag: "Ignored" };
+  if (event === "MOVED_FROM" && !isDir) return isValidBookExtension(name) ? { _tag: "BookDeleted", parent, name } : { _tag: "Ignored" };
 
   if (event === "MOVED_TO" && isDir) return { _tag: "FolderCreated", parent, name };
 
-  if (event === "MOVED_TO" && !isDir)
-    return isValidBookExtension(name) ? { _tag: "BookCreated", parent, name } : { _tag: "Ignored" };
+  if (event === "MOVED_TO" && !isDir) return isValidBookExtension(name) ? { _tag: "BookCreated", parent, name } : { _tag: "Ignored" };
 
   return { _tag: "Ignored" };
 }

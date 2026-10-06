@@ -92,9 +92,7 @@ async function resync(ctx: AppContext): Promise<void> {
   try {
     log.info("Resync", "Starting full resync");
     const entries = await readdir(config.dataPath);
-    await Promise.all(
-      entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })),
-    );
+    await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
     log.info("Resync", "Cleared data directory");
     await doSync(ctx);
   } finally {
@@ -235,29 +233,37 @@ async function main(): Promise<void> {
 
     log.info("Server", "Listening", { port: server.port });
 
-    await initialSync(ctx);
-
     let reconcileTask: Promise<void> | null = null;
-
-    if (config.reconcileInterval > 0) {
-      reconcileTask = startReconciliation(ctx, controller.signal);
-      log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
-    }
 
     const shutdown = async () => {
       log.info("Server", "Shutting down");
       server.stop();
       controller.abort();
-      const timeout = new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS));
-      await Promise.race([
-        Promise.allSettled([consumerTask, reconcileTask].filter(Boolean)),
-        timeout,
-      ]);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      const timeout = new Promise<"timeout">((resolve) => {
+        timeoutId = setTimeout(() => resolve("timeout"), SHUTDOWN_TIMEOUT_MS);
+      });
+
+      const outcome = await Promise.race([Promise.allSettled([consumerTask, reconcileTask].filter(Boolean)), timeout]);
+      clearTimeout(timeoutId);
+
+      if (outcome === "timeout") {
+        log.warn("Server", "Shutdown deadline reached; active work or cleanup is unfinished");
+      }
+
       process.exit(0);
     };
 
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
+
+    await initialSync(ctx);
+
+    if (!controller.signal.aborted && config.reconcileInterval > 0) {
+      reconcileTask = startReconciliation(ctx, controller.signal);
+      log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
+    }
   } catch (error) {
     log.error("Server", "Startup failed", error);
     process.exit(1);

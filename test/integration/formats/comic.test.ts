@@ -25,8 +25,7 @@ describe("Comic Handler Integration", () => {
         const archive = join(dir, "variant.cbz");
         await Bun.$`7zz a -tzip ${archive} .`.cwd(contents).quiet();
 
-        const expected =
-          await Bun.$`unzip -p ${cbzPath} Bobby-Make-Believe_1915__1.jpg`.arrayBuffer();
+        const expected = await Bun.$`unzip -p ${cbzPath} Bobby-Make-Believe_1915__1.jpg`.arrayBuffer();
 
         // #when selecting the cover through the real handler
         const handler = await comicHandlerRegistration.create(archive);

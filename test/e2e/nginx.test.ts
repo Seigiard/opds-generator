@@ -31,12 +31,7 @@ async function waitForServer(): Promise<void> {
 // Decode the handful of HTML entities that appear in escaped attribute values, as a
 // browser does before it uses the URL (paths are otherwise percent-encoded).
 function htmlDecode(value: string): string {
-  return value
-    .replaceAll("&#39;", "'")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
+  return value.replaceAll("&#39;", "'").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 }
 
 // Check if /resync is enabled
@@ -326,8 +321,8 @@ describe("nginx integration", () => {
         // the links a browser actually clicks (folder cards, home) must resolve to HTML, not XML
         const html = await htmlRes.text();
 
-        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)].flatMap(
-          (m) => (m[1]!.startsWith("#") ? [] : [m[1]!]),
+        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)].flatMap((m) =>
+          m[1]!.startsWith("#") ? [] : [m[1]!],
         );
 
         for (const href of cardHrefs) {

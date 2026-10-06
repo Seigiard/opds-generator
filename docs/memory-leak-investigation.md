@@ -1,3 +1,7 @@
+## Historical investigation (March 2026)
+
+The measurements below describe the former Effect event runtime. Issue [#12](https://github.com/Seigiard/opds-generator/issues/12) reintroduces Effect 4 only for command and temporary-resource ownership; queue and handlers remain plain async/neverthrow. Use the current Docker memory suites to assess that implementation.
+
 ## Problem
 
 RSS grows linearly during book processing. heap_used stable at 12-13 MB, RSS grows unbounded → OOM crash at 512 MB Docker limit.

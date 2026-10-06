@@ -1,147 +1,34 @@
-import { describe, expect, test } from "bun:test";
-import { ok } from "neverthrow";
-import { SimpleQueue } from "../../src/queue.ts";
-import { startConsumer } from "../../src/effect/consumer.ts";
-import type { AppContext } from "../../src/context.ts";
-import type { EventType } from "../../src/effect/types.ts";
+import { describe, expect, test, beforeAll } from "bun:test";
+import { MAX_OBJECTS_PER_ITER, MAX_RUNTIME_LEAK_KB, QUEUE_EVENTS_PER_OP, retainedKbPerIter, runProbe } from "../helpers/run-leak-probe.ts";
 
-const ITERATIONS = 500;
-
-const MAX_LEAK_KB = 1;
-
-function getRssMb(): number {
-  return process.memoryUsage().rss / 1024 / 1024;
-}
-
-function stabilize(): void {
-  Bun.gc(true);
-  Bun.gc(true);
-  Bun.gc(true);
-}
-
-async function warmup(fn: () => Promise<void>, count = 200): Promise<void> {
-  for (let i = 0; i < count; i++) {
-    await fn();
-
-    if (i % 20 === 0) Bun.gc(true);
-  }
-
-  stabilize();
-}
-
-function measureLeak(label: string, before: number, after: number, iters: number): number {
-  const totalMb = after - before;
-  const perIterKb = (totalMb * 1024) / iters;
-  console.log(
-    `  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iters} iters)`,
-  );
-
-  return perIterKb;
-}
-
-function createTestContext(): AppContext {
-  return {
-    config: {
-      filesPath: "/test/files",
-      dataPath: "/test/data",
-      port: 3000,
-      reconcileInterval: 1800,
-    },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-    fs: {
-      mkdir: async () => {},
-      rm: async () => {},
-      readdir: async () => [],
-      stat: async () => ({ isDirectory: () => false, size: 0 }),
-      exists: async () => false,
-      writeFile: async () => {},
-      atomicWrite: async () => {},
-      symlink: async () => {},
-      unlink: async () => {},
-    },
-    dedup: { shouldProcess: () => true },
-    queue: new SimpleQueue<EventType>(),
-    handlers: {
-      get: () => undefined,
-      register: () => {},
-    },
-  };
-}
+// Measured in probe subprocesses. In the shared test process this suite read whatever
+// the preceding test left behind: −6…−8 KB/iter after the in-process handler test,
+// +0.6…+1.2 KB/iter once that test moved out (issue #13).
+const scenarios = [
+  { name: "queue-cycle", label: "SimpleQueue enqueue/take cycle", eventsPerOp: QUEUE_EVENTS_PER_OP },
+  { name: "consumer-enqueue", label: "Consumer + enqueue cycle", eventsPerOp: 1 },
+];
 
 describe("Runtime memory leak isolation (post-Effect migration)", () => {
-  test("SimpleQueue enqueue/take cycle", async () => {
-    const queue = new SimpleQueue<EventType>();
+  for (const { name, label, eventsPerOp } of scenarios) {
+    describe(label, () => {
+      let result: Awaited<ReturnType<typeof runProbe>>;
 
-    const op = async () => {
-      queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
-      await queue.take();
-    };
+      beforeAll(async () => {
+        result = await runProbe(name);
+      }, 60000);
 
-    await warmup(op);
+      test(`retains less than ${MAX_RUNTIME_LEAK_KB} KB of RSS per event`, () => {
+        // #given / #when — the probe ran the cycle in a pristine process
+        // #then
+        expect(retainedKbPerIter(result) / eventsPerOp).toBeLessThan(MAX_RUNTIME_LEAK_KB);
+      });
 
-    stabilize();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      await op();
-      Bun.gc(true);
-    }
-
-    stabilize();
-
-    const kb = measureLeak("SimpleQueue(offer+take)", before, getRssMb(), ITERATIONS);
-    expect(kb).toBeLessThan(MAX_LEAK_KB);
-  }, 30000);
-
-  test("Consumer + enqueue cycle", async () => {
-    const ctx = createTestContext();
-    let processed = 0;
-
-    ctx.handlers.get = (tag) => {
-      if (tag === "FolderMetaSyncRequested") {
-        return async () => {
-          processed++;
-
-          return ok<readonly EventType[]>([]);
-        };
-      }
-
-      return undefined;
-    };
-
-    const controller = new AbortController();
-    const consumerTask = startConsumer(ctx, controller.signal);
-    await new Promise((r) => setTimeout(r, 50));
-
-    const enqueue = () => {
-      ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
-    };
-
-    await warmup(async () => {
-      enqueue();
-      await new Promise((r) => setTimeout(r, 5));
+      test(`retains less than ${MAX_OBJECTS_PER_ITER} JS objects per event`, () => {
+        // #given / #when — the probe ran the cycle in a pristine process
+        // #then
+        expect(result.objectsPerIter / eventsPerOp).toBeLessThan(MAX_OBJECTS_PER_ITER);
+      });
     });
-
-    stabilize();
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      enqueue();
-
-      if (i % 50 === 0) {
-        await new Promise((r) => setTimeout(r, 50));
-        Bun.gc(true);
-      }
-    }
-
-    await new Promise((r) => setTimeout(r, 500));
-    stabilize();
-
-    const kb = measureLeak("consumer+enqueue", before, getRssMb(), ITERATIONS);
-    console.log(`  processed: ${processed}`);
-
-    controller.abort();
-    await consumerTask;
-    expect(kb).toBeLessThan(MAX_LEAK_KB);
-  }, 30000);
+  }
 });

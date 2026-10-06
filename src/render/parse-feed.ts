@@ -17,9 +17,7 @@ export function parseFeed(xml: string): FeedModel {
   const self = links.find((l) => l["@_rel"] === "self");
   const start = links.find((l) => l["@_rel"] === "start");
 
-  const kind: FeedModel["kind"] = self?.["@_type"]?.includes("kind=acquisition")
-    ? "acquisition"
-    : "navigation";
+  const kind: FeedModel["kind"] = self?.["@_type"]?.includes("kind=acquisition") ? "acquisition" : "navigation";
 
   return {
     id: getString(feed.id) ?? "",

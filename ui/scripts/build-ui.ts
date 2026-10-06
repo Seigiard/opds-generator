@@ -70,12 +70,7 @@ const FOLIATE_EXCLUDED_FILES = new Set(["eslint.config.js", "rollup.config.js", 
 
 const FOLIATE_VENDOR_FILES = ["zip.js", "fflate.js"];
 
-const FOLIATE_PDFJS_FILES = [
-  "pdf.mjs",
-  "pdf.worker.mjs",
-  "text_layer_builder.css",
-  "annotation_layer_builder.css",
-];
+const FOLIATE_PDFJS_FILES = ["pdf.mjs", "pdf.worker.mjs", "text_layer_builder.css", "annotation_layer_builder.css"];
 
 const FOLIATE_PDFJS_DIRS = ["cmaps", "standard_fonts"];
 
@@ -94,10 +89,7 @@ async function foliateModuleFiles(): Promise<string[]> {
   const entries = await readdir(foliateSourceDir, { withFileTypes: true });
 
   return entries
-    .filter(
-      (entry) =>
-        entry.isFile() && entry.name.endsWith(".js") && !FOLIATE_EXCLUDED_FILES.has(entry.name),
-    )
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".js") && !FOLIATE_EXCLUDED_FILES.has(entry.name))
     .map((entry) => entry.name)
     .sort();
 }
@@ -125,11 +117,7 @@ async function copyFoliateRuntime(targetDir: string, moduleFiles: string[]): Pro
   }
 
   for (const dir of FOLIATE_PDFJS_DIRS) {
-    await cp(
-      join(foliateSourceDir, "vendor", "pdfjs", dir),
-      join(targetDir, "vendor", "pdfjs", dir),
-      { recursive: true },
-    );
+    await cp(join(foliateSourceDir, "vendor", "pdfjs", dir), join(targetDir, "vendor", "pdfjs", dir), { recursive: true });
   }
 }
 
@@ -157,8 +145,7 @@ async function hashFoliateRuntime(moduleFiles: string[]): Promise<string> {
     for (const entry of entries) {
       const full = join(dirPath, entry);
 
-      if ((await stat(full)).isFile())
-        hasher.update(`${dir}/${entry}\n`).update(await Bun.file(full).arrayBuffer());
+      if ((await stat(full)).isFile()) hasher.update(`${dir}/${entry}\n`).update(await Bun.file(full).arrayBuffer());
     }
   }
 
@@ -206,9 +193,7 @@ async function buildReader(): Promise<void> {
   const css = await Bun.file(join(readerDir, "reader.css")).text();
   const readerCssResult = await postcss(pipeline).process(css, { from: undefined });
 
-  const page = template
-    .replace("__FOLIATE_BASE__", `/static/${foliateDirName}`)
-    .replace("__READER_CSS__", readerCssResult.css);
+  const page = template.replace("__FOLIATE_BASE__", `/static/${foliateDirName}`).replace("__READER_CSS__", readerCssResult.css);
 
   await Bun.write(join(staticDir, "read.html"), page);
   console.log(`build:ui → ${join(staticDir, "read.html")}`);

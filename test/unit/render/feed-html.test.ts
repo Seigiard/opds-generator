@@ -6,13 +6,7 @@ import { renderHtml, formatFromMime } from "../../../src/render/feed-html.ts";
 import { BOOK_EXTENSIONS, VIEWABLE_FORMATS } from "../../../src/types.ts";
 import { parseFragment } from "../../../ui/reader/fragment.ts";
 import type { FeedModel } from "../../../src/render/feed-model.ts";
-import {
-  allElements,
-  byClass,
-  flattenElements,
-  parseHtml,
-  type HtmlNode,
-} from "../../helpers/html-query.ts";
+import { allElements, byClass, flattenElements, parseHtml, type HtmlNode } from "../../helpers/html-query.ts";
 
 const FEEDS_DIR = join(import.meta.dir, "../../fixtures/feeds");
 
@@ -32,8 +26,7 @@ const stripDoctype = (html: string) => html.replace(/^<!DOCTYPE html>\s*/i, "");
 
 const links = (roots: HtmlNode[]) => allElements(roots).filter((el) => el.tag === "a");
 
-const documentIndex = (html: string, predicate: (el: HtmlNode) => boolean) =>
-  flattenElements(html).findIndex(predicate);
+const documentIndex = (html: string, predicate: (el: HtmlNode) => boolean) => flattenElements(html).findIndex(predicate);
 
 describe("renderHtml", () => {
   test("happy path: folder and book cards, breadcrumb home, title", async () => {
@@ -64,16 +57,12 @@ describe("renderHtml", () => {
     const roots = parseHtml(renderHtml(parseFeed(await readFeed("edge-cases.xml"))));
 
     // the no-cover book renders its title in a <span>, not an <img>
-    const spans = allElements(roots).filter(
-      (el) => el.tag === "span" && el.text === "Book Without Cover",
-    );
+    const spans = allElements(roots).filter((el) => el.tag === "span" && el.text === "Book Without Cover");
 
     expect(spans.length).toBeGreaterThan(0);
 
     // and no cover image is emitted for that title
-    const imgs = allElements(roots).filter(
-      (el) => el.tag === "img" && el.attrs.alt === "Book Without Cover",
-    );
+    const imgs = allElements(roots).filter((el) => el.tag === "img" && el.attrs.alt === "Book Without Cover");
 
     expect(imgs).toHaveLength(0);
   });
@@ -130,9 +119,7 @@ describe("renderHtml", () => {
     const roots = parseHtml(renderHtml(parseFeed(await readFeed("cyrillic-book.xml"))));
     // #then the card opens the popup via a hash link, no checkbox/label
     expect(links(roots).some((a) => a.attrs.href === "#book-1")).toBe(true);
-    expect(
-      allElements(roots).some((el) => el.tag === "input" && el.attrs.type === "checkbox"),
-    ).toBe(false);
+    expect(allElements(roots).some((el) => el.tag === "input" && el.attrs.type === "checkbox")).toBe(false);
     // and the popup is a <dialog class="popup" id="book-1"> element
     const popup = byClass(roots, "popup")[0];
     expect(popup?.tag).toBe("dialog");
@@ -175,15 +162,9 @@ describe("renderHtml", () => {
     expect(links(roots).some((a) => a.attrs.href === "#book-2")).toBe(true);
 
     // the second card's link precedes the first popup in document order (independent popups)
-    const secondCardLink = documentIndex(
-      html,
-      (el) => el.tag === "a" && el.attrs.href === "#book-2",
-    );
+    const secondCardLink = documentIndex(html, (el) => el.tag === "a" && el.attrs.href === "#book-2");
 
-    const firstPopup = documentIndex(
-      html,
-      (el) => el.attrs.class === "popup" && el.attrs.id === "book-1",
-    );
+    const firstPopup = documentIndex(html, (el) => el.attrs.class === "popup" && el.attrs.id === "book-1");
 
     expect(secondCardLink).toBeGreaterThan(firstPopup);
   });
@@ -253,10 +234,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
     const roots = parseHtml(renderHtml(model));
     // #then exactly the epub and pdf acquisitions carry View links
     const views = byClass(roots, "popup__view-btn");
-    expect(views.map((v) => v.attrs.href)).toEqual([
-      "/static/read.html#/v/book.epub/book.epub",
-      "/static/read.html#/v/book.pdf/book.pdf",
-    ]);
+    expect(views.map((v) => v.attrs.href)).toEqual(["/static/read.html#/v/book.epub/book.epub", "/static/read.html#/v/book.pdf/book.pdf"]);
     // and every popup still has its download button
     expect(byClass(roots, "popup__download-btn")).toHaveLength(3);
   });
@@ -281,9 +259,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
 
   test("registry flip: adding fb2 turns the View link on with no renderer edit", () => {
     // #given fb2 temporarily added to the registry
-    const model = bookModel([
-      { title: "F", href: "/v/book.fb2/book.fb2", type: "application/x-fictionbook+xml" },
-    ]);
+    const model = bookModel([{ title: "F", href: "/v/book.fb2/book.fb2", type: "application/x-fictionbook+xml" }]);
 
     expect(byClass(parseHtml(renderHtml(model)), "popup__view-btn")).toHaveLength(0);
     // SAFETY: VIEWABLE_FORMATS is constructed as a mutable Set in src/types.ts; restore it below.
@@ -293,9 +269,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
       // #when rendered with the flipped registry
       const roots = parseHtml(renderHtml(model));
       // #then the fb2 acquisition now carries a View link
-      expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe(
-        "/static/read.html#/v/book.fb2/book.fb2",
-      );
+      expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe("/static/read.html#/v/book.fb2/book.fb2");
     } finally {
       // SAFETY: restore the same concrete Set mutated above after this registry extension test.
       (VIEWABLE_FORMATS as Set<string>).delete("fb2");

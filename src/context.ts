@@ -35,10 +35,7 @@ export interface DeduplicationService {
   shouldProcess(key: string): boolean;
 }
 
-type AsyncHandler = (
-  event: EventType,
-  deps: HandlerDeps,
-) => Promise<import("neverthrow").Result<readonly EventType[], Error>>;
+type AsyncHandler = (event: EventType, deps: HandlerDeps) => Promise<import("neverthrow").Result<readonly EventType[], Error>>;
 
 export interface HandlerRegistryService {
   get(tag: string): AsyncHandler | undefined;
@@ -54,7 +51,7 @@ export interface AppContext {
   readonly handlers: HandlerRegistryService;
 }
 
-export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">;
+export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs"> & { readonly signal?: AbortSignal };
 
 export async function buildContext(): Promise<AppContext> {
   const configService: ConfigService = {

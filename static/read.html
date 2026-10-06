@@ -18,23 +18,14 @@
   <body>
     <noscript>
       <div class="reader-fallback">
-        <p>
-          This reader needs JavaScript. You can download books directly from the catalog instead.
-        </p>
+        <p>This reader needs JavaScript. You can download books directly from the catalog instead.</p>
         <p><a href="/">Back to catalog</a></p>
       </div>
     </noscript>
     <div id="reader" class="reader" hidden>
       <header class="reader__bar">
         <a id="reader-return" class="reader__return" href="/">Catalog</a>
-        <button
-          id="reader-toc-toggle"
-          class="reader__toc-toggle"
-          type="button"
-          aria-expanded="false"
-          aria-controls="reader-toc"
-          hidden
-        >
+        <button id="reader-toc-toggle" class="reader__toc-toggle" type="button" aria-expanded="false" aria-controls="reader-toc" hidden>
           Contents
         </button>
         <span id="reader-title" class="reader__title"></span>
@@ -43,25 +34,9 @@
       <nav id="reader-toc" class="reader__toc" hidden aria-label="Table of contents"></nav>
       <main id="reader-view" class="reader__view"></main>
       <footer class="reader__footer">
-        <button
-          id="reader-prev"
-          class="reader__nav-btn"
-          type="button"
-          aria-label="Previous page"
-          hidden
-        >
-          &#8592;
-        </button>
+        <button id="reader-prev" class="reader__nav-btn" type="button" aria-label="Previous page" hidden>&#8592;</button>
         <span id="reader-position" class="reader__position"></span>
-        <button
-          id="reader-next"
-          class="reader__nav-btn"
-          type="button"
-          aria-label="Next page"
-          hidden
-        >
-          &#8594;
-        </button>
+        <button id="reader-next" class="reader__nav-btn" type="button" aria-label="Next page" hidden>&#8594;</button>
       </footer>
     </div>
     <div id="reader-error" class="reader-fallback" hidden>

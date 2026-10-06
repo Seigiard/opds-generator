@@ -59,10 +59,7 @@ interface QueueLike {
   size: number;
 }
 
-async function benchFastPath(
-  createQueue: () => QueueLike,
-  iterations: number,
-): Promise<BenchResult> {
+async function benchFastPath(createQueue: () => QueueLike, iterations: number): Promise<BenchResult> {
   const queue = createQueue();
 
   for (let i = 0; i < 500; i++) {
@@ -93,10 +90,7 @@ async function benchFastPath(
   };
 }
 
-async function benchWaiterPath(
-  createQueue: () => QueueLike,
-  iterations: number,
-): Promise<BenchResult> {
+async function benchWaiterPath(createQueue: () => QueueLike, iterations: number): Promise<BenchResult> {
   const queue = createQueue();
 
   for (let i = 0; i < 500; i++) {
@@ -131,12 +125,8 @@ async function benchWaiterPath(
 
 function logComparison(name: string, old: BenchResult, next: BenchResult): void {
   console.log(`\n  ${name}:`);
-  console.log(
-    `    ArrayQueue:    ${old.opsPerMs.toFixed(1)} ops/ms, ${old.kbPerEvent.toFixed(3)} KB/event`,
-  );
-  console.log(
-    `    UnrolledQueue: ${next.opsPerMs.toFixed(1)} ops/ms, ${next.kbPerEvent.toFixed(3)} KB/event`,
-  );
+  console.log(`    ArrayQueue:    ${old.opsPerMs.toFixed(1)} ops/ms, ${old.kbPerEvent.toFixed(3)} KB/event`);
+  console.log(`    UnrolledQueue: ${next.opsPerMs.toFixed(1)} ops/ms, ${next.kbPerEvent.toFixed(3)} KB/event`);
   const winner = next.kbPerEvent <= old.kbPerEvent ? "UnrolledQueue" : "ArrayQueue";
   console.log(`    Winner (RSS): ${winner}`);
 }
@@ -184,12 +174,8 @@ describe("Queue Benchmark — ArrayQueue vs UnrolledQueue (R8)", () => {
     const newDeltaKb = (getRssMb() - newBeforeRss) * 1024;
 
     console.log("\n  Burst (10K enqueue + 10K take):");
-    console.log(
-      `    ArrayQueue:    ${oldElapsed.toFixed(1)}ms, RSS delta: ${oldDeltaKb.toFixed(0)} KB`,
-    );
-    console.log(
-      `    UnrolledQueue: ${newElapsed.toFixed(1)}ms, RSS delta: ${newDeltaKb.toFixed(0)} KB`,
-    );
+    console.log(`    ArrayQueue:    ${oldElapsed.toFixed(1)}ms, RSS delta: ${oldDeltaKb.toFixed(0)} KB`);
+    console.log(`    UnrolledQueue: ${newElapsed.toFixed(1)}ms, RSS delta: ${newDeltaKb.toFixed(0)} KB`);
   }, 120_000);
 
   test("steady-state RSS: 50K alternating enqueue/take", async () => {
@@ -236,12 +222,8 @@ describe("Queue Benchmark — ArrayQueue vs UnrolledQueue (R8)", () => {
     const newDelta = (getRssMb() - newBefore) * 1024;
 
     console.log("\n  Steady-state (50K alternating):");
-    console.log(
-      `    ArrayQueue:    RSS delta: ${oldDelta.toFixed(0)} KB (${(oldDelta / N).toFixed(4)} KB/event)`,
-    );
-    console.log(
-      `    UnrolledQueue: RSS delta: ${newDelta.toFixed(0)} KB (${(newDelta / N).toFixed(4)} KB/event)`,
-    );
+    console.log(`    ArrayQueue:    RSS delta: ${oldDelta.toFixed(0)} KB (${(oldDelta / N).toFixed(4)} KB/event)`);
+    console.log(`    UnrolledQueue: RSS delta: ${newDelta.toFixed(0)} KB (${(newDelta / N).toFixed(4)} KB/event)`);
     expect(newDelta / N).toBeLessThan(MAX_KB_PER_EVENT);
   }, 300_000);
 });

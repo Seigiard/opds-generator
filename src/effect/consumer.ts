@@ -86,10 +86,12 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
       continue;
     }
 
-    const deps = { config: ctx.config, logger: ctx.logger, fs: ctx.fs };
+    const deps = { config: ctx.config, logger: ctx.logger, fs: ctx.fs, signal };
 
     try {
       const result = await handler(event, deps);
+
+      if (signal.aborted) break;
       const duration = Date.now() - startTime;
 
       if (result.isOk()) {
@@ -123,6 +125,7 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
         });
       }
     } catch (err) {
+      if (signal.aborted) break;
       ctx.logger.error("Consumer", "Unexpected handler throw", err, { event_tag: event._tag });
     }
 

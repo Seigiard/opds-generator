@@ -175,13 +175,7 @@ function bindKeys(doc: Document | Window, actions: KeyActions): void {
  * foliate's; this wires chrome (arrows/Esc, TOC, position), the download/return actions,
  * focus, and the failure states. Shared verbatim by production and the playground smoke.
  */
-export async function openInShell({
-  source,
-  filename,
-  folderPath,
-  downloadHref,
-  ext,
-}: ShellSource): Promise<void> {
+export async function openInShell({ source, filename, folderPath, downloadHref, ext }: ShellSource): Promise<void> {
   const reader = el<HTMLDivElement>("reader");
   const returnLink = el<HTMLAnchorElement>("reader-return");
   const downloadLink = el<HTMLAnchorElement>("reader-download");
@@ -254,9 +248,7 @@ export async function openInShell({
 
   const relocateSchema = v.object({
     fraction: v.optional(v.number()),
-    location: v.optional(
-      v.object({ current: v.optional(v.number()), total: v.optional(v.number()) }),
-    ),
+    location: v.optional(v.object({ current: v.optional(v.number()), total: v.optional(v.number()) })),
   });
 
   view.addEventListener("relocate", (event) => {
@@ -314,11 +306,7 @@ export async function openInShell({
  * otherwise block first paint and hold the whole file in memory); everything else uses
  * foliate's own loader. Playground File sources and 200-only servers fall back to it too.
  */
-async function resolveBook(
-  source: string | File,
-  ext: string | undefined,
-  base: string,
-): Promise<string | File | FoliateBook> {
+async function resolveBook(source: string | File, ext: string | undefined, base: string): Promise<string | File | FoliateBook> {
   if (ext !== "pdf" || source instanceof File) return source;
   const rangeFile = await makeRangeFile(source);
 

@@ -67,15 +67,12 @@ describe("parseFragment", () => {
 
   test("encoded unicode and spaces decode for validation and re-encode for fetch", () => {
     // #given a percent-encoded cyrillic name with spaces
-    const result = parse(
-      "#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
-    );
+    const result = parse("#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub");
 
     // #then the fetch path is canonically re-encoded and the filename is human-readable
     expect(result).toMatchObject({
       kind: "ok",
-      fetchPath:
-        "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+      fetchPath: "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
       folderPath: "/test/",
       filename: "Книга one.epub",
     });
@@ -86,18 +83,12 @@ describe("parseFragment", () => {
     expect(result).toEqual({ kind: "unsupported", folderPath: "/comics/", ext: "djvu" });
   });
 
-  test.each([
-    "",
-    "#",
-    "#garbage",
-    "#book.epub",
-    "#/onlyfile.epub",
-    "#/folder/noextension",
-    "#/folder/.epub",
-    "#/folder/file.",
-  ])("missing or malformed fragment %j is invalid", (hash) => {
-    expect(parse(hash)).toEqual({ kind: "invalid" });
-  });
+  test.each(["", "#", "#garbage", "#book.epub", "#/onlyfile.epub", "#/folder/noextension", "#/folder/.epub", "#/folder/file."])(
+    "missing or malformed fragment %j is invalid",
+    (hash) => {
+      expect(parse(hash)).toEqual({ kind: "invalid" });
+    },
+  );
 
   // AE5: hostile-fragment matrix — every entry must yield invalid (no fetch, safe back-link)
   test.each([

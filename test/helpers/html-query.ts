@@ -52,12 +52,8 @@ export function byClass(roots: HtmlNode[], className: string): HtmlNode[] {
 }
 
 /** All attribute name/value pairs across every element, in document order. */
-export function collectAttributes(
-  html: string,
-): Array<{ name: string; value: string; tag: string }> {
-  return flattenElements(html).flatMap((el) =>
-    Object.entries(el.attrs).map(([name, value]) => ({ name, value, tag: el.tag })),
-  );
+export function collectAttributes(html: string): Array<{ name: string; value: string; tag: string }> {
+  return flattenElements(html).flatMap((el) => Object.entries(el.attrs).map(([name, value]) => ({ name, value, tag: el.tag })));
 }
 
 function build(nodes: XmlFields[]): HtmlNode[] {
