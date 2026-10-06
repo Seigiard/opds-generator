@@ -15,13 +15,13 @@
 import { spawnWithTimeoutText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
 import { listEntries, readEntry } from "../../src/utils/archive.ts";
-import { bookSync } from "../../src/effect/handlers/book-sync.ts";
-import { folderSync } from "../../src/effect/handlers/folder-sync.ts";
-import { folderMetaSync } from "../../src/effect/handlers/folder-meta-sync.ts";
-import { startConsumer } from "../../src/effect/consumer.ts";
+import { bookSync } from "../../src/processing/handlers/book-sync.ts";
+import { folderSync } from "../../src/processing/handlers/folder-sync.ts";
+import { folderMetaSync } from "../../src/processing/handlers/folder-meta-sync.ts";
+import { startConsumer } from "../../src/processing/consumer.ts";
 import { SimpleQueue } from "../../src/queue.ts";
 import type { AppContext, HandlerDeps } from "../../src/context.ts";
-import type { EventType } from "../../src/effect/types.ts";
+import type { EventType } from "../../src/processing/types.ts";
 import { ok } from "neverthrow";
 import { QUEUE_EVENTS_PER_OP } from "./run-leak-probe.ts";
 import { join } from "node:path";

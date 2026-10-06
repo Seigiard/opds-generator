@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { folderCleanup } from "../../../src/effect/handlers/folder-cleanup.ts";
-import { folderSync } from "../../../src/effect/handlers/folder-sync.ts";
-import { bookCleanup } from "../../../src/effect/handlers/book-cleanup.ts";
+import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
+import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
+import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
-import type { EventType } from "../../../src/effect/types.ts";
+import type { EventType } from "../../../src/processing/types.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
 
 // Mock tracking
@@ -108,7 +108,7 @@ const asyncDeps: HandlerDeps = {
   },
 };
 
-describe("Effect Handlers", () => {
+describe("Processing Handlers", () => {
   beforeEach(() => {
     mockFs.reset();
     mockLogger.reset();

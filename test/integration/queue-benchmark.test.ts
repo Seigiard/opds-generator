@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { SimpleQueue } from "../../src/queue.ts";
-import type { EventType } from "../../src/effect/types.ts";
+import type { EventType } from "../../src/processing/types.ts";
 
 class ArrayQueue<T> {
   private items: T[] = [];
