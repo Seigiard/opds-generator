@@ -36,6 +36,7 @@ export function parsePdfInfoOutput(output: string): PdfInfo {
     if (/^\s/.test(line)) continue;
 
     const colonIndex = line.indexOf(":");
+
     if (colonIndex === -1) continue;
 
     const key = line.slice(0, colonIndex).trim();
@@ -76,6 +77,7 @@ function parseCreationDate(dateStr: string | undefined): string | undefined {
   if (!dateStr) return undefined;
 
   const yearMatch = dateStr.match(/\b(19|20)\d{2}\b/);
+
   return yearMatch ? yearMatch[0] : undefined;
 }
 
@@ -91,12 +93,18 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
 }
 
 async function extractCover(filePath: string): Promise<Buffer | null> {
-  const proc = Bun.spawn(["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const proc = Bun.spawn(
+    ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
 
-  const [data, exitCode] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited]);
+  const [data, exitCode] = await Promise.all([
+    new Response(proc.stdout).arrayBuffer(),
+    proc.exited,
+  ]);
 
   if (exitCode !== 0 || data.byteLength === 0) return null;
 
@@ -106,9 +114,11 @@ async function extractCover(filePath: string): Promise<Buffer | null> {
 async function createPdfHandler(filePath: string): Promise<FormatHandler | null> {
   try {
     const file = Bun.file(filePath);
+
     if (!(await file.exists())) return null;
 
     const info = await parsePdfInfo(filePath);
+
     if (!info) return null;
 
     const metadata: BookMetadata = {
@@ -131,6 +141,7 @@ async function createPdfHandler(filePath: string): Promise<FormatHandler | null>
     };
   } catch (error) {
     logHandlerError("PDF", filePath, error);
+
     return null;
   }
 }

@@ -16,10 +16,12 @@ async function extractMetadataAndCover(
   bookDataDir: string,
 ): Promise<{ meta: BookMetadata; hasCover: boolean }> {
   const createHandler = getHandlerFactory(ext);
+
   if (!createHandler) return { meta: { title: "" }, hasCover: false };
 
   try {
     const handler = await createHandler(filePath);
+
     if (!handler) return { meta: { title: "" }, hasCover: false };
 
     const meta = handler.getMetadata();
@@ -38,6 +40,7 @@ async function extractMetadataAndCover(
       } catch {
         hasCover = false;
       }
+
       cover = null;
     }
 
@@ -47,7 +50,10 @@ async function extractMetadataAndCover(
   }
 }
 
-export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
+export const bookSync = async (
+  event: EventType,
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "BookCreated") return ok([]);
 
   const { parent, name } = event;
@@ -64,6 +70,7 @@ export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Res
 
     let meta: BookMetadata;
     let hasCover: boolean;
+
     try {
       const result = await extractMetadataAndCover(filePath, ext, bookDataDir);
       meta = result.meta;
@@ -76,20 +83,28 @@ export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Res
     const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
     const title = meta.title || normalizeFilenameTitle(rawFilename);
     const encodedPath = encodeUrlPath(relativePath);
-    const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
+    const mimeType = MIME_TYPES.get(ext) ?? "application/octet-stream";
 
     const entry = new Entry(`urn:opds:book:${relativePath}`, title);
+
     if (meta.author) entry.setAuthor(meta.author);
+
     if (meta.description) entry.setSummary(meta.description);
     entry.setDcMetadataField("format", ext.toUpperCase());
     entry.setContent({ type: "text", value: formatFileSize(fileStat.size) });
 
     if (meta.publisher) entry.setDcMetadataField("publisher", meta.publisher);
+
     if (meta.issued) entry.setDcMetadataField("issued", meta.issued);
+
     if (meta.language) entry.setDcMetadataField("language", meta.language);
+
     if (meta.subjects) entry.setDcMetadataField("subjects", meta.subjects);
+
     if (meta.pageCount) entry.setDcMetadataField("extent", `${meta.pageCount} pages`);
+
     if (meta.series) entry.setDcMetadataField("isPartOf", meta.series);
+
     if (meta.rights) entry.setRights(meta.rights);
 
     if (hasCover) {
@@ -106,6 +121,7 @@ export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Res
     await deps.fs.symlink(filePath, join(bookDataDir, name));
 
     deps.logger.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
+
     return ok([]);
   } catch (error) {
     return err(error instanceof Error ? error : new Error(String(error)));

@@ -20,6 +20,7 @@ describe("QueueChunk", () => {
   test("push returns false when full", () => {
     // #given
     const chunk = new QueueChunk<number>();
+
     for (let i = 0; i < CHUNK_SIZE; i++) chunk.push(i);
 
     // #then
@@ -110,24 +111,32 @@ describe("UnrolledQueue", () => {
   test("large burst — 10K items preserve order", () => {
     const q = new UnrolledQueue<number>();
     const N = 10_000;
+
     for (let i = 0; i < N; i++) q.push(i);
+
     for (let i = 0; i < N; i++) expect(q.shift()).toBe(i);
     expect(q.length).toBe(0);
   });
 
   test("interleaved push/shift across chunk boundaries", () => {
     const q = new UnrolledQueue<number>();
+
     for (let round = 0; round < 3; round++) {
       const base = round * CHUNK_SIZE;
+
       for (let i = 0; i < CHUNK_SIZE; i++) q.push(base + i);
+
       for (let i = 0; i < CHUNK_SIZE; i++) expect(q.shift()).toBe(base + i);
     }
+
     expect(q.length).toBe(0);
   });
 
   test("single chunk resets after full drain for reuse", () => {
     const q = new UnrolledQueue<number>();
+
     for (let i = 0; i < CHUNK_SIZE; i++) q.push(i);
+
     for (let i = 0; i < CHUNK_SIZE; i++) q.shift();
     q.push(999);
     expect(q.shift()).toBe(999);
@@ -135,10 +144,14 @@ describe("UnrolledQueue", () => {
 
   test("spare node recycling — drain and refill (R4)", () => {
     const q = new UnrolledQueue<number>();
+
     for (let i = 0; i < CHUNK_SIZE + 1; i++) q.push(i);
+
     for (let i = 0; i < CHUNK_SIZE + 1; i++) q.shift();
     expect(q.length).toBe(0);
+
     for (let i = 0; i < CHUNK_SIZE + 1; i++) q.push(i);
+
     for (let i = 0; i < CHUNK_SIZE + 1; i++) expect(q.shift()).toBe(i);
   });
 });
@@ -226,21 +239,26 @@ describe("SimpleQueue", () => {
   test("chunk boundary crossing preserves FIFO (spec #8)", async () => {
     const q = new SimpleQueue<number>();
     const total = CHUNK_SIZE * 2 + 100;
+
     for (let i = 0; i < total; i++) q.enqueue(i);
+
     for (let i = 0; i < total; i++) expect(await q.take()).toBe(i);
   });
 
   test("large burst — 10K items (spec #10)", async () => {
     const q = new SimpleQueue<number>();
     const N = 10_000;
+
     for (let i = 0; i < N; i++) q.enqueue(i);
     expect(q.size).toBe(N);
+
     for (let i = 0; i < N; i++) expect(await q.take()).toBe(i);
     expect(q.size).toBe(0);
   });
 
   test("interleaved enqueue/take (spec #11)", async () => {
     const q = new SimpleQueue<number>();
+
     for (let i = 0; i < CHUNK_SIZE * 3; i++) {
       q.enqueue(i);
       expect(await q.take()).toBe(i);

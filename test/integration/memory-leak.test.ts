@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
+import * as v from "valibot";
 
 /**
  * Each scenario runs in its own bun subprocess (test/helpers/leak-probe.ts) and
@@ -10,7 +11,9 @@ import { join } from "node:path";
  */
 
 const PROBE_PATH = join(import.meta.dir, "..", "helpers", "leak-probe.ts");
+
 const MAX_LEAK_KB = 8;
+
 // full-chain on a loaded GitHub runner drifts both estimators to ~1-2.4 KB/iter (see
 // docs/known-flaky-tests.md §1): local runs show a strongly negative two-point
 // (-7 KB/iter), proving no structural leak, so the CI readings are allocator/RSS
@@ -19,27 +22,37 @@ const MAX_LEAK_KB = 8;
 // metrics ever hold above 3 across quiet runs.
 const MAX_CHAIN_LEAK_KB = 3;
 
-type ProbeResult = {
-  scenario: string;
-  slopeKbPerIter: number;
-  twoPointKbPerIter: number;
-  samples: number;
-  iterations: number;
-  rssEndMb: number;
-};
+const probeSchema = v.object({
+  scenario: v.string(),
+  slopeKbPerIter: v.number(),
+  twoPointKbPerIter: v.number(),
+  samples: v.number(),
+  iterations: v.number(),
+  rssEndMb: v.number(),
+});
+
+type ProbeResult = v.InferOutput<typeof probeSchema>;
 
 async function runProbe(scenario: string): Promise<ProbeResult> {
   const proc = Bun.spawn(["bun", PROBE_PATH, scenario], { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
   if (exitCode !== 0) {
     throw new Error(`leak-probe ${scenario} exited ${exitCode}: ${stderr}`);
   }
+
   const lastLine = stdout.trim().split("\n").at(-1) ?? "";
-  const result = JSON.parse(lastLine) as ProbeResult;
+  const result = v.parse(probeSchema, JSON.parse(lastLine));
   console.log(
     `  ${scenario}: slope ${result.slopeKbPerIter.toFixed(2)} KB/iter over ${result.samples} samples ` +
       `(two-point: ${result.twoPointKbPerIter.toFixed(2)} KB/iter, rss end ${result.rssEndMb.toFixed(1)} MB)`,
   );
+
   return result;
 }
 

@@ -205,7 +205,11 @@ describe("formats/utils", () => {
 
     test("removes namespace prefixes", () => {
       const parser = createXmlParser([]);
-      const result = parser.parse('<dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Test</dc:title>');
+
+      const result = parser.parse(
+        '<dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Test</dc:title>',
+      );
+
       expect(result.title).toBe("Test");
     });
 

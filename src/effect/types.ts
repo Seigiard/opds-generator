@@ -1,39 +1,17 @@
-export interface RawBooksEvent {
-  parent: string;
-  name: string;
-  events: string;
-}
+import * as v from "valibot";
 
-export interface RawDataEvent {
-  parent: string;
-  name: string;
-  events: string;
-}
+const rawEventSchema = v.object({ parent: v.string(), name: v.string(), events: v.string() });
+
+export type RawBooksEvent = v.InferOutput<typeof rawEventSchema>;
+
+export type RawDataEvent = v.InferOutput<typeof rawEventSchema>;
 
 export function isRawBooksEvent(u: unknown): u is RawBooksEvent {
-  return (
-    typeof u === "object" &&
-    u !== null &&
-    "parent" in u &&
-    typeof (u as Record<string, unknown>).parent === "string" &&
-    "name" in u &&
-    typeof (u as Record<string, unknown>).name === "string" &&
-    "events" in u &&
-    typeof (u as Record<string, unknown>).events === "string"
-  );
+  return v.is(rawEventSchema, u);
 }
 
 export function isRawDataEvent(u: unknown): u is RawDataEvent {
-  return (
-    typeof u === "object" &&
-    u !== null &&
-    "parent" in u &&
-    typeof (u as Record<string, unknown>).parent === "string" &&
-    "name" in u &&
-    typeof (u as Record<string, unknown>).name === "string" &&
-    "events" in u &&
-    typeof (u as Record<string, unknown>).events === "string"
-  );
+  return v.is(rawEventSchema, u);
 }
 
 export type EventType =

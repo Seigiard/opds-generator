@@ -1,19 +1,25 @@
 import { createXmlParser, getString } from "../formats/utils.ts";
 import { entryFromFragment, toLinks, type FeedModel } from "./feed-model.ts";
+import * as v from "valibot";
+import { xmlFields, xmlFieldsSchema } from "../formats/xml-value.ts";
 
 const feedParser = createXmlParser(["link"]);
+
 const ENTRY_RE = /<entry(?:\s[^>]*)?>[\s\S]*?<\/entry>/g;
 
 export function parseFeed(xml: string): FeedModel {
   const fragments = xml.match(ENTRY_RE) ?? [];
   const shell = xml.replace(ENTRY_RE, "");
-  const parsed = feedParser.parse(shell) as { feed?: Record<string, unknown> };
-  const feed = parsed.feed ?? {};
+  const parsed = v.parse(xmlFieldsSchema, feedParser.parse(shell));
+  const feed = xmlFields(parsed.feed) ?? {};
 
   const links = toLinks(feed.link);
   const self = links.find((l) => l["@_rel"] === "self");
   const start = links.find((l) => l["@_rel"] === "start");
-  const kind: FeedModel["kind"] = self?.["@_type"]?.includes("kind=acquisition") ? "acquisition" : "navigation";
+
+  const kind: FeedModel["kind"] = self?.["@_type"]?.includes("kind=acquisition")
+    ? "acquisition"
+    : "navigation";
 
   return {
     id: getString(feed.id) ?? "",

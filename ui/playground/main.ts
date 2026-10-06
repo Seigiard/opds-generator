@@ -7,14 +7,15 @@ import { parseFeed } from "../../src/render/parse-feed.ts";
 import { renderHtml } from "../../src/render/feed-html.ts";
 import { initGlobal, wire } from "../gridnav/viewer.ts";
 
-const cassettes = import.meta.glob("../../test/fixtures/feeds/*.xml", {
+const cassettes = import.meta.glob<string>("../../test/fixtures/feeds/*.xml", {
   query: "?raw",
   import: "default",
   eager: true,
-}) as Record<string, string>;
+});
 
-const select = document.getElementById("cassette") as HTMLSelectElement;
-const preview = document.getElementById("preview") as HTMLElement;
+const select = document.querySelector<HTMLSelectElement>("#cassette")!;
+
+const preview = document.getElementById("preview")!;
 
 for (const path of Object.keys(cassettes).sort()) {
   const option = document.createElement("option");
@@ -25,7 +26,9 @@ for (const path of Object.keys(cassettes).sort()) {
 
 function render(): void {
   const xml = cassettes[select.value];
+
   if (!xml) return;
+
   // Drop a stale #book-N so switching cassettes does not reopen a popup in the new feed.
   // replaceState fires no hashchange, so the global sync stays quiet until wire() runs.
   if (location.hash) history.replaceState(null, "", location.pathname + location.search);
@@ -34,7 +37,9 @@ function render(): void {
 }
 
 initGlobal();
+
 select.addEventListener("change", render);
+
 render();
 
 if (import.meta.hot) import.meta.hot.accept();

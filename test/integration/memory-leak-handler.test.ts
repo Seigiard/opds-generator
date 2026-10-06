@@ -9,14 +9,22 @@ import { tmpdir } from "node:os";
 import { mkdir, rm, stat, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-memleak-handler-${Date.now()}`);
+
 const FILES_DIR = join(TEST_DIR, "files");
+
 const DATA_DIR = join(TEST_DIR, "data");
+
 const FIXTURES_DIR = "/app/files/test";
 
 const ITERATIONS = 100;
+
 const MAX_LEAK_KB = 5;
 
-const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
+const BOOK_FILES = [
+  "Test Book - Test Author.pdf",
+  "bobby_make_believe_sample.cbz",
+  "Test Book - Test Author.epub",
+];
 
 const asyncDeps: HandlerDeps = {
   config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
@@ -28,15 +36,18 @@ const asyncDeps: HandlerDeps = {
     rm: (path, options) => rm(path, options),
     readdir: async (path) => {
       const fs = await import("node:fs/promises");
+
       return fs.readdir(path);
     },
     stat: async (path) => {
       const s = await stat(path);
+
       return { isDirectory: () => s.isDirectory(), size: s.size };
     },
     exists: async (path) => {
       try {
         await stat(path);
+
         return true;
       } catch {
         return false;
@@ -52,6 +63,7 @@ const asyncDeps: HandlerDeps = {
       try {
         await unlink(path);
       } catch {}
+
       await symlink(target, path);
     },
     unlink: (path) => unlink(path),
@@ -106,8 +118,10 @@ describe("Full handler memory leak (target: 0 KB/iter)", () => {
     for (let i = 0; i < 100; i++) {
       const book = BOOK_FILES[i % BOOK_FILES.length]!;
       await processOneBook(`warmup-${i}`, book);
+
       if (i % 5 === 0) Bun.gc(true);
     }
+
     stabilize();
 
     const before = getRssMb();
@@ -122,7 +136,9 @@ describe("Full handler memory leak (target: 0 KB/iter)", () => {
     const after = getRssMb();
     const totalMb = after - before;
     const perIterKb = (totalMb * 1024) / ITERATIONS;
-    console.log(`  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`);
+    console.log(
+      `  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`,
+    );
     expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
   }, 180000);
 });

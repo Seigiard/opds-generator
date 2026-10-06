@@ -53,6 +53,7 @@ const createMockLogger = (): MockLogger => ({
 });
 
 const mockFs = createMockFs();
+
 const mockLogger = createMockLogger();
 
 // Helper to create events
@@ -115,7 +116,11 @@ describe("Effect Handlers", () => {
 
   describe("folderCleanup", () => {
     test("removes data directory for deleted folder", async () => {
-      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
+      const result = await folderCleanup(
+        folderDeletedEvent("/test/books/Fiction/", "Author"),
+        asyncDeps,
+      );
+
       expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/Author");
@@ -123,7 +128,11 @@ describe("Effect Handlers", () => {
     });
 
     test("handles nested folder paths correctly", async () => {
-      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"), asyncDeps);
+      const result = await folderCleanup(
+        folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"),
+        asyncDeps,
+      );
+
       expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/SciFi/Isaac Asimov");
     });
@@ -177,7 +186,11 @@ describe("Effect Handlers", () => {
 
   describe("bookCleanup", () => {
     test("removes data directory for deleted book", async () => {
-      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
+      const result = await bookCleanup(
+        bookDeletedEvent("/test/books/Fiction/", "book.epub"),
+        asyncDeps,
+      );
+
       expect(result.isOk()).toBe(true);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/book.epub");
@@ -185,7 +198,11 @@ describe("Effect Handlers", () => {
     });
 
     test("returns cascade event to regenerate parent feed", async () => {
-      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
+      const result = await bookCleanup(
+        bookDeletedEvent("/test/books/Fiction/", "book.epub"),
+        asyncDeps,
+      );
+
       expect(result.isOk()).toBe(true);
       const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);
@@ -195,7 +212,11 @@ describe("Effect Handlers", () => {
 
   describe("folderCleanup cascade", () => {
     test("returns cascade event to regenerate parent feed for nested folders", async () => {
-      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
+      const result = await folderCleanup(
+        folderDeletedEvent("/test/books/Fiction/", "SciFi"),
+        asyncDeps,
+      );
+
       expect(result.isOk()).toBe(true);
       const cascades = result._unsafeUnwrap();
       expect(cascades).toHaveLength(1);

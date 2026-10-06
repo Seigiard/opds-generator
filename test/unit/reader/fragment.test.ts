@@ -44,7 +44,12 @@ describe("parseFragment", () => {
   });
 
   test("legacy /file leaf on a root-level book lands the back-link at the catalog root", () => {
-    expect(parse("#/manual-test.pdf/file")).toMatchObject({ kind: "ok", folderPath: "/", ext: "pdf", filename: "manual-test.pdf" });
+    expect(parse("#/manual-test.pdf/file")).toMatchObject({
+      kind: "ok",
+      folderPath: "/",
+      ext: "pdf",
+      filename: "manual-test.pdf",
+    });
   });
 
   test("a `file` leaf whose parent is not a viewable book is still invalid (no /resync reach)", () => {
@@ -53,16 +58,24 @@ describe("parseFragment", () => {
   });
 
   test("a `file` leaf under a non-viewable book reports unsupported, not ok", () => {
-    expect(parse("#/comics/thing.djvu/file")).toEqual({ kind: "unsupported", folderPath: "/comics/", ext: "djvu" });
+    expect(parse("#/comics/thing.djvu/file")).toEqual({
+      kind: "unsupported",
+      folderPath: "/comics/",
+      ext: "djvu",
+    });
   });
 
   test("encoded unicode and spaces decode for validation and re-encode for fetch", () => {
     // #given a percent-encoded cyrillic name with spaces
-    const result = parse("#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub");
+    const result = parse(
+      "#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+    );
+
     // #then the fetch path is canonically re-encoded and the filename is human-readable
     expect(result).toMatchObject({
       kind: "ok",
-      fetchPath: "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+      fetchPath:
+        "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
       folderPath: "/test/",
       filename: "Книга one.epub",
     });
@@ -73,12 +86,18 @@ describe("parseFragment", () => {
     expect(result).toEqual({ kind: "unsupported", folderPath: "/comics/", ext: "djvu" });
   });
 
-  test.each(["", "#", "#garbage", "#book.epub", "#/onlyfile.epub", "#/folder/noextension", "#/folder/.epub", "#/folder/file."])(
-    "missing or malformed fragment %j is invalid",
-    (hash) => {
-      expect(parse(hash)).toEqual({ kind: "invalid" });
-    },
-  );
+  test.each([
+    "",
+    "#",
+    "#garbage",
+    "#book.epub",
+    "#/onlyfile.epub",
+    "#/folder/noextension",
+    "#/folder/.epub",
+    "#/folder/file.",
+  ])("missing or malformed fragment %j is invalid", (hash) => {
+    expect(parse(hash)).toEqual({ kind: "invalid" });
+  });
 
   // AE5: hostile-fragment matrix — every entry must yield invalid (no fetch, safe back-link)
   test.each([
@@ -104,10 +123,12 @@ describe("parseFragment", () => {
   // R15: no constructible fragment reaches /resync or any non-book path
   test("R15: every accepted fetch path has non-dot segments and a viewable extension", () => {
     const probes = ["#/resync", "#/resync/resync", "#/a/resync", "#/a/b/c/resync"];
+
     for (const probe of probes) {
       const result = parse(probe);
       expect(result.kind).not.toBe("ok");
     }
+
     // and an accepted path can never be /resync: it always ends in .<viewable ext>
     const accepted = parse("#/a/resync.epub");
     expect(accepted).toMatchObject({ kind: "ok", fetchPath: "/a/resync.epub" });
@@ -120,7 +141,10 @@ describe("parseFragment", () => {
     expect(result).toEqual({ kind: "invalid" });
     // and a legit percent-in-name file is re-encoded canonically
     const legit = parse("#/books/100%25 legit.epub/100%25 legit.epub");
-    expect(legit).toMatchObject({ kind: "ok", fetchPath: "/books/100%25%20legit.epub/100%25%20legit.epub" });
+    expect(legit).toMatchObject({
+      kind: "ok",
+      fetchPath: "/books/100%25%20legit.epub/100%25%20legit.epub",
+    });
   });
 
   test("malformed percent-encoding is invalid, not thrown", () => {

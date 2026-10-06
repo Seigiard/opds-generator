@@ -1,5 +1,6 @@
 import { BOOK_EXTENSIONS, VIEWABLE_FORMATS } from "../../src/types.ts";
 import { parseFragment } from "./fragment.ts";
+import * as v from "valibot";
 
 type TocItem = { label?: string; href?: string; subitems?: TocItem[] | null };
 
@@ -9,15 +10,23 @@ type RelocateDetail = {
 };
 
 interface FoliateView extends HTMLElement {
-  open(book: string | File | object): Promise<void>;
-  prev(): unknown;
-  next(): unknown;
-  goTo(target: string): Promise<unknown>;
-  book: {
-    metadata?: { title?: unknown };
-    toc?: TocItem[] | null;
-  };
+  open(book: string | File | FoliateBook): Promise<void>;
+  prev(): Promise<void>;
+  next(): Promise<void>;
+  goTo(target: string): Promise<FoliateNavigation | undefined>;
+  book: FoliateBook;
   renderer: HTMLElement & { next(): Promise<void> };
+}
+
+interface FoliateNavigation {
+  index: number;
+  anchor?: number | ((doc: Document) => Element | Range);
+}
+
+interface FoliateBook {
+  sections: { id: string | number; load(): Promise<string>; size?: number }[];
+  metadata?: { title?: string | Record<string, string> };
+  toc?: TocItem[] | null;
 }
 
 /** Byte-range-backed file foliate's makePDF consumes — streams instead of downloading whole. */
@@ -43,14 +52,18 @@ export interface ShellSource {
  */
 async function makeRangeFile(url: string): Promise<RangeFile | null> {
   let total: number;
+
   try {
     const probe = await fetch(url, { headers: { Range: "bytes=0-0" } });
+
     if (probe.status !== 206) return null;
     total = Number(probe.headers.get("content-range")?.split("/")[1]);
   } catch {
     return null;
   }
+
   if (!Number.isFinite(total) || total <= 0) return null;
+
   return {
     size: total,
     slice(begin, end) {
@@ -58,6 +71,7 @@ async function makeRangeFile(url: string): Promise<RangeFile | null> {
         async arrayBuffer() {
           // HTTP Range is inclusive; foliate/pdf.js pass a half-open [begin, end).
           const res = await fetch(url, { headers: { Range: `bytes=${begin}-${end - 1}` } });
+
           return res.arrayBuffer();
         },
       };
@@ -67,7 +81,10 @@ async function makeRangeFile(url: string): Promise<RangeFile | null> {
 
 const el = <T extends HTMLElement>(id: string): T => {
   const found = document.getElementById(id);
+
   if (!found) throw new Error(`reader: missing #${id}`);
+
+  // SAFETY: every caller names an ID and its element class from both reader HTML templates.
   return found as T;
 };
 
@@ -79,20 +96,29 @@ function showError(message: string, backHref: string): void {
 }
 
 /** foliate metadata titles are either strings or {lang: title} maps. */
-function bookTitle(raw: unknown): string | undefined {
-  if (typeof raw === "string" && raw) return raw;
-  if (raw && typeof raw === "object") {
-    const first = Object.values(raw)[0];
-    if (typeof first === "string" && first) return first;
+function bookTitle(raw: FoliateBook["metadata"]): string | undefined {
+  const title = v.safeParse(v.string(), raw?.title);
+
+  if (title.success && title.output) return title.output;
+
+  const localized = v.safeParse(v.record(v.string(), v.string()), raw?.title);
+
+  if (localized.success) {
+    const first = Object.values(localized.output)[0];
+
+    if (first) return first;
   }
+
   return undefined;
 }
 
 /** Book-controlled labels go through textContent only — never markup. */
 function renderToc(items: TocItem[], view: FoliateView, onNavigate: () => void): HTMLOListElement {
   const list = document.createElement("ol");
+
   for (const item of items) {
     const li = document.createElement("li");
+
     if (item.href !== undefined) {
       const link = document.createElement("a");
       link.href = "#";
@@ -109,17 +135,21 @@ function renderToc(items: TocItem[], view: FoliateView, onNavigate: () => void):
       span.textContent = item.label?.trim() || "Untitled";
       li.append(span);
     }
+
     if (item.subitems?.length) li.append(renderToc(item.subitems, view, onNavigate));
     list.append(li);
   }
+
   return list;
 }
 
 function onRelocate(detail: RelocateDetail, positionEl: HTMLElement): void {
   const parts: string[] = [];
-  if (typeof detail.fraction === "number") parts.push(`${Math.round(detail.fraction * 100)}%`);
+
+  if (detail.fraction !== undefined) parts.push(`${Math.round(detail.fraction * 100)}%`);
   const { current, total } = detail.location ?? {};
-  if (typeof current === "number" && typeof total === "number") parts.push(`${current + 1} / ${total}`);
+
+  if (current !== undefined && total !== undefined) parts.push(`${current + 1} / ${total}`);
   positionEl.textContent = parts.join(" · ");
 }
 
@@ -131,7 +161,9 @@ interface KeyActions {
 
 function bindKeys(doc: Document | Window, actions: KeyActions): void {
   doc.addEventListener("keydown", (event) => {
+    // SAFETY: the DOM keydown event is a KeyboardEvent in both window and document realms.
     const key = (event as KeyboardEvent).key;
+
     if (key === "ArrowLeft") actions.onPrev();
     else if (key === "ArrowRight") actions.onNext();
     else if (key === "Escape") actions.onReturn();
@@ -143,7 +175,13 @@ function bindKeys(doc: Document | Window, actions: KeyActions): void {
  * foliate's; this wires chrome (arrows/Esc, TOC, position), the download/return actions,
  * focus, and the failure states. Shared verbatim by production and the playground smoke.
  */
-export async function openInShell({ source, filename, folderPath, downloadHref, ext }: ShellSource): Promise<void> {
+export async function openInShell({
+  source,
+  filename,
+  folderPath,
+  downloadHref,
+  ext,
+}: ShellSource): Promise<void> {
   const reader = el<HTMLDivElement>("reader");
   const returnLink = el<HTMLAnchorElement>("reader-return");
   const downloadLink = el<HTMLAnchorElement>("reader-download");
@@ -157,40 +195,48 @@ export async function openInShell({ source, filename, folderPath, downloadHref, 
 
   returnLink.href = folderPath;
   el<HTMLAnchorElement>("reader-error-return").href = folderPath;
+
   if (downloadHref) {
     downloadLink.href = downloadHref;
     downloadLink.hidden = false;
   }
+
   titleEl.textContent = filename;
   document.title = filename;
   reader.hidden = false;
 
   const base = document.querySelector('meta[name="foliate-base"]')?.getAttribute("content");
+
   if (!base) {
     showError("Couldn't load this book.", folderPath);
+
     return;
   }
 
   let view: FoliateView;
+
   try {
     await import(/* @vite-ignore */ `${base}/view.js`);
+    // SAFETY: the pinned view.js registers foliate-view with the methods used by this shell.
     view = document.createElement("foliate-view") as FoliateView;
     viewSlot.append(view);
     await view.open(await resolveBook(source, ext, base));
   } catch (error) {
     console.error("reader: failed to open book", error);
     showError("Couldn't load this book.", folderPath);
+
     return;
   }
 
-  const title = bookTitle(view.book.metadata?.title) ?? filename;
+  const title = bookTitle(view.book.metadata) ?? filename;
   document.title = title;
   titleEl.textContent = title;
 
   // Serialize page turns: rapid key-repeat / clicks otherwise overlap foliate's async
   // prev()/next() and leave the position indicator and focus out of order.
   let navBusy = false;
-  const navigate = (move: () => unknown): void => {
+
+  const navigate = (move: () => Promise<void>): void => {
     if (navBusy) return;
     navBusy = true;
     Promise.resolve(move())
@@ -199,14 +245,28 @@ export async function openInShell({ source, filename, folderPath, downloadHref, 
         navBusy = false;
       });
   };
+
   const actions: KeyActions = {
     onPrev: () => navigate(() => view.prev()),
     onNext: () => navigate(() => view.next()),
     onReturn: () => window.location.assign(folderPath),
   };
 
-  view.addEventListener("relocate", (event) => onRelocate((event as CustomEvent<RelocateDetail>).detail, positionEl));
+  const relocateSchema = v.object({
+    fraction: v.optional(v.number()),
+    location: v.optional(
+      v.object({ current: v.optional(v.number()), total: v.optional(v.number()) }),
+    ),
+  });
+
+  view.addEventListener("relocate", (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail = v.safeParse(relocateSchema, event.detail);
+
+    if (detail.success) onRelocate(detail.output, positionEl);
+  });
   view.addEventListener("load", (event) => {
+    // SAFETY: pinned foliate view.js emits load with the rendered iframe Document in detail.doc.
     const { doc } = (event as CustomEvent<{ doc: Document }>).detail;
     bindKeys(doc, actions);
   });
@@ -221,7 +281,9 @@ export async function openInShell({ source, filename, folderPath, downloadHref, 
     tocNav.hidden = true;
     tocToggle.setAttribute("aria-expanded", "false");
   };
+
   const toc = view.book.toc;
+
   if (toc?.length) {
     tocNav.append(renderToc(toc, view, closeToc));
     tocToggle.hidden = false;
@@ -238,6 +300,7 @@ export async function openInShell({ source, filename, folderPath, downloadHref, 
     // fall back to the error state instead of stranding a half-open reader.
     console.error("reader: first render failed", error);
     showError("Couldn't load this book.", folderPath);
+
     return;
   }
 
@@ -251,30 +314,46 @@ export async function openInShell({ source, filename, folderPath, downloadHref, 
  * otherwise block first paint and hold the whole file in memory); everything else uses
  * foliate's own loader. Playground File sources and 200-only servers fall back to it too.
  */
-async function resolveBook(source: string | File, ext: string | undefined, base: string): Promise<string | File | object> {
-  if (ext !== "pdf" || typeof source !== "string") return source;
+async function resolveBook(
+  source: string | File,
+  ext: string | undefined,
+  base: string,
+): Promise<string | File | FoliateBook> {
+  if (ext !== "pdf" || source instanceof File) return source;
   const rangeFile = await makeRangeFile(source);
+
   if (!rangeFile) return source;
-  const { makePDF } = (await import(/* @vite-ignore */ `${base}/pdf.js`)) as { makePDF: (file: RangeFile) => Promise<object> };
+
+  // SAFETY: pinned pdf.js exports makePDF, whose sections and metadata conform to FoliateBook.
+  const { makePDF } = (await import(/* @vite-ignore */ `${base}/pdf.js`)) as {
+    makePDF: (file: RangeFile) => Promise<FoliateBook>;
+  };
+
   return makePDF(rangeFile);
 }
 
 /** Production entry: validate the URL fragment (R15), then hand a same-origin URL to the shell. */
 export function startReader(): void {
   const result = parseFragment(window.location.hash, VIEWABLE_FORMATS, BOOK_EXTENSIONS);
+
   if (result.kind === "invalid") {
     showError("This reader link is invalid.", "/");
+
     return;
   }
+
   if (result.kind === "unsupported") {
     showError("This format isn't supported in the viewer.", result.folderPath);
+
     return;
   }
 
   // R15 belt-and-braces against the live origin before any network request.
   const target = new URL(result.fetchPath, window.location.origin);
+
   if (target.origin !== window.location.origin) {
     showError("This reader link is invalid.", "/");
+
     return;
   }
 
@@ -288,8 +367,8 @@ export function startReader(): void {
     folderPath: result.folderPath,
     downloadHref: result.fetchPath,
     ext: result.ext,
-  }).catch((error: unknown) => {
-    console.error("reader: unexpected failure", error);
+  }).catch((cause: unknown) => {
+    console.error("reader: unexpected failure", cause);
     showError("Couldn't load this book.", result.folderPath);
   });
 }

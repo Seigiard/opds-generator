@@ -19,12 +19,16 @@ function decodeXmlEntities(text: string): string {
 
 export function extractTitle(entryXml: string): string {
   const match = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+
   if (!match?.[1]) return "";
+
   return decodeXmlEntities(match[1].trim());
 }
 
 export function extractAuthor(entryXml: string): string | undefined {
   const match = entryXml.match(/<author>\s*<name>([\s\S]*?)<\/name>\s*<\/author>/);
+
   if (!match?.[1]) return undefined;
+
   return decodeXmlEntities(match[1].trim());
 }

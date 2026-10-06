@@ -4,6 +4,7 @@ import { parseFeed } from "../../src/render/parse-feed.ts";
 import { renderHtml } from "../../src/render/feed-html.ts";
 
 const feedsDir = join(import.meta.dir, "..", "..", "test", "fixtures", "feeds");
+
 const goldenDir = join(import.meta.dir, "..", "..", "test", "golden");
 
 // Clear existing goldens so a removed cassette surfaces as a git deletion, not a stale orphan render:check would pass over.

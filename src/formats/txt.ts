@@ -4,6 +4,7 @@ async function createTxtHandler(filePath: string): Promise<FormatHandler | null>
   try {
     const file = Bun.file(filePath);
     const exists = await file.exists();
+
     if (!exists) return null;
 
     return {

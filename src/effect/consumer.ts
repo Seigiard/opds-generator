@@ -7,13 +7,17 @@ import type { EventType } from "./types.ts";
 function generateEventId(event: EventType, path: string | undefined): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 7);
+
   return `${event._tag}:${path ?? "unknown"}:${timestamp}:${random}`;
 }
 
 export function getEventPath(event: EventType): string | undefined {
-  if ("path" in event && typeof event.path === "string") return event.path;
+  if ("path" in event) return event.path;
+
   if ("parent" in event && "name" in event) return join(event.parent, event.name);
-  if ("parent" in event && typeof event.parent === "string") return event.parent;
+
+  if ("parent" in event) return event.parent;
+
   return undefined;
 }
 
@@ -29,7 +33,7 @@ function logMemorySnapshot(): void {
     log.info("Consumer", `Heap snapshot saved to ${snapshotPath}`, {
       event_type: "handler_complete",
       events_processed: eventCounter,
-    } as any);
+    });
   }
 
   if (eventCounter % 50 === 0) {
@@ -46,7 +50,7 @@ function logMemorySnapshot(): void {
       jsc_protected_object_count: jsc.protectedObjectCount,
       jsc_global_object_count: jsc.globalObjectCount,
       jsc_protected_global_object_count: jsc.protectedGlobalObjectCount,
-    } as any);
+    });
   }
 }
 
@@ -55,6 +59,7 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
 
   while (!signal.aborted) {
     let event: EventType;
+
     try {
       event = await ctx.queue.take(signal);
     } catch {
@@ -74,6 +79,7 @@ export async function startConsumer(ctx: AppContext, signal: AbortSignal): Promi
     });
 
     const handler = ctx.handlers.get(event._tag);
+
     if (!handler) {
       ctx.logger.warn("Consumer", "No handler found", { event_tag: event._tag });
       logMemorySnapshot();

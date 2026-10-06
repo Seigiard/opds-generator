@@ -5,15 +5,19 @@ const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 // Wait for a URL to return 200
 async function waitFor(path: string, maxWaitMs = 45000): Promise<void> {
   const start = Date.now();
+
   while (Date.now() - start < maxWaitMs) {
     try {
       const response = await fetch(`${BASE_URL}${path}`);
+
       if (response.status === 200) return;
     } catch {
       // Connection refused
     }
+
     await new Promise((r) => setTimeout(r, 500));
   }
+
   throw new Error(`Not ready: ${path}`);
 }
 
@@ -27,12 +31,18 @@ async function waitForServer(): Promise<void> {
 // Decode the handful of HTML entities that appear in escaped attribute values, as a
 // browser does before it uses the URL (paths are otherwise percent-encoded).
 function htmlDecode(value: string): string {
-  return value.replaceAll("&#39;", "'").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+  return value
+    .replaceAll("&#39;", "'")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
 }
 
 // Check if /resync is enabled
 async function isResyncEnabled(): Promise<boolean> {
   const response = await fetch(`${BASE_URL}/resync`);
+
   return response.status === 401;
 }
 
@@ -98,6 +108,7 @@ describe("nginx integration", () => {
       const feed = await (await fetch(`${BASE_URL}/test/feed.xml`)).text();
       const match = feed.match(/acquisition[^>]*href="([^"]+)"/);
       expect(match).not.toBeNull();
+
       return match![1]!;
     }
 
@@ -195,6 +206,7 @@ describe("nginx integration", () => {
       const html = await (await fetch(`${BASE_URL}/static/read.html`)).text();
       const match = html.match(/name="foliate-base" content="([^"]+)"/);
       expect(match).not.toBeNull();
+
       return match![1]!;
     }
 
@@ -217,6 +229,7 @@ describe("nginx integration", () => {
 
     test("R13: hashed foliate runtime is immutable-cacheable with module-safe MIME", async () => {
       const base = await foliateBase();
+
       for (const file of ["/view.js", "/vendor/pdfjs/pdf.mjs", "/vendor/pdfjs/pdf.worker.mjs"]) {
         const response = await fetch(`${BASE_URL}${base}${file}`);
         expect(response.status).toBe(200);
@@ -267,6 +280,7 @@ describe("nginx integration", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ test: true }),
       });
+
       expect(response.status).toBe(404);
     });
   });
@@ -295,6 +309,7 @@ describe("nginx integration", () => {
 
       while (queue.length > 0) {
         const feedPath = queue.shift()!;
+
         if (visited.has(feedPath)) continue;
         visited.add(feedPath);
 
@@ -310,9 +325,11 @@ describe("nginx integration", () => {
 
         // the links a browser actually clicks (folder cards, home) must resolve to HTML, not XML
         const html = await htmlRes.text();
-        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)]
-          .map((m) => m[1]!)
-          .filter((href) => !href.startsWith("#"));
+
+        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)].flatMap(
+          (m) => (m[1]!.startsWith("#") ? [] : [m[1]!]),
+        );
+
         for (const href of cardHrefs) {
           expect(href).not.toMatch(/feed\.xml$/);
           const cardRes = await fetch(`${BASE_URL}${href}`);
@@ -333,8 +350,10 @@ describe("nginx integration", () => {
 
         for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) queue.push(m[1]!);
         const image = xml.match(/opds-spec\.org\/image"\s+href="([^"]+)"/);
+
         if (image) assets.add(image[1]!);
         const acquisition = xml.match(/acquisition[^>]*href="([^"]+)"/);
+
         if (acquisition) assets.add(acquisition[1]!);
       }
 
@@ -353,37 +372,49 @@ describe("nginx integration", () => {
   describe("/resync endpoint", () => {
     test("GET /resync without auth returns 401 (when enabled)", async () => {
       const enabled = await isResyncEnabled();
+
       if (!enabled) {
         console.log("Skipping: /resync not configured");
+
         return;
       }
+
       const response = await fetch(`${BASE_URL}/resync`);
       expect(response.status).toBe(401);
     });
 
     test("GET /resync with wrong auth returns 401 (when enabled)", async () => {
       const enabled = await isResyncEnabled();
+
       if (!enabled) {
         console.log("Skipping: /resync not configured");
+
         return;
       }
+
       const credentials = Buffer.from("wrong:credentials").toString("base64");
+
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: { Authorization: `Basic ${credentials}` },
       });
+
       expect(response.status).toBe(401);
     });
 
     test("CSRF guard: a browser navigation to /resync is rejected before auth (403, not 401)", async () => {
       // #given /resync is enabled
       const enabled = await isResyncEnabled();
+
       if (!enabled) {
         console.log("Skipping: /resync not configured");
+
         return;
       }
+
       // #when a request arrives with browser-navigation fetch metadata (as a malicious
       // book frame's meta-refresh/window.location would carry), even with valid auth
       const credentials = Buffer.from("admin:secret").toString("base64");
+
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: {
           Authorization: `Basic ${credentials}`,
@@ -391,34 +422,45 @@ describe("nginx integration", () => {
           "Sec-Fetch-Site": "same-origin",
         },
       });
+
       // #then it is blocked in the rewrite phase, before the resync ever runs
       expect(response.status).toBe(403);
     });
 
     test("CSRF guard: a cross-site request to /resync is rejected (403)", async () => {
       const enabled = await isResyncEnabled();
+
       if (!enabled) {
         console.log("Skipping: /resync not configured");
+
         return;
       }
+
       const credentials = Buffer.from("admin:secret").toString("base64");
+
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: { Authorization: `Basic ${credentials}`, "Sec-Fetch-Site": "cross-site" },
       });
+
       expect(response.status).toBe(403);
     });
 
     // This test triggers resync - keep it last
     test("GET /resync with correct auth returns 202 (when enabled)", async () => {
       const enabled = await isResyncEnabled();
+
       if (!enabled) {
         console.log("Skipping: /resync not configured");
+
         return;
       }
+
       const credentials = Buffer.from("admin:secret").toString("base64");
+
       const response = await fetch(`${BASE_URL}/resync`, {
         headers: { Authorization: `Basic ${credentials}` },
       });
+
       expect(response.status).toBe(202);
     });
   });

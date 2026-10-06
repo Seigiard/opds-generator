@@ -16,10 +16,12 @@ interface MockConfig {
 }
 
 let spawnSpy: Mock<typeof Bun.spawn> | null = null;
+
 let mockConfig: MockConfig = {};
 
 function createReadableStream(data: string | Buffer): ReadableStream<Uint8Array> {
-  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
+  const bytes = Buffer.isBuffer(data) ? new Uint8Array(data) : new TextEncoder().encode(data);
+
   return new ReadableStream({
     start(controller) {
       controller.enqueue(bytes);
@@ -72,14 +74,17 @@ function setupSpawnSpy(): void {
     const command = cmdArray[0];
 
     if (command === "pdfinfo" && mockConfig.pdfinfo !== undefined) {
+      // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
       return createMockSpawnResult(mockConfig.pdfinfo) as any;
     }
 
     if (command === "pdftoppm" && mockConfig.pdftoppm !== undefined) {
+      // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
       return createMockSpawnResult(mockConfig.pdftoppm) as any;
     }
 
     if (command === "magick" && mockConfig.magick !== undefined) {
+      // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
       return createMockSpawnResult("", mockConfig.magick ? 0 : 1) as any;
     }
 
@@ -92,13 +97,16 @@ export function resetMocks(): void {
     spawnSpy.mockRestore();
     spawnSpy = null;
   }
+
   mockConfig = {};
 }
 
 export function getMockCalls(): string[][] {
   if (!spawnSpy) return [];
+
   return spawnSpy.mock.calls.map((call) => {
     const cmd = call[0];
+
     return Array.isArray(cmd) ? cmd : [cmd];
   });
 }

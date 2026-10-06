@@ -27,7 +27,11 @@ const nav = `<?xml version="1.0" encoding="UTF-8"?>
   </body>
 </html>`;
 
-const opf = (title: string, extraManifest = "", extraSpine = "") => `<?xml version="1.0" encoding="UTF-8"?>
+const opf = (
+  title: string,
+  extraManifest = "",
+  extraSpine = "",
+) => `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">urn:uuid:${title.replace(/\W+/g, "-").toLowerCase()}</dc:identifier>
@@ -122,7 +126,11 @@ async function zipEpub(epub: Epub): Promise<void> {
   await Bun.write(join(stage, "OEBPS", "content.opf"), opf(epub.title, epub.extraManifest ?? ""));
   await Bun.write(join(stage, "OEBPS", "nav.xhtml"), nav);
   await Bun.write(join(stage, "OEBPS", "chapter1.xhtml"), chapter("Chapter One", epub.chapter1));
-  await Bun.write(join(stage, "OEBPS", "chapter2.xhtml"), chapter("Chapter Two", epub.chapter2Body));
+  await Bun.write(
+    join(stage, "OEBPS", "chapter2.xhtml"),
+    chapter("Chapter Two", epub.chapter2Body),
+  );
+
   for (const [path, content] of Object.entries(epub.extraFiles ?? {})) {
     await Bun.write(join(stage, "OEBPS", path), content);
   }

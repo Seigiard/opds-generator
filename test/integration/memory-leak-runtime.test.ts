@@ -6,6 +6,7 @@ import type { AppContext } from "../../src/context.ts";
 import type { EventType } from "../../src/effect/types.ts";
 
 const ITERATIONS = 500;
+
 const MAX_LEAK_KB = 1;
 
 function getRssMb(): number {
@@ -21,21 +22,31 @@ function stabilize(): void {
 async function warmup(fn: () => Promise<void>, count = 200): Promise<void> {
   for (let i = 0; i < count; i++) {
     await fn();
+
     if (i % 20 === 0) Bun.gc(true);
   }
+
   stabilize();
 }
 
 function measureLeak(label: string, before: number, after: number, iters: number): number {
   const totalMb = after - before;
   const perIterKb = (totalMb * 1024) / iters;
-  console.log(`  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iters} iters)`);
+  console.log(
+    `  ${label}: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${iters} iters)`,
+  );
+
   return perIterKb;
 }
 
 function createTestContext(): AppContext {
   return {
-    config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
+    config: {
+      filesPath: "/test/files",
+      dataPath: "/test/data",
+      port: 3000,
+      reconcileInterval: 1800,
+    },
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
     fs: {
       mkdir: async () => {},
@@ -60,18 +71,22 @@ function createTestContext(): AppContext {
 describe("Runtime memory leak isolation (post-Effect migration)", () => {
   test("SimpleQueue enqueue/take cycle", async () => {
     const queue = new SimpleQueue<EventType>();
+
     const op = async () => {
       queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
       await queue.take();
     };
+
     await warmup(op);
 
     stabilize();
     const before = getRssMb();
+
     for (let i = 0; i < ITERATIONS; i++) {
       await op();
       Bun.gc(true);
     }
+
     stabilize();
 
     const kb = measureLeak("SimpleQueue(offer+take)", before, getRssMb(), ITERATIONS);
@@ -86,9 +101,11 @@ describe("Runtime memory leak isolation (post-Effect migration)", () => {
       if (tag === "FolderMetaSyncRequested") {
         return async () => {
           processed++;
-          return ok([] as readonly EventType[]);
+
+          return ok<readonly EventType[]>([]);
         };
       }
+
       return undefined;
     };
 
@@ -110,6 +127,7 @@ describe("Runtime memory leak isolation (post-Effect migration)", () => {
 
     for (let i = 0; i < ITERATIONS; i++) {
       enqueue();
+
       if (i % 50 === 0) {
         await new Promise((r) => setTimeout(r, 50));
         Bun.gc(true);

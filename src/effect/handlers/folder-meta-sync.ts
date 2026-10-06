@@ -2,7 +2,11 @@ import { ok, err, type Result } from "neverthrow";
 import { join, relative } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
-import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
+import {
+  encodeUrlPath,
+  formatFolderDescription,
+  normalizeFilenameTitle,
+} from "../../utils/processor.ts";
 import type { HandlerDeps, FileSystemService } from "../../context.ts";
 import type { EventType } from "../types.ts";
 import { FEED_FILE, INDEX_FILE, ENTRY_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
@@ -28,6 +32,7 @@ async function readFolderEntries(
 
   for (const item of items) {
     if (item.startsWith("_")) continue;
+
     if (item === FEED_FILE || item.endsWith(".tmp")) continue;
 
     const itemPath = join(normalizedDir, item);
@@ -57,21 +62,30 @@ async function readFolderEntries(
 
 const sortByTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   const cmp = naturalSort(a.title, b.title);
+
   return cmp !== 0 ? cmp : naturalSort(a.dirName, b.dirName);
 };
 
 const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   if (!a.author && b.author) return -1;
+
   if (a.author && !b.author) return 1;
+
   if (a.author && b.author) {
     const authorCmp = naturalSort(a.author, b.author);
+
     if (authorCmp !== 0) return authorCmp;
   }
+
   const titleCmp = naturalSort(a.title, b.title);
+
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
 
-export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
+export const folderMetaSync = async (
+  event: EventType,
+  deps: HandlerDeps,
+): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderMetaSyncRequested") return ok([]);
 
   const folderDataDir = event.path;
@@ -80,14 +94,22 @@ export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promi
 
   if (relativePath !== "") {
     const sourceFolder = join(deps.config.filesPath, relativePath);
+
     try {
       const s = await deps.fs.stat(sourceFolder);
+
       if (!s.isDirectory()) {
-        deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
+        deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", {
+          path: relativePath,
+        });
+
         return ok([]);
       }
     } catch {
-      deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", { path: relativePath });
+      deps.logger.debug("FolderMetaSync", "Skipping (source folder deleted)", {
+        path: relativePath,
+      });
+
       return ok([]);
     }
   }
@@ -95,7 +117,11 @@ export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promi
   return generateFeed(deps, normalizedDir, relativePath);
 };
 
-async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePath: string): Promise<Result<readonly EventType[], Error>> {
+async function generateFeed(
+  deps: HandlerDeps,
+  normalizedDir: string,
+  relativePath: string,
+): Promise<Result<readonly EventType[], Error>> {
   deps.logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
   let folderEntries: EntryWithTitle[];
@@ -106,7 +132,10 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
     folderEntries = result.folderEntries;
     bookEntries = result.bookEntries;
   } catch (error) {
-    deps.logger.warn("FolderMetaSync", "Error reading folder", { path: relativePath, error: String(error) });
+    deps.logger.warn("FolderMetaSync", "Error reading folder", {
+      path: relativePath,
+      error: String(error),
+    });
     folderEntries = [];
     bookEntries = [];
   }
@@ -120,9 +149,14 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
 
   const feedOutputPath = join(normalizedDir, FEED_FILE);
   const rawFolderName = relativePath.split("/").pop() || "Catalog";
-  const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
+
+  const folderName =
+    rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
+
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
-  const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+
+  const selfHref =
+    relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
   const model = buildFeedModel({
     id: feedId,
@@ -133,6 +167,7 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
     startHref: `/${FEED_FILE}`,
     fragments: entries,
   });
+
   const completeFeed = renderXml(model);
 
   try {
@@ -148,14 +183,21 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
       await deps.fs.atomicWrite(join(normalizedDir, INDEX_FILE), renderHtml(model));
       deps.logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
     } catch (htmlError) {
-      deps.logger.error("FolderMetaSync", "Failed to render index.html", htmlError, { path: relativePath || "/" });
+      deps.logger.error("FolderMetaSync", "Failed to render index.html", htmlError, {
+        path: relativePath || "/",
+      });
     }
 
     if (relativePath !== "") {
       const entryOutputPath = join(normalizedDir, FOLDER_ENTRY_FILE);
-      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
+
+      const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(
+        selfHref,
+        "navigation",
+      );
 
       const description = formatFolderDescription(folderEntries.length, bookEntries.length);
+
       if (description) entry.setSummary(description);
 
       const entryXml = entry.toXml({ prettyPrint: true });

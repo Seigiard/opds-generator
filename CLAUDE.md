@@ -18,6 +18,8 @@ OPDS catalog generator for locally stored ebooks. Watches `/books` directory, ex
 
 ## Task Completion Checklist
 
+Anti-slop is vendored under `tools/oxlint/anti-slop/`. Its `UPSTREAM.md` records the source revision. Update Oxlint and `@oxlint/plugins` together at matching exact versions. The plugin is excluded from application typechecking and formatting.
+
 After completing any task:
 
 ```bash
@@ -309,6 +311,8 @@ const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "naviga
 ### Dependency Notes
 
 - `sharp` includes its own TypeScript definitions; do not add `@types/sharp`.
+- `valibot` validates watcher events, parsed XML values, and reader event details at their input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract; format and render helpers consume that contract. Rebuild the Docker test image after changing this runtime dependency.
+- `knip.json` is the active Knip configuration. Its entry list includes the vendored anti-slop entry point so Knip sees the plugin's development dependency imports.
 - `detect-libc` is pulled transitively by `sharp`; do not add it as a direct dependency unless app code imports it.
 - `hono` is a runtime `dependency` (the renderer runs in the production image): `src/render/feed-html.ts` imports `html` from `hono/html` for auto-escaping. Zero transitive deps, browser-importable (proven by `render:pure`). After changing render deps, rebuild the test image: `bun run rebuild:test`.
 - `ui/vendor/foliate-js` (submodule) and its bundled pdf.js are **security-sensitive**: they execute attacker-supplied book content. Bump the submodule on upstream security advisories, not just for features — see `ui/vendor/VENDOR.md` for the pinned commit, pdf.js version/checksums (≥ CVE-2024-4367 fix), and the update procedure. `test/unit/reader/vendor-posture.test.ts` pins foliate's iframe sandbox + pdf.js `isEvalSupported: false`; a bump that changes either forces a security re-review.

@@ -4,13 +4,36 @@ import { parseFeed } from "../../../src/render/parse-feed.ts";
 import { renderXml } from "../../../src/render/feed-xml.ts";
 
 const FEEDS_DIR = join(import.meta.dir, "../../fixtures/feeds");
-const REAL_CASSETTES = ["root.xml", "nonfiction-cyrillic.xml", "cyrillic-book.xml", "large-folder.xml", "deep-nested.xml"];
+
+const REAL_CASSETTES = [
+  "root.xml",
+  "nonfiction-cyrillic.xml",
+  "cyrillic-book.xml",
+  "large-folder.xml",
+  "deep-nested.xml",
+];
 
 const readFeed = (name: string) => Bun.file(join(FEEDS_DIR, name)).text();
-const normalizeUpdated = (xml: string) => xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+
+const normalizeUpdated = (xml: string) =>
+  xml.replace(/<updated>[^<]*<\/updated>/g, "<updated>X</updated>");
+
 const stripStylesheetPi = (xml: string) => xml.replace(/^\s*<\?xml-stylesheet[^>]*\?>\n/m, "");
 
 describe("parseFeed", () => {
+  test("ignores an empty link without dropping cached entries or their verbatim XML", async () => {
+    // #given the unchanged real cassette plus an empty optional link in each entry
+    const source = await readFeed("nonfiction-cyrillic.xml");
+    const xml = source.replaceAll("</entry>", "<link/></entry>");
+    // #when parsed and sent to the OPDS renderer
+    const model = parseFeed(xml);
+    const rebuilt = renderXml(model);
+    // #then metadata and every original entry fragment remain available
+    expect(model.entries).toHaveLength(6);
+    expect(model.entries[0]?.title).toBe("Finance");
+    expect(normalizeUpdated(rebuilt)).toBe(normalizeUpdated(stripStylesheetPi(xml)));
+  });
+
   test("extracts feed metadata and entries from a real cassette", async () => {
     // #given a mixed folder+book acquisition feed with cyrillic content
     const xml = await readFeed("nonfiction-cyrillic.xml");
@@ -57,6 +80,7 @@ describe("parseFeed", () => {
     <link rel="http://opds-spec.org/acquisition/open-access" href="/a/file" type="application/pdf"/>
   </entry>
 </feed>`;
+
     // #when parsed
     const model = parseFeed(xml);
     // #then the attributed entry is not silently dropped
