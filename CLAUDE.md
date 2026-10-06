@@ -1,138 +1,10 @@
-## What This Is
+# CLAUDE.md
 
-OPDS catalog generator for locally stored ebooks. Watches `/books` directory, extracts metadata from epub/fb2/mobi/pdf/djvu/cbz/txt, generates OPDS 1.2 feeds with covers and thumbnails. Browse in any OPDS-compatible reader.
+OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, neverthrow event pipeline, Effect 4 only for command ownership, nginx in front, everything runs in Docker.
 
-## Agent skills
+`CLAUDE.md` is the single source of truth for project context. Update it in the same change when you alter architecture, dependencies, commands, gotchas, or project structure.
 
-### Issue tracker
-
-Issues and specs live in GitHub Issues for `Seigiard/opds-generator`. Before reading or publishing tickets, read `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the five canonical triage labels. Before triaging or changing labels, read `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: root `GLOSSARY.md` and `docs/adr/`. Before exploring domain concepts or architecture, read `docs/agents/domain.md`.
-
-## Quick Reference
-
-| Instead of              | Use                         |
-| ----------------------- | --------------------------- |
-| `node`, `ts-node`       | `bun <file>`                |
-| `npm install/run`       | `bun install/run`           |
-| `jest`, `vitest`        | `bun test`                  |
-| `express`               | `Bun.serve()`               |
-| `fs.readFile/writeFile` | `Bun.file()`, `Bun.write()` |
-| `execa`                 | ``Bun.$`cmd` ``             |
-| `crypto`                | `Bun.hash()`                |
-| `dotenv`                | Bun auto-loads .env         |
-| `curl` in healthcheck   | `wget` (curl not in image)  |
-
-## Task Completion Checklist
-
-Anti-slop is vendored under `tools/oxlint/anti-slop/`. Its `UPSTREAM.md` records the source revision. Update Oxlint and `@oxlint/plugins` together at matching exact versions. The plugin is excluded from application typechecking and formatting.
-
-After completing any task:
-
-```bash
-bun run fix          # format:fix + lint:fix — zero warnings, zero errors policy
-bun --bun tsc --noEmit # check types
-bun run test
-npx knip             # check unused exports/deps
-bun run build:ui     # if you touched ui/ or src/render — regenerates static/style.css + main.js
-bun run render:golden # if you touched src/render markup — regenerates + commit test/golden/*.html
-```
-
-If you change `ui/styles/*`, `ui/gridnav/*`, or the renderer, run `bun run build:ui` and commit the regenerated `static/` artifacts. `bun run test:all` runs `build:ui:check` (a `git diff --exit-code static/` freshness gate), `render:check`, and `render:pure` before the test suites.
-
-**Renderer gates (host-side, no docker):**
-
-- `bun run render:check` — regenerates `test/golden/*.html` from every cassette and fails on any diff or untracked golden. Byte-exact, no normalization; `test/golden/` is in `.prettierignore` so oxfmt never touches it. Any markup change to `src/render/feed-html.ts` requires re-running `bun run render:golden` and committing the regenerated goldens.
-- `bun run render:pure` — proves `src/render/*` stays browser-importable (KTD-7): builds the four modules with `--target=browser` (catches node builtins, direct + transitive) and runs a `Bun`-globals oxlint rule scoped to `src/render/**/*.ts` (see `.oxlintrc.json` `overrides`).
-
-`bun run fix` must produce 0 warnings and 0 errors. Fix all lint/format issues before committing.
-
-`.oxfmtrc.json` pins the 140-column formatting width so local checks and CI use the same width without relying on a developer's home `.editorconfig`.
-
-CI quality gates run as separate steps in `.github/workflows/docker.yml` so failures identify the check that failed. CI runs routing e2e only; the known-flaky event-logging e2e remains local in `test:all`.
-
-**MANDATORY:** Run `bun run test` and verify 0 failures BEFORE every commit. Never commit untested code. If tests fail — fix first, then commit.
-
-**MANDATORY:** Update `CLAUDE.md` when changes affect architecture, dependencies, commands, gotchas, or project structure. CLAUDE.md is the single source of truth for project context.
-
-## Development Workflow
-
-Docker dev runs at http://localhost:8080 — do NOT run bun locally.
-Gracefully shutdown after tests.
-
-```bash
-git submodule update --init                           # foliate-js reader runtime (first checkout / after clone)
-docker compose -f docker-compose.dev.yml up          # start
-docker compose -f docker-compose.dev.yml logs -f     # logs
-curl http://localhost:8080/feed.xml                  # test
-curl -u admin:secret http://localhost:8080/resync    # force resync
-```
-
-`ui/vendor/foliate-js` is a pinned git submodule; `build:ui` needs it to regenerate the
-reader artifacts (`static/reader.js`, `static/foliate-<hash>/`, `static/read.html`). The
-Docker image ships committed `static/` only, so the running container never needs the
-submodule — but a fresh clone that runs `build:ui`/`build:ui:check` must init it first.
-
-## Environment Variables
-
-| Variable             | Default  | Description                                                                        |
-| -------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `FILES`              | `/books` | Source books directory                                                             |
-| `DATA`               | `/data`  | Generated metadata cache                                                           |
-| `PORT`               | `3000`   | Internal Bun server port                                                           |
-| `LOG_LEVEL`          | `info`   | debug \| info \| warn \| error                                                     |
-| `DEV_MODE`           | `false`  | Enable Bun --watch hot reload                                                      |
-| `ADMIN_USER`         | -        | /resync Basic Auth username                                                        |
-| `ADMIN_TOKEN`        | -        | /resync Basic Auth password                                                        |
-| `RATE_LIMIT_MB`      | `0`      | Download rate limit MB/s (0 = off); also throttles in-browser reader fetches (R14) |
-| `RECONCILE_INTERVAL` | `1800`   | Periodic reconciliation seconds (0 = off, min 60)                                  |
-
-## Testing
-
-**IMPORTANT:** Run tests via docker, not locally!
-
-```bash
-# Run unit + integration tests (inside docker)
-bun run test
-
-# Run e2e tests (nginx + event logging, outside docker)
-bun run test:e2e
-
-# Run ALL tests (unit + integration + e2e)
-bun run test:all
-
-# Run specific test file
-docker compose -f docker-compose.test.yml run --rm test bun test test/integration/effect/queue-consumer.test.ts
-
-# Type check (locally is fine)
-bun --bun tsc --noEmit
-```
-
-### Test Structure
-
-```
-test/
-├── setup.ts             # Global test setup
-├── helpers/             # Mock services, assertions, fs utils
-├── unit/                # Pure logic, no external deps
-│   ├── utils/
-│   └── effect/handlers/
-├── integration/         # Requires docker (poppler, djvulibre, etc.)
-│   ├── formats/         # Format handler tests
-│   └── effect/          # Queue + cascade flow tests
-└── e2e/                 # Full system tests
-    ├── nginx.test.ts    # nginx routing + auth
-    └── event-logging.test.ts  # Event lifecycle tracing
-```
-
-## Project Structure
+## Project map
 
 ```
 src/
@@ -140,262 +12,222 @@ src/
 ├── config.ts        # Environment configuration
 ├── constants.ts     # File constants (feed.xml, entry.xml, etc.)
 ├── scanner.ts       # File scanning, sync planning
-├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS)
+├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
 ├── watcher.sh       # inotifywait → POST /events
 ├── context.ts       # AppContext, HandlerDeps, buildContext()
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
-├── effect/          # Event handling (neverthrow + async/await)
+├── effect/          # Event handling (neverthrow + async/await, despite the name)
 │   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
 │   ├── consumer.ts  # Event loop (AbortController-based)
-│   ├── adapters/    # Raw → typed event conversion
-│   │   ├── books-adapter.ts    # /books watcher events
-│   │   ├── data-adapter.ts     # /data watcher events
-│   │   └── sync-plan-adapter.ts # Initial sync → events
-│   └── handlers/    # book-sync, folder-sync, etc.
-├── render/          # FeedModel + two renderers (no Bun/node:fs — browser-importable)
-│   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel (fast-xml-parser)
-│   ├── feed-xml.ts   # renderXml(model) → feed.xml (opds-ts skeleton + spliced fragments)
-│   ├── feed-html.ts  # renderHtml(model) → index.html (cards, :target popup, breadcrumb)
+│   ├── adapters/    # Raw → typed events: books-adapter, data-adapter, sync-plan-adapter
+│   └── handlers/    # book-sync, folder-sync, folder-meta-sync, cleanup, …
+├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
+│   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
+│   ├── feed-xml.ts   # renderXml(model) → feed.xml
+│   ├── feed-html.ts  # renderHtml(model) → index.html
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (cassettes + playground)
-├── formats/         # FormatHandler implementations
-│   ├── types.ts     # FormatHandler, BookMetadata
-│   ├── index.ts     # Handler registry
-│   ├── utils.ts     # XML parsing utilities
-│   └── *.ts         # epub, fb2, mobi, pdf, comic, txt, djvu
-├── logging/         # Structured logging
-│   ├── types.ts     # LogLevel, LogContext
-│   ├── logger.ts    # Flat JSON logger to stdout
-│   └── index.ts     # Exports
+├── formats/         # FormatHandler per format; index.ts is the registry
+├── logging/         # Flat JSON logger to stdout
 └── utils/           # archive, image, process, processor, opds
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
-├── styles/          # CSS sources (reset, index, header, variations) → static/style.css
-├── gridnav/         # main.ts (thin prod entry) + viewer.ts (initGlobal/wire popup+nav
-│                    #   driver, reused by the playground) + gridnav.ts → static/main.js
-├── reader/          # In-browser reader shell: shell.ts (chrome+foliate boundary),
-│                    #   fragment.ts (R15 URL validation), reader.ts (prod entry),
-│                    #   read.html (template), reader.css → static/reader.js + read.html;
-│                    #   SMOKE.md (U6 manual checklist)
-├── vendor/          # foliate-js pinned git submodule + VENDOR.md (provenance/audit)
-├── playground/      # Vite pages: index.html (cassette → renderHtml preview) and
-│                    #   reader.html (fixtures → shell smoke); fixtures/ (smoke EPUBs)
-└── scripts/         # build-ui.ts (build:ui), fixtures-pull.ts (fixtures:pull),
-                     #   render-golden.ts (render:golden/check), render-purity.ts (render:pure),
-                     #   build-smoke-fixtures.ts (regenerates ui/playground/fixtures/*.epub)
+├── styles/          # CSS sources → static/style.css
+├── gridnav/         # main.ts (prod entry) + viewer.ts + gridnav.ts → static/main.js
+├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
+├── vendor/          # foliate-js pinned git submodule + VENDOR.md
+├── playground/      # Vite pages: index.html (cassette preview), reader.html (fixture smoke)
+└── scripts/         # build-ui, fixtures-pull, render-golden, render-purity, build-smoke-fixtures
 
-static/              # Committed build artifacts served by nginx
-├── style.css        # Generated by build:ui (PostCSS pipeline; do not edit by hand)
-├── main.js          # Generated by build:ui (Bun.build; excluded from oxlint/oxfmt)
-├── reader.js        # Generated by build:ui (reader shell bundle; no-cache like main.js)
-├── read.html        # Generated by build:ui (reader page; refs the hashed foliate dir)
-├── foliate-<hash>/  # Generated by build:ui: vendored foliate+pdf.js runtime,
-│                    #   content-hashed → immutable-cacheable; pdf.js loads lazily
-└── favicon/         # Static favicons
-
-test/golden/         # Byte-exact renderHtml output per cassette; generated by render:golden,
-                     #   gated by render:check, .prettierignore'd — never hand-edit
+static/              # Committed build artifacts served by nginx (generated by build:ui)
+test/                # setup.ts, helpers/, unit/, integration/ (needs docker), e2e/
+test/golden/         # Byte-exact renderHtml output per cassette (generated by render:golden)
+tools/oxlint/anti-slop/ # Vendored anti-slop Oxlint plugin; UPSTREAM.md records the source revision
 ```
 
-### Viewer: single model, two renderers
+`/data` mirrors `/books`. A book becomes a folder with `entry.xml`, `cover.jpg`, `thumb.jpg`, and a `file` symlink. A folder gets `feed.xml`, `index.html`, and `_entry.xml` (consumed by its parent).
 
-`FeedModel` is the one source of truth per folder. The `folder-meta-sync` cascade builds it once and writes two artifacts from it: `feed.xml` via `renderXml` (readers) and `index.html` via `renderHtml` (browsers). No browser XSLT — HTML is rendered at sync time. `parseFeed` reconstructs a model from a feed.xml for cassettes and the playground.
+<important if="you are reading or publishing GitHub issues, triaging, or changing labels">
 
-**To change the browser template:** edit `src/render/feed-html.ts` (markup) and/or `ui/styles/*` (CSS). Run `bun run dev:ui` for a live HMR preview against real cassettes. Run `bun run build:ui` to regenerate `static/style.css` + `static/main.js`, then restart the container (or `POST /resync`) to regenerate every `index.html`. **After any markup change, run `bun run render:golden` and commit the regenerated `test/golden/*.html`** — `render:check` fails otherwise. Never hand-edit `static/style.css`, `static/main.js`, or `test/golden/*`.
+- Issues and specs live in GitHub Issues for `Seigiard/opds-generator`. Read `docs/agents/issue-tracker.md` first.
+- Use the five canonical triage labels. Read `docs/agents/triage-labels.md` first.
 
-`feed-html.ts` renders through hono/html's auto-escaping ` html` ``tag (aliased `frag` for the sync/non-Promise narrowing) — interpolated data values are escaped by default (`&<>"'`), so there are no manual `escapeHtml`/`escapeAttr` calls. Rules: never `.join()` nested`` html` ` fragments (strips the escaped marker → double-escape); interleave fragment arrays with literal separators via the `interleave` helper. Auto-escaping does not cover URL schemes — every href/src goes through `safeHref`, which drops anything but `http(s)`/relative/`#` to `#`. The escaping contract is pinned by `test/unit/render/escaping.test.ts` against the hand-authored `test/fixtures/feeds/hostile.xml` cassette.
+</important>
 
-Book detail popups use hash + CSS `:target` (works with no JS). `main.js` is progressive enhancement (gridnav keyboard nav, focus trap, Esc/Back close) and is not on the critical path.
+<important if="you are exploring domain concepts or architecture decisions, or editing GLOSSARY.md or an ADR">
 
-## Architecture: Dual Server
+Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agents/domain.md` first.
 
-```
-nginx:80 (external)                      Bun:3000 (localhost only)
-├── / → 302 /index.html (browsers)       ├── POST /events/books ← books watcher
-├── /<folder>/ → index.html (browsers)   ├── POST /events/data ← data watcher
-├── /opds → root feed.xml as 200 XML (readers) └── POST /resync ← nginx
-├── /<folder>/feed.xml → feed (readers)
-├── /static/* → /app/static
-├── /resync → auth → proxy
-└── downloads/covers → /data/*
-```
+</important>
 
-Audience split is by URL structure, not content negotiation: readers follow the explicit `feed.xml` link graph, browsers follow folder URLs to `index.html`. During initial sync / mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
+<important if="you need to run commands to build, test, lint, start the server, or regenerate artifacts">
 
-## Architecture: Event Processing
+The app and tests run in Docker. Do not run the app with bun on the host. Shut containers down gracefully when you finish.
 
-1. **Adapters** (`adapters/*.ts`) — raw inotify → typed EventType
-2. **Queue** (`SimpleQueue<EventType>`) — unrolled queue + Promise waiters; pending `FolderMetaSyncRequested` events are coalesced by path and moved behind later queued work
-3. **Consumer** (`consumer.ts`) — `while (!signal.aborted)` loop with `queue.take(signal)`
-4. **Handlers** (`handlers/*.ts`) — return `Result<EventType[], Error>` for cascades
+| Command                                                                   | What it does                                                                     |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `git submodule update --init`                                             | Fetch foliate-js (first checkout; `build:ui` needs it)                           |
+| `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                       |
+| `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                                  |
+| `curl http://localhost:8080/feed.xml`                                     | Smoke-check the dev feed                                                         |
+| `curl -u admin:secret http://localhost:8080/resync`                       | Force resync (dev credentials)                                                   |
+| `bun run start` / `bun run rebuild`                                       | Production compose up / build                                                    |
+| `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                             |
+| `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors                 |
+| `bun run lint` / `bun run format`                                         | Check-only oxlint / oxfmt                                                        |
+| `bun --bun tsc --noEmit`                                                  | Type check (host is fine)                                                        |
+| `bun run test`                                                            | Unit + integration tests in Docker                                               |
+| `bun run test:unit` / `test:integration` / `test:coverage`                | Subsets / coverage, in Docker                                                    |
+| `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                                |
+| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose)                         |
+| `bun run test:e2e:routing`                                                | Routing e2e only (what CI runs)                                                  |
+| `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                   |
+| `npx knip`                                                                | Unused exports/deps (`knip.json`)                                                |
+| `bun run build:ui`                                                        | Regenerate `static/` (style.css, main.js, reader.js, read.html, foliate-<hash>/) |
+| `bun run build:ui:check`                                                  | Rebuild and fail if `static/` differs from the commit                            |
+| `bun run render:golden`                                                   | Regenerate `test/golden/*.html` from every cassette                              |
+| `bun run render:check`                                                    | Fail on any golden diff or untracked golden (byte-exact)                         |
+| `bun run render:pure`                                                     | Prove `src/render/*` is browser-importable                                       |
+| `bun run dev:ui`                                                          | Vite HMR preview of renderer + reader, no Docker (http://localhost:5173)         |
+| `bun run fixtures:pull`                                                   | Refresh renderer cassettes                                                       |
 
-### DI via AppContext + Pick<>
+</important>
 
-| Field in AppContext | Purpose                                               |
-| ------------------- | ----------------------------------------------------- |
-| `config`            | filesPath, dataPath, port, reconcileInterval          |
-| `logger`            | info, warn, error, debug (void, fire-and-forget)      |
-| `fs`                | mkdir, rm, readdir, stat, atomicWrite (Promise-based) |
-| `dedup`             | TTL-based (500ms) event filtering (synchronous)       |
-| `queue`             | SimpleQueue: enqueue, enqueueMany, take, size         |
-| `handlers`          | Map<tag, AsyncHandler>                                |
+<important if="you are finishing a task or about to commit">
 
-Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal: AbortSignal`. The consumer supplies its shutdown signal; `bookSync` forwards it to format factories and archive commands.
+Run, and fix until clean:
 
-### Command and temporary-resource ownership
+1. `bun run fix` (0 warnings, 0 errors)
+2. `bun --bun tsc --noEmit`
+3. `bun run test` — 0 failures before every commit, no exceptions
+4. `npx knip`
+5. `bun run build:ui` if you touched `ui/` or `src/render`, and commit the regenerated `static/`
+6. `bun run render:golden` if you touched `src/render` markup, and commit the regenerated `test/golden/*.html`
 
-`src/utils/process.ts` owns command execution through Effect 4 scopes. `spawnWithTimeout` and `spawnWithTimeoutText` keep a Promise interface; `withTemporaryDirectory` owns temporary inputs used by DJVU/sharp and RAR extraction. Event processing remains `neverthrow` + async/await.
+CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus routing e2e only. The event-logging e2e is known-flaky and stays local in `test:all`.
 
-- Commands default to 15 seconds each, with an optional `timeout` override. Timeout or cancellation sends SIGTERM, waits up to 1 second, then sends SIGKILL and waits for exit. Timeout returns empty stdout, `exitCode: -1`, and `timedOut: true`; cancellation rejects with the caller's abort reason after release.
-- Stdout stays file-backed and stderr is ignored. Acquire fd, child, and output resources inside the scope so spawn failure also releases them. PDF/DJVU commands use this module instead of direct spawns.
-- Temporary-directory callbacks must await all work that uses their files. Their Promise is uninterruptible so native sharp/unrar work can finish before cleanup; commands inside the callback observe its captured caller signal.
-- Format factories accept an optional shutdown signal. Cancellation is distinct from extraction failure: rethrow it through fallback catches, and check it before catalogue publication. Existing `entry.xml` remains untouched when cancellation occurs before publication; image files may already have been refreshed. Once entry/link publication starts, finish both writes so a fresh entry cannot lack its download link.
-- Shutdown signals are installed before initial sync. The existing 8-second hard deadline remains; expiry logs unfinished work/cleanup before process exit.
+</important>
 
-### Effect anti-slop rules
+<important if="you are changing the browser viewer: src/render/feed-html.ts, ui/styles, or ui/gridnav">
 
-The vendored `anti-slop-effect` plugin is registered in `.oxlintrc.json`. Its five rules run at `error` on the Effect-owned command implementation (`src/utils/process.ts`):
+- `FeedModel` is the one source per folder. The `folder-meta-sync` cascade builds it once and writes `feed.xml` (`renderXml`) and then `index.html` (`renderHtml`). HTML is rendered at sync time; there is no browser XSLT.
+- Preview with `bun run dev:ui`. Then run `bun run build:ui`, restart the container or `POST /resync` to regenerate every `index.html`.
+- `static/style.css`, `static/main.js`, and `test/golden/*` are generated. Change their sources and regenerate.
+- `test/golden/` is byte-exact and `.prettierignore`'d. Every markup change needs `bun run render:golden` and a commit of the goldens.
+- `src/render/*` must stay browser-importable: no node builtins, no `Bun` globals (`render:pure` and an oxlint override enforce this). The same holds for `src/types.ts`, which the browser bundles import.
+- Editing CSS reshuffles all `random()` card hues (the seed is the source length). This is expected.
+- Book popups use hash + CSS `:target` and work without JS. `main.js` is progressive enhancement only.
 
-- `no-manual-effect-error-tag`: use `Effect.catchTag`/`catchTags` and `catchReason`/`catchReasons` instead of manual tag checks inside broad Effect catch handlers.
-- `no-manual-tag-comparison`: use `Match` or `Predicate.isTagged` instead of branching on `_tag`.
-- `no-manual-tagged-construction`: use Schema/Data tagged-value constructors instead of literal `_tag` objects.
-- `no-service-constructor-imports`: keep project-local `make<CapabilityName>` construction local instead of importing it into runtime Effect modules. Test/spec imports are exempt; package aliases are not enforced.
-- `prefer-effect-match`: use Effect's `Match` instead of chained literal ternaries over the same value.
+</important>
 
-When another module adopts Effect, add its path to this override. Plain async/neverthrow event modules retain their existing discriminated unions. Keep resource acquisition/release scoped, preserve native-work lifetime during interruption, and preserve original errors at the Promise interface.
+<important if="you are interpolating data into HTML in src/render/feed-html.ts">
 
-### Key Patterns
+- Markup goes through hono's auto-escaping `html` tag (aliased `frag`). Interpolated values are escaped for you; add no manual escaping.
+- Never `.join()` nested `html` fragments: it drops the escaped marker and double-escapes. Use the `interleave` helper.
+- Escaping does not cover URL schemes. Pass every `href`/`src` through `safeHref`.
+- `test/unit/render/escaping.test.ts` pins the contract against `test/fixtures/feeds/hostile.xml`.
 
-**Cascade events** — handlers return events via neverthrow:
+</important>
 
-```typescript
-return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }]);
-```
+<important if="you are changing the in-browser reader (ui/reader/), its nginx config, or the foliate-js submodule">
 
-**Flag cleanup** — use `try/finally`:
+- The popup **View** link opens `static/read.html#/<folder>/<file>`; the fragment never reaches nginx. Enable a format by adding it to `VIEWABLE_FORMATS` in `src/types.ts`; the renderer needs no edit.
+- The reader CSP is the load-bearing script control. foliate's iframe sandbox gives no isolation (`allow-same-origin` + `allow-scripts`, WebKit bug 218086). The CSP is an nginx header on `/static/read.html` only, pinned verbatim by `test/e2e/nginx.test.ts`. Keep it at least as strict; `'unsafe-eval'` is forbidden.
+- `static/foliate-<hash>/` is content-hashed and served `immutable`. `read.html` re-declares `no-cache` because nginx `add_header` replaces inherited headers.
+- pdf.js loads lazily, only for PDFs. Keep `reader.js` around 4 KB.
+- `build:ui` prepends a `getOrInsertComputed` shim (`PDFJS_COMPAT_SHIM`) to the copied pdf.js files so PDFs render on older browsers. Re-check it on every pdf.js bump.
+- foliate-js and its pdf.js run attacker-supplied book content. Bump the submodule on upstream security advisories. Follow `ui/vendor/VENDOR.md`. `test/unit/reader/vendor-posture.test.ts` pins the iframe sandbox and `isEvalSupported: false`; a change there needs a security re-review.
+- The playground serves no CSP. Run the AE3/AE6 security checks against the Docker dev server, per `ui/reader/SMOKE.md`.
+- The Docker image ships committed `static/` only; the container never needs the submodule.
 
-```typescript
-isSyncing = true;
-try {
-  await doWork();
-} finally {
-  isSyncing = false;
-}
-```
+</important>
 
-**Graceful shutdown** — AbortController:
+<important if="you are working on nginx routing, auth, or the Bun HTTP endpoints">
 
-```typescript
-const controller = new AbortController();
-const consumerTask = startConsumer(ctx, controller.signal);
-// ...
-controller.abort();
-await Promise.allSettled([consumerTask, reconcileTask]);
-```
+- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books`, `POST /events/data` (watchers), and `POST /resync` (proxied).
+- Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
+- During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
+- `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.
+- The Docker healthcheck uses `wget` (`wget -q --spider http://127.0.0.1/feed.xml`); the alpine image has no `curl`.
 
-**Mirror structure** — /data mirrors /books:
+</important>
 
-- Book → folder with `entry.xml`, `cover.jpg`, `thumb.jpg`, `file` (symlink)
-- Folder → `feed.xml` + `_entry.xml` (for parent)
+<important if="you are adding or reading environment variables or configuration">
 
-## Adding New Format Handler
+| Variable             | Default  | Description                                                                  |
+| -------------------- | -------- | ---------------------------------------------------------------------------- |
+| `FILES`              | `/books` | Source books directory                                                       |
+| `DATA`               | `/data`  | Generated metadata cache                                                     |
+| `PORT`               | `3000`   | Internal Bun server port                                                     |
+| `LOG_LEVEL`          | `info`   | debug \| info \| warn \| error                                               |
+| `DEV_MODE`           | `false`  | Enable Bun --watch hot reload                                                |
+| `ADMIN_USER`         | -        | /resync Basic Auth username                                                  |
+| `ADMIN_TOKEN`        | -        | /resync Basic Auth password                                                  |
+| `RATE_LIMIT_MB`      | `0`      | Download rate limit MB/s (0 = off); also throttles in-browser reader fetches |
+| `RECONCILE_INTERVAL` | `1800`   | Periodic reconciliation seconds (0 = off, min 60)                            |
 
-1. Create `src/formats/{format}.ts` implementing FormatHandler interface
-2. Export `registration: FormatHandlerRegistration`
-3. Import and add to registrations array in `src/formats/index.ts`
+</important>
 
-### Handler Interface
+<important if="you are working on event adapters, the queue, the consumer, or handlers in src/effect/">
 
-```typescript
-interface FormatHandler {
-  getMetadata(): BookMetadata;       // Sync extraction
-  getCover(): Promise<Buffer | null>; // Async cover extraction
-}
+- Flow: adapters (raw inotify → typed `EventType`) → `SimpleQueue` → consumer loop (`queue.take(signal)`) → handlers.
+- The queue coalesces pending `FolderMetaSyncRequested` events by path and moves them behind later queued work.
+- Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/effect/handlers/book-sync.ts`.
+- Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.
+- Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/server.ts`).
+- Avoid watcher loops: the data watcher classifies only `entry.xml`/`_entry.xml` and ignores everything else (including `feed.xml`, `index.html`, `.jsonl`). Check `src/watcher.sh` exclusions when you change written files.
+- An `index.html` render failure is logged and must not block `feed.xml`.
 
-interface FormatHandlerRegistration {
-  extensions: string[];               // ["epub", "epub3"]
-  create: FormatHandlerFactory;       // async factory function
-}
-```
+</important>
 
-### Supported Formats
+<important if="you are spawning external commands, using temp directories, or touching src/utils/process.ts">
 
-| Format | Extensions         | Dependencies      |
-| ------ | ------------------ | ----------------- |
-| EPUB   | .epub              | unzip             |
-| FB2    | .fb2, .fbz         | unzip (fbz)       |
-| MOBI   | .mobi, .azw, .azw3 | -                 |
-| PDF    | .pdf               | poppler-utils     |
-| DJVU   | .djvu              | djvulibre         |
-| Comics | .cbz, .cbr, .cb7   | node-7z, unrar-js |
-| Text   | .txt               | -                 |
+- `src/utils/process.ts` owns command execution through Effect 4 scopes behind a Promise interface (`spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory`). PDF/DJVU and archive code use it, never direct spawns.
+- Commands time out after 15 s by default (`timeout` overrides). Timeout or cancellation sends SIGTERM, waits up to 1 s, then SIGKILL and waits for exit. Timeout returns empty stdout, `exitCode: -1`, `timedOut: true`. Cancellation rejects with the caller's abort reason after release.
+- Stdout is file-backed; stderr is ignored. Acquire fd, child, and output inside the scope so spawn failure releases them too.
+- `withTemporaryDirectory` callbacks must await all work that uses their files. The Promise is uninterruptible so native sharp/unrar work finishes before cleanup.
+- Shutdown signals are installed before initial sync. The 8 s hard deadline stays; on expiry it logs unfinished work before exit.
 
-## opds-ts Usage
+</important>
 
-```typescript
-import { Entry, Feed } from "opds-ts/v1.2";
+<important if="you are adopting Effect in a module or editing Effect code">
 
-const entry = new Entry(id, title)
-  .setAuthor(author)
-  .addImage(coverUrl)
-  .addAcquisition(downloadUrl, mimeType, "open-access");
+- `effect` is pinned to `4.0.1` and limited to command/resource ownership. Event processing stays neverthrow + async/await with plain discriminated unions.
+- The vendored `anti-slop-effect` rules run at `error` on Effect-owned modules via the `.oxlintrc.json` override. When another module adopts Effect, add its path to that override.
+- Keep acquisition/release scoped, let native work outlive interruption, and preserve original errors at the Promise boundary.
+- Historical findings in `docs/memory-leak-investigation.md` describe the old runtime; the Docker memory suites check current behavior.
 
-const feed = new Feed(id, title).setKind("navigation").addSelfLink(href, "navigation");
-```
+</important>
 
-## Troubleshooting
+<important if="you are adding a format handler or changing format extraction or cancellation in src/formats/">
 
-### Dependency Notes
+- Add `src/formats/<format>.ts` exporting `registration: FormatHandlerRegistration`, then add it to the array in `src/formats/index.ts`. The interface is in `src/formats/types.ts`; follow `epub.ts`.
+- Format factories accept an optional shutdown signal. Cancellation is not an extraction failure: rethrow it through fallback catches, and check it before catalogue publication.
+- If cancelled before publication, the existing `entry.xml` stays untouched (images may already be refreshed). Once entry/link publication starts, finish both writes so an entry never lacks its download link.
+- `valibot` validates watcher events, parsed XML values, and reader event details at input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract.
+- Build feed objects with `opds-ts/v1.2` (`Entry`, `Feed`); see `src/utils/opds.ts`.
+- Format dependencies: EPUB/FBZ need `unzip`, PDF `poppler-utils`, DJVU `djvulibre`, comics `node-7z` + `unrar-js`. They exist in the Docker image only.
 
-- `sharp` includes its own TypeScript definitions; do not add `@types/sharp`.
-- `effect` is pinned to `4.0.1` and limited to command/resource ownership. Rebuild the Docker test image after changing it. Historical Effect memory findings in `docs/memory-leak-investigation.md` describe the old runtime; current behavior is checked by the Docker memory suites.
-- Before investigating native RSS test failures, read `docs/memory-oracle-investigation.md` (#13). Memory gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per queue or consumer event, unchanged) plus exact JS-object growth (< 0.5 per operation). `memory-oracle-calibration.test.ts` proves both go red on retained memory; never raise a limit to pass a red run. The handler-chain RSS gate is weak at its limit (known limit, documented there).
-- `valibot` validates watcher events, parsed XML values, and reader event details at their input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract; format and render helpers consume that contract. Rebuild the Docker test image after changing this runtime dependency.
-- `knip.json` is the active Knip configuration. Its entry list includes the vendored anti-slop entry point so Knip sees the plugin's development dependency imports.
-- `detect-libc` is pulled transitively by `sharp`; do not add it as a direct dependency unless app code imports it.
-- `hono` is a runtime `dependency` (the renderer runs in the production image): `src/render/feed-html.ts` imports `html` from `hono/html` for auto-escaping. Zero transitive deps, browser-importable (proven by `render:pure`). After changing render deps, rebuild the test image: `bun run rebuild:test`.
-- `ui/vendor/foliate-js` (submodule) and its bundled pdf.js are **security-sensitive**: they execute attacker-supplied book content. Bump the submodule on upstream security advisories, not just for features — see `ui/vendor/VENDOR.md` for the pinned commit, pdf.js version/checksums (≥ CVE-2024-4367 fix), and the update procedure. `test/unit/reader/vendor-posture.test.ts` pins foliate's iframe sandbox + pdf.js `isEvalSupported: false`; a bump that changes either forces a security re-review.
+</important>
 
-### Infinite Loop in Watchers
+<important if="you are writing tests or debugging failing tests">
 
-- data watcher excludes `.jsonl` files and `index.html`
-- feed.xml and index.html are NOT watched (data-adapter classifies only entry.xml/\_entry.xml; everything else → Ignored)
-- `index.html` is written by the cascade after `feed.xml` (same model); an HTML render failure is logged and does not block the feed
-- Check watcher.sh exclusion patterns
+- Run tests in Docker (`bun run test`). Integration tests need poppler-utils and djvulibre from the image. After dependency changes, run `bun run rebuild:test`.
+- Check that fixtures exist in `test/fixtures/`.
+- Known-flaky tests are listed in `docs/known-flaky-tests.md`.
 
-### Viewer / index.html
+</important>
 
-- Browser HTML is rendered at sync time (`src/render/feed-html.ts`), not by XSLT in the browser — `layout.xsl` and the `<?xml-stylesheet?>` PI were removed (Chrome 158 drops XSLT 2026-11-17)
-- `static/style.css` and `static/main.js` are generated by `bun run build:ui`; never hand-edit them
-- Editing CSS reshuffles all `random()` card hues (seed = source length) — expected, not a bug
-- Preview renderer changes live with `bun run dev:ui` (Vite, no docker); refresh cassettes with `bun run fixtures:pull`
+<important if="a memory or RSS test fails, or you are touching the memory gates">
 
-### In-browser reader (ui/reader/)
+Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per queue or consumer event) plus JS-object growth below 0.5 per operation. `memory-oracle-calibration.test.ts` proves both go red on retained memory. Keep the limits fixed: a red run is a finding, not a threshold to raise. The handler-chain RSS gate is weak at its limit.
 
-- The popup **View** link (epub/pdf) opens `static/read.html#/<folder>/<file>`; the fragment never hits nginx (KTD-1). Viewability is the `VIEWABLE_FORMATS` set in `src/types.ts` (next to `MIME_TYPES`) — enabling a format is a one-line registry change, no renderer edit. `renderDownloads()` consults it; both `feed-html.ts` and `reader.ts` are browser bundles, so `src/types.ts` must stay free of Bun/node imports.
-- The reader CSP is the **load-bearing script control**, not foliate's iframe sandbox (which combines `allow-same-origin`+`allow-scripts` and provides no isolation — WebKit bug 218086). It ships as an nginx response header on `/static/read.html` only (KTD-6), pinned verbatim by `test/e2e/nginx.test.ts`. Never widen it; never add `'unsafe-eval'`.
-- `static/foliate-<hash>/` is content-hashed and regenerates in lockstep with `read.html` in one `build:ui` run, so nginx serves it `immutable` (unlike the no-cache unversioned assets). `read.html` re-declares `no-cache` because nginx `add_header` **replaces** inherited headers.
-- pdf.js loads lazily — only when a PDF opens (R13); EPUB readers fetch none of it. `reader.js` stays ~4 KB.
-- pdf.js 5.5.207 needs `Map.prototype.getOrInsertComputed` (Chrome/Edge 145+, FF 144+, Safari 18.4+); `build:ui` prepends a spec-shaped shim to the copied `pdf.mjs` + `pdf.worker.mjs` (`PDFJS_COMPAT_SHIM`, folded into the dir hash; submodule stays pristine) so PDFs render below that floor. Re-check on a pdf.js bump. See `ui/vendor/VENDOR.md`.
-- Never hand-edit `static/reader.js`, `static/read.html`, or `static/foliate-*/`. After changing `ui/reader/*`, run `bun run build:ui` and commit the regenerated `static/`.
-- Reader rendering: `bun run dev:ui` → http://localhost:5173/reader.html (fixtures in `ui/playground/fixtures/`). **The playground serves no CSP** — the AE3/AE6 security checks must run against the docker dev server. Full checklist: `ui/reader/SMOKE.md`.
+</important>
 
-### Tests Failing
+<important if="you are adding, removing, or upgrading dependencies">
 
-- Always run tests in Docker: `bun run test`
-- Rebuild Docker image after dependency changes: `bun run rebuild:test`
-- Integration tests require poppler-utils, djvulibre (in Docker image)
-- Check test fixtures exist in test/fixtures/
+- Rebuild the test image after any runtime dependency change: `bun run rebuild:test`.
+- `hono` is a runtime dependency (the renderer runs in production) and must stay browser-importable.
+- `sharp` ships its own types; `detect-libc` comes transitively through sharp. Add neither `@types/sharp` nor `detect-libc` directly.
+- Update Oxlint and `@oxlint/plugins` together at matching exact versions. The vendored anti-slop plugin is excluded from app typechecking and formatting, and is listed as a Knip entry.
 
-### Resync Not Working
-
-- Requires ADMIN_USER + ADMIN_TOKEN environment variables
-- nginx removes auth block if not configured
-- Check entrypoint.sh AUTH_ENABLED logic
-
-### Healthcheck Commands
-
-Docker healthcheck uses `wget` (NOT `curl` — not in alpine image):
-
-```bash
-wget -q --spider http://127.0.0.1/feed.xml
-```
+</important>
