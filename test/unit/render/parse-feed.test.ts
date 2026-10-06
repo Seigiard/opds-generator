@@ -21,6 +21,19 @@ const normalizeUpdated = (xml: string) =>
 const stripStylesheetPi = (xml: string) => xml.replace(/^\s*<\?xml-stylesheet[^>]*\?>\n/m, "");
 
 describe("parseFeed", () => {
+  test("ignores an empty link without dropping cached entries or their verbatim XML", async () => {
+    // #given the unchanged real cassette plus an empty optional link in each entry
+    const source = await readFeed("nonfiction-cyrillic.xml");
+    const xml = source.replaceAll("</entry>", "<link/></entry>");
+    // #when parsed and sent to the OPDS renderer
+    const model = parseFeed(xml);
+    const rebuilt = renderXml(model);
+    // #then metadata and every original entry fragment remain available
+    expect(model.entries).toHaveLength(6);
+    expect(model.entries[0]?.title).toBe("Finance");
+    expect(normalizeUpdated(rebuilt)).toBe(normalizeUpdated(stripStylesheetPi(xml)));
+  });
+
   test("extracts feed metadata and entries from a real cassette", async () => {
     // #given a mixed folder+book acquisition feed with cyrillic content
     const xml = await readFeed("nonfiction-cyrillic.xml");

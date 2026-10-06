@@ -50,6 +50,15 @@ export interface LogContext {
   port?: number;
   body?: unknown;
   raw_event?: string;
+  events_processed?: number;
+  heap_used_mb?: number;
+  heap_total_mb?: number;
+  rss_mb?: number;
+  external_mb?: number;
+  jsc_object_count?: number;
+  jsc_protected_object_count?: number;
+  jsc_global_object_count?: number;
+  jsc_protected_global_object_count?: number;
 }
 
 export interface LogEntry extends LogContext {

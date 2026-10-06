@@ -4,6 +4,8 @@
 import { XMLParser } from "fast-xml-parser";
 import { readdirSync, lstatSync } from "node:fs";
 import { join } from "node:path";
+import { toLinks } from "../../src/render/feed-model.ts";
+import type { XmlValue } from "../../src/formats/xml-value.ts";
 
 const DATA = process.argv[2] ?? "data";
 
@@ -13,7 +15,7 @@ const parser = new XMLParser({
   isArray: (name) => name === "entry" || name === "link" || name === "dc:subject",
 });
 
-const esc = (s: unknown) =>
+const esc = (s: XmlValue) =>
   String(s ?? "").replace(
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
@@ -34,7 +36,7 @@ const fmt = (type = "") => FORMAT.find(([re]) => re.test(type))?.[1] ?? "Downloa
 
 type Link = { "@_rel"?: string; "@_href"?: string; "@_type"?: string };
 
-const links = (o: any): Link[] => (o?.link ?? []) as Link[];
+const links = (o: any): Link[] => toLinks(o?.link);
 
 const rel = (o: any, r: string) => links(o).find((l) => l["@_rel"] === r);
 

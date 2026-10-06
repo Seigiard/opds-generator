@@ -16,8 +16,13 @@ const DATA_DIR = join(TEST_DIR, "data");
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
-const mockLogger = {
-  calls: [] as Array<{ level: string; tag: string; msg: string }>,
+interface CapturedLogger {
+  calls: Array<{ level: string; tag: string; msg: string }>;
+  reset(): void;
+}
+
+const mockLogger: CapturedLogger = {
+  calls: [],
   reset() {
     this.calls = [];
   },

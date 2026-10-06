@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import * as v from "valibot";
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
@@ -9,20 +10,22 @@ const TEST_FOLDER = "test-events";
 
 const FIXTURE_PDF = "/books/test/Test Book - Test Author.pdf";
 
-interface LogEntry {
-  ts: string;
-  level: string;
-  tag: string;
-  msg: string;
-  event_type?: string;
-  event_id?: string;
-  event_tag?: string;
-  path?: string;
-  duration_ms?: number;
-  cascade_count?: number;
-  cascade_tags?: string[];
-  error?: string;
-}
+const logEntrySchema = v.object({
+  ts: v.string(),
+  level: v.string(),
+  tag: v.string(),
+  msg: v.string(),
+  event_type: v.optional(v.string()),
+  event_id: v.optional(v.string()),
+  event_tag: v.optional(v.string()),
+  path: v.optional(v.string()),
+  duration_ms: v.optional(v.number()),
+  cascade_count: v.optional(v.number()),
+  cascade_tags: v.optional(v.array(v.string())),
+  error: v.optional(v.string()),
+});
+
+type LogEntry = v.InferOutput<typeof logEntrySchema>;
 
 // Helper: execute command inside container
 async function execInContainer(cmd: string): Promise<string> {
@@ -80,7 +83,7 @@ async function getLogsSince(since: string): Promise<LogEntry[]> {
     .filter((line) => line.startsWith("{"))
     .map((line) => {
       try {
-        return JSON.parse(line) as LogEntry;
+        return v.parse(logEntrySchema, JSON.parse(line));
       } catch {
         return null;
       }

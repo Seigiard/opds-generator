@@ -105,7 +105,7 @@ export class SimpleQueue<T> {
   private dirtyKeys = new Set<string>();
   private waiters: Array<{
     resolve: (item: T) => void;
-    reject: (reason: unknown) => void;
+    reject: (cause: unknown) => void;
   }> = [];
 
   constructor(private readonly getKey?: (item: T) => string | null | undefined) {}

@@ -64,7 +64,7 @@ export async function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promis
       const buffer = new Uint8Array(size);
       await fh.read(buffer, 0, size, 0);
 
-      return { stdout: buffer.buffer as ArrayBuffer, exitCode, timedOut: false };
+      return { stdout: buffer.buffer, exitCode, timedOut: false };
     } finally {
       await fh.close();
     }

@@ -71,7 +71,7 @@ async function main(): Promise<void> {
     cassettes.push({ path, relative: relative(dataDir, path), xml, ...describe(xml, path) });
   }
 
-  const selection: Record<string, Cassette | undefined> = {
+  const selection = {
     "root.xml": cassettes.find((c) => c.relative === FEED_FILE),
     "nonfiction-cyrillic.xml": pick(
       cassettes,

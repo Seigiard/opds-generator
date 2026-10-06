@@ -1,4 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
+import * as v from "valibot";
+import { xmlFields, xmlFieldsSchema } from "../../src/formats/xml-value.ts";
+import type { XmlFields } from "../../src/formats/xml-value.ts";
 
 export interface HtmlNode {
   tag: string;
@@ -23,7 +26,7 @@ const stripDoctype = (html: string): string => html.replace(/^<!DOCTYPE html>\s*
  * byte layout — byte protection lives in the golden gate.
  */
 export function parseHtml(html: string): HtmlNode[] {
-  return build(orderedParser.parse(stripDoctype(html)) as OrderedNode[]);
+  return build(v.parse(v.array(xmlFieldsSchema), orderedParser.parse(stripDoctype(html))));
 }
 
 /** Depth-first, document-order list of every element under `roots`. */
@@ -57,12 +60,7 @@ export function collectAttributes(
   );
 }
 
-interface OrderedNode {
-  ":@"?: Record<string, string>;
-  [key: string]: unknown;
-}
-
-function build(nodes: OrderedNode[]): HtmlNode[] {
+function build(nodes: XmlFields[]): HtmlNode[] {
   const out: HtmlNode[] = [];
 
   for (const node of nodes) {
@@ -72,18 +70,18 @@ function build(nodes: OrderedNode[]): HtmlNode[] {
 
     const attrs: Record<string, string> = {};
 
-    for (const [key, value] of Object.entries(node[":@"] ?? {})) {
+    for (const [key, value] of Object.entries(xmlFields(node[":@"]) ?? {})) {
       attrs[key.replace(/^@_/, "")] = String(value);
     }
 
-    const rawChildren = (node[tag] as OrderedNode[]) ?? [];
+    const rawChildren = v.parse(v.array(xmlFieldsSchema), node[tag] ?? []);
     out.push({ tag, attrs, children: build(rawChildren), text: collectText(rawChildren) });
   }
 
   return out;
 }
 
-function collectText(nodes: OrderedNode[]): string {
+function collectText(nodes: XmlFields[]): string {
   let text = "";
 
   for (const node of nodes) {
@@ -92,7 +90,7 @@ function collectText(nodes: OrderedNode[]): string {
     } else {
       const tag = Object.keys(node).find((k) => k !== ":@");
 
-      if (tag) text += collectText((node[tag] as OrderedNode[]) ?? []);
+      if (tag) text += collectText(v.parse(v.array(xmlFieldsSchema), node[tag] ?? []));
     }
   }
 

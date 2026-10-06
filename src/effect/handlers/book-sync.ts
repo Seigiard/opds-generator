@@ -83,7 +83,7 @@ export const bookSync = async (
     const rawFilename = basename(relativePath).replace(/\.[^.]+$/, "");
     const title = meta.title || normalizeFilenameTitle(rawFilename);
     const encodedPath = encodeUrlPath(relativePath);
-    const mimeType = MIME_TYPES[ext] ?? "application/octet-stream";
+    const mimeType = MIME_TYPES.get(ext) ?? "application/octet-stream";
 
     const entry = new Entry(`urn:opds:book:${relativePath}`, title);
 

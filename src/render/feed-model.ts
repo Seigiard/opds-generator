@@ -1,4 +1,7 @@
 import { createXmlParser, getString, getStringArray } from "../formats/utils.ts";
+import * as v from "valibot";
+import { xmlFields, xmlFieldsSchema } from "../formats/xml-value.ts";
+import type { XmlValue, XmlFields } from "../formats/xml-value.ts";
 
 const IMAGE_REL = "http://opds-spec.org/image";
 
@@ -42,26 +45,36 @@ export interface FeedModel {
   entries: FeedEntry[];
 }
 
-interface RawLink {
-  "@_rel"?: string;
-  "@_href"?: string;
-  "@_type"?: string;
-}
+const linkSchema = v.object({
+  "@_rel": v.optional(v.string()),
+  "@_href": v.optional(v.string()),
+  "@_type": v.optional(v.string()),
+});
+
+type RawLink = v.InferOutput<typeof linkSchema>;
 
 const entryParser = createXmlParser(["link", "subject"]);
 
-export function toLinks(value: unknown): RawLink[] {
+export function toLinks(value: XmlValue | undefined): RawLink[] {
   if (!value) return [];
 
-  return (Array.isArray(value) ? value : [value]) as RawLink[];
+  const links: RawLink[] = [];
+
+  for (const candidate of Array.isArray(value) ? value : [value]) {
+    const link = v.safeParse(linkSchema, candidate);
+
+    if (link.success) links.push(link.output);
+  }
+
+  return links;
 }
 
 export function entryFromFragment(xml: string): FeedEntry {
-  let e: Record<string, unknown>;
+  let e: XmlFields;
 
   try {
-    const parsed = entryParser.parse(xml) as { entry?: Record<string, unknown> };
-    e = parsed.entry ?? {};
+    const parsed = v.parse(xmlFieldsSchema, entryParser.parse(xml));
+    e = xmlFields(parsed.entry) ?? {};
   } catch {
     // A malformed cached entry.xml degrades the HTML card only — renderXml splices
     // the verbatim fragment regardless, and feed.xml generation must never block (R2).
@@ -81,10 +94,7 @@ export function entryFromFragment(xml: string): FeedEntry {
   const subsectionHref = findHref(SUBSECTION_REL);
   const kind: FeedEntry["kind"] = subsectionHref ? "folder" : "book";
 
-  const author =
-    e.author && typeof e.author === "object"
-      ? getString((e.author as { name?: unknown }).name)
-      : undefined;
+  const author = getString(xmlFields(e.author)?.name);
 
   return {
     xml,

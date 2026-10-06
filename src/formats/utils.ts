@@ -1,4 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
+import * as v from "valibot";
+import { xmlFields, xmlStringSchema, xmlNumberSchema, xmlBooleanSchema } from "./xml-value.ts";
+import type { XmlValue } from "./xml-value.ts";
 
 export function createXmlParser(arrayElements: string[]): XMLParser {
   return new XMLParser({
@@ -9,84 +12,90 @@ export function createXmlParser(arrayElements: string[]): XMLParser {
   });
 }
 
-const HTML_ENTITIES: Record<string, string> = {
-  // XML standard entities
-  lt: "<",
-  gt: ">",
-  amp: "&",
-  quot: '"',
-  apos: "'",
-  // Typography
-  mdash: "—",
-  ndash: "–",
-  hellip: "…",
-  bull: "•",
-  middot: "·",
-  laquo: "«",
-  raquo: "»",
-  // Quotes
-  ldquo: "\u201C",
-  rdquo: "\u201D",
-  lsquo: "\u2018",
-  rsquo: "\u2019",
-  sbquo: "\u201A",
-  bdquo: "\u201E",
-  // Spaces
-  nbsp: "\u00A0",
-  ensp: "\u2002",
-  emsp: "\u2003",
-  thinsp: "\u2009",
-  // Symbols
-  copy: "©",
-  reg: "®",
-  trade: "™",
-  deg: "°",
-  plusmn: "±",
-  times: "×",
-  divide: "÷",
-  para: "¶",
-  sect: "§",
-  dagger: "†",
-  Dagger: "‡",
-  permil: "‰",
-  // Currency
-  euro: "€",
-  pound: "£",
-  yen: "¥",
-  cent: "¢",
-  // Arrows
-  larr: "←",
-  rarr: "→",
-  uarr: "↑",
-  darr: "↓",
-};
+const HTML_ENTITIES = new Map(
+  Object.entries({
+    // XML standard entities
+    lt: "<",
+    gt: ">",
+    amp: "&",
+    quot: '"',
+    apos: "'",
+    // Typography
+    mdash: "—",
+    ndash: "–",
+    hellip: "…",
+    bull: "•",
+    middot: "·",
+    laquo: "«",
+    raquo: "»",
+    // Quotes
+    ldquo: "\u201C",
+    rdquo: "\u201D",
+    lsquo: "\u2018",
+    rsquo: "\u2019",
+    sbquo: "\u201A",
+    bdquo: "\u201E",
+    // Spaces
+    nbsp: "\u00A0",
+    ensp: "\u2002",
+    emsp: "\u2003",
+    thinsp: "\u2009",
+    // Symbols
+    copy: "©",
+    reg: "®",
+    trade: "™",
+    deg: "°",
+    plusmn: "±",
+    times: "×",
+    divide: "÷",
+    para: "¶",
+    sect: "§",
+    dagger: "†",
+    Dagger: "‡",
+    permil: "‰",
+    // Currency
+    euro: "€",
+    pound: "£",
+    yen: "¥",
+    cent: "¢",
+    // Arrows
+    larr: "←",
+    rarr: "→",
+    uarr: "↑",
+    darr: "↓",
+  }),
+);
 
 export function decodeEntities(str: string): string {
   return str
-    .replace(/&([a-zA-Z]+);/g, (match, name) => HTML_ENTITIES[name] ?? match)
+    .replace(/&([a-zA-Z]+);/g, (match, name) => HTML_ENTITIES.get(name) ?? match)
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)));
 }
 
-export function getString(val: unknown): string | undefined {
-  if (typeof val === "string") return decodeEntities(val.trim());
+export function getString(val: XmlValue | undefined): string | undefined {
+  const text = v.safeParse(xmlStringSchema, val);
 
-  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (text.success) return decodeEntities(text.output.trim());
 
-  if (typeof val === "object" && val && "#text" in val) {
-    return decodeEntities(String((val as { "#text": unknown })["#text"]).trim());
+  if (v.is(xmlNumberSchema, val) || v.is(xmlBooleanSchema, val)) return String(val);
+
+  const fields = xmlFields(val);
+
+  if (fields && "#text" in fields) {
+    return decodeEntities(String(fields["#text"]).trim());
   }
 
   return undefined;
 }
 
-export function getFirstString(val: unknown): string | undefined {
+export function getFirstString(val: XmlValue | undefined): string | undefined {
   if (Array.isArray(val) && val.length > 0) return getString(val[0]);
 
   return getString(val);
 }
 
-export function getStringArray(val: unknown): string[] | undefined {
+export function getStringArray(val: XmlValue | undefined): string[] | undefined {
   if (!val) return undefined;
   const arr = Array.isArray(val) ? val : [val];
   const result = arr.map(getString).filter((s): s is string => !!s);

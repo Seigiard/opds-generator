@@ -15,7 +15,7 @@ export interface ConfigService {
 export interface LoggerService {
   info(tag: string, msg: string, ctx?: LogContext): void;
   warn(tag: string, msg: string, ctx?: LogContext): void;
-  error(tag: string, msg: string, err?: unknown, ctx?: LogContext): void;
+  error(tag: string, msg: string, cause?: unknown, ctx?: LogContext): void;
   debug(tag: string, msg: string, ctx?: LogContext): void;
 }
 

@@ -21,7 +21,7 @@ interface MobiHeader {
   headerLength: number;
 }
 
-const EXTH_TYPES: Record<number, string> = {
+const EXTH_TYPES = {
   100: "creator",
   101: "publisher",
   103: "description",
@@ -31,7 +31,7 @@ const EXTH_TYPES: Record<number, string> = {
   201: "coverOffset",
   202: "thumbnailOffset",
   503: "title",
-};
+} as const;
 
 const decoder = new TextDecoder("utf-8");
 
@@ -93,12 +93,14 @@ function parseExthRecords(record0: Uint8Array, offset: number): ExthData {
     if (len < 8 || pos + len > record0.length) break;
 
     const value = record0.subarray(pos + 8, pos + len);
-    const key = EXTH_TYPES[type];
+    const key = Object.entries(EXTH_TYPES).find(([code]) => Number(code) === type)?.[1];
 
     if (key) {
       if (type === 201 || type === 202) {
         const valueView = new DataView(value.buffer, value.byteOffset, value.byteLength);
-        (data as Record<string, number>)[key] = valueView.getUint32(0);
+
+        if (type === 201) data.coverOffset = valueView.getUint32(0);
+        else data.thumbnailOffset = valueView.getUint32(0);
       } else {
         const str = readString(value, 0, value.length);
 
@@ -107,7 +109,7 @@ function parseExthRecords(record0: Uint8Array, offset: number): ExthData {
         } else if (key === "subject") {
           subjects.push(str);
         } else {
-          (data as Record<string, string>)[key] = str;
+          if (key !== "coverOffset" && key !== "thumbnailOffset") data[key] = str;
         }
       }
     }

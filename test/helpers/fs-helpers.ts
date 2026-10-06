@@ -1,6 +1,7 @@
 import { mkdtemp, rm, mkdir, cp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as v from "valibot";
 
 export async function createTempDir(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), `${prefix}-`));
@@ -32,7 +33,7 @@ export async function createFileStructure(root: string, structure: FileTree): Pr
   for (const [name, content] of Object.entries(structure)) {
     const path = join(root, name);
 
-    if (typeof content === "string" || Buffer.isBuffer(content)) {
+    if (v.is(v.string(), content) || Buffer.isBuffer(content)) {
       await Bun.write(path, content);
     } else {
       await createFileStructure(path, content);

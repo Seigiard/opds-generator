@@ -1,6 +1,8 @@
 import { describe, test, expect } from "bun:test";
 import { comicHandlerRegistration } from "../../../src/formats/comic.ts";
 import { join } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { createTempDir, cleanupTempDir } from "../../helpers/fs-helpers.ts";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
@@ -8,16 +10,44 @@ describe("Comic Handler Integration", () => {
   describe("with CBZ format", () => {
     const cbzPath = join(FIXTURES_DIR, "bobby_make_believe_sample.cbz");
 
+    test("an incomplete page hint does not discard a later valid front cover", async () => {
+      // #given the existing image fixture plus incomplete and valid page hints
+      const dir = await createTempDir("comic-page-hints");
+
+      try {
+        const contents = join(dir, "contents");
+        await mkdir(contents);
+        await Bun.$`unzip -q ${cbzPath} -d ${contents}`.quiet();
+        await Bun.write(
+          join(contents, "ComicInfo.xml"),
+          '<ComicInfo><Pages><Page Type="Story"/><Page Image="1" Type="FrontCover"/></Pages></ComicInfo>',
+        );
+        const archive = join(dir, "variant.cbz");
+        await Bun.$`7zz a -tzip ${archive} .`.cwd(contents).quiet();
+
+        const expected =
+          await Bun.$`unzip -p ${cbzPath} Bobby-Make-Believe_1915__1.jpg`.arrayBuffer();
+
+        // #when selecting the cover through the real handler
+        const handler = await comicHandlerRegistration.create(archive);
+        const cover = await handler!.getCover();
+        // #then the existing second image wins despite the preceding incomplete hint
+        expect(cover).toEqual(Buffer.from(expected));
+      } finally {
+        await cleanupTempDir(dir);
+      }
+    });
+
     test("creates handler successfully", async () => {
       const handler = await comicHandlerRegistration.create(cbzPath);
       expect(handler).not.toBeNull();
     });
 
-    test("extracts metadata (may be empty for comics without metadata)", async () => {
+    test("returns an empty title for the image-only CBZ fixture", async () => {
       const handler = await comicHandlerRegistration.create(cbzPath);
       const metadata = handler!.getMetadata();
 
-      expect(typeof metadata.title).toBe("string");
+      expect(metadata.title).toBe("");
     });
 
     test("getCover returns buffer", async () => {

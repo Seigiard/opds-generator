@@ -8,53 +8,20 @@ import {
   parseDate,
 } from "./utils.ts";
 import { log, logHandlerError } from "../logging/index.ts";
+import * as v from "valibot";
+import { xmlFields, xmlFieldsSchema, xmlStringSchema, xmlNumberSchema } from "./xml-value.ts";
+import type { XmlValue } from "./xml-value.ts";
 
 const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
 const xmlParser = createXmlParser(["Page", "writer", "creator", "penciller", "genre"]);
 
-interface ComicInfoPage {
-  "@_Image": string;
-  "@_Type"?: string;
-}
+const pageSchema = v.object({
+  "@_Image": v.pipe(v.union([v.string(), v.number()]), v.transform(String)),
+  "@_Type": v.optional(v.string()),
+});
 
-interface ComicInfoDoc {
-  ComicInfo: {
-    Title?: string;
-    Series?: string;
-    Number?: string;
-    Volume?: string;
-    Summary?: string;
-    Publisher?: string;
-    Year?: string;
-    Month?: string;
-    Writer?: string;
-    Penciller?: string;
-    CoverArtist?: string;
-    Genre?: string;
-    LanguageISO?: string;
-    PageCount?: string;
-    Pages?: { Page?: ComicInfoPage[] };
-  };
-}
-
-interface CoMetDoc {
-  comet: {
-    title?: string;
-    series?: string;
-    issue?: string;
-    volume?: string;
-    description?: string;
-    publisher?: string;
-    date?: string;
-    writer?: string[];
-    creator?: string[];
-    penciller?: string[];
-    genre?: string[];
-    language?: string;
-    rights?: string;
-  };
-}
+type ComicInfoPage = v.InferOutput<typeof pageSchema>;
 
 function formatDateFromNumbers(year?: number, month?: number): string | undefined {
   if (!year) return undefined;
@@ -91,14 +58,18 @@ function formatSeries(
   return parts.length > 0 ? parts.join(" ") : undefined;
 }
 
-function toStringOrUndefined(val: unknown): string | undefined {
+function toStringOrUndefined(val: XmlValue | undefined): string | undefined {
   if (val === undefined || val === null) return undefined;
 
-  if (typeof val === "string") return val;
+  if (v.is(xmlStringSchema, val)) return val;
 
-  if (typeof val === "number") return String(val);
+  if (v.is(xmlNumberSchema, val)) return String(val);
 
   return undefined;
+}
+
+function seriesPart(val: XmlValue) {
+  return v.is(v.union([xmlStringSchema, xmlNumberSchema]), val) ? val : undefined;
 }
 
 async function parseComicInfo(
@@ -114,8 +85,8 @@ async function parseComicInfo(
   if (!content) return null;
 
   try {
-    const doc = xmlParser.parse(content) as ComicInfoDoc;
-    const info = doc.ComicInfo;
+    const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
+    const info = xmlFields(doc.ComicInfo);
 
     if (!info) return null;
 
@@ -135,10 +106,23 @@ async function parseComicInfo(
       language: toStringOrUndefined(info.LanguageISO),
       subjects: parseGenresString(toStringOrUndefined(info.Genre)),
       pageCount: pageCount && !isNaN(pageCount) ? pageCount : undefined,
-      series: formatSeries(toStringOrUndefined(info.Series), info.Volume, info.Number),
+      series: formatSeries(
+        toStringOrUndefined(info.Series),
+        seriesPart(info.Volume),
+        seriesPart(info.Number),
+      ),
     };
 
-    return { metadata, pages: info.Pages?.Page };
+    const rawPages = xmlFields(info.Pages)?.Page;
+    const pages: ComicInfoPage[] = [];
+
+    for (const candidate of Array.isArray(rawPages) ? rawPages : []) {
+      const page = v.safeParse(pageSchema, candidate);
+
+      if (page.success) pages.push(page.output);
+    }
+
+    return { metadata, pages };
   } catch (error) {
     log.warn("Comic", "Failed to parse ComicInfo.xml", { file: filePath, error: String(error) });
 
@@ -156,8 +140,8 @@ async function parseCoMet(filePath: string, entries: string[]): Promise<BookMeta
   if (!content) return null;
 
   try {
-    const doc = xmlParser.parse(content) as CoMetDoc;
-    const comet = doc.comet;
+    const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
+    const comet = xmlFields(doc.comet);
 
     if (!comet) return null;
 
@@ -172,7 +156,11 @@ async function parseCoMet(filePath: string, entries: string[]): Promise<BookMeta
       issued: parseDate(toStringOrUndefined(comet.date)),
       language: toStringOrUndefined(comet.language),
       subjects: getStringArray(comet.genre),
-      series: formatSeries(toStringOrUndefined(comet.series), comet.volume, comet.issue),
+      series: formatSeries(
+        toStringOrUndefined(comet.series),
+        seriesPart(comet.volume),
+        seriesPart(comet.issue),
+      ),
       rights: toStringOrUndefined(comet.rights),
     };
   } catch (error) {

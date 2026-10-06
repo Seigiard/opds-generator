@@ -43,10 +43,10 @@ export class Gridnav {
   }
 
   private card(el: HTMLElement): HTMLElement {
-    return (el.closest(".card") as HTMLElement) || el;
+    return el.closest<HTMLElement>(".card") || el;
   }
 
-  private position(el: HTMLElement): { x: number; y: number } {
+  private position(el: HTMLElement) {
     const card = this.card(el);
 
     return { x: card.offsetLeft, y: card.offsetTop };
@@ -75,9 +75,9 @@ export class Gridnav {
 
   private onKeydown = (ev: KeyboardEvent): void => {
     if (this.isBlocked()) return;
-    const target = ev.target as HTMLElement;
+    const target = ev.target;
 
-    if (!target.matches?.(this.selector)) return;
+    if (!(target instanceof HTMLElement) || !target.matches(this.selector)) return;
 
     const move = this.keyMoves[ev.code];
 
@@ -89,7 +89,7 @@ export class Gridnav {
 
     ev.preventDefault();
 
-    if (typeof move === "number") {
+    if (move !== "up" && move !== "down") {
       const next = this.items[currentIndex + move];
 
       if (!next) return;

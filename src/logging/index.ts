@@ -1,8 +1,9 @@
 import type { LogLevel, LogEntry, LogContext } from "./types.ts";
+import * as v from "valibot";
 
-const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
+const LOG_LEVELS = ["debug", "info", "warn", "error"];
 
-const currentLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) || "info";
+const currentLevel = process.env.LOG_LEVEL || "info";
 
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(currentLevel);
@@ -34,30 +35,30 @@ export const log = {
     emit({ ts: new Date().toISOString(), level: "warn", tag, msg, ...ctx });
   },
 
-  error(tag: string, msg: string, err?: unknown, ctx?: LogContext): void {
+  error(tag: string, msg: string, cause?: unknown, ctx?: LogContext): void {
     if (!shouldLog("error")) return;
 
     const errorCtx: LogContext = { ...ctx };
 
-    if (err instanceof Error) {
-      errorCtx.error = err.message;
-      errorCtx.error_stack = err.stack;
-    } else if (typeof err === "string") {
-      errorCtx.error = err;
-    } else if (err !== undefined && err !== null) {
-      errorCtx.error = JSON.stringify(err);
+    if (cause instanceof Error) {
+      errorCtx.error = cause.message;
+      errorCtx.error_stack = cause.stack;
+    } else if (v.is(v.string(), cause)) {
+      errorCtx.error = cause;
+    } else if (cause !== undefined && cause !== null) {
+      errorCtx.error = JSON.stringify(cause);
     }
 
     emit({ ts: new Date().toISOString(), level: "error", tag, msg, ...errorCtx });
   },
 };
 
-export function logHandlerError(tag: string, filePath: string, error: unknown): void {
-  if (error instanceof Error && error.message.includes("Executable not found")) {
-    log.debug(tag, "External tool not available", { file: filePath, tool: error.message });
+export function logHandlerError(tag: string, filePath: string, cause: unknown): void {
+  if (cause instanceof Error && cause.message.includes("Executable not found")) {
+    log.debug(tag, "External tool not available", { file: filePath, tool: cause.message });
 
     return;
   }
 
-  log.error(tag, "Handler failed", error, { file: filePath });
+  log.error(tag, "Handler failed", cause, { file: filePath });
 }

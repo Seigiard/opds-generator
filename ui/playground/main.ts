@@ -7,15 +7,15 @@ import { parseFeed } from "../../src/render/parse-feed.ts";
 import { renderHtml } from "../../src/render/feed-html.ts";
 import { initGlobal, wire } from "../gridnav/viewer.ts";
 
-const cassettes = import.meta.glob("../../test/fixtures/feeds/*.xml", {
+const cassettes = import.meta.glob<string>("../../test/fixtures/feeds/*.xml", {
   query: "?raw",
   import: "default",
   eager: true,
-}) as Record<string, string>;
+});
 
-const select = document.getElementById("cassette") as HTMLSelectElement;
+const select = document.querySelector<HTMLSelectElement>("#cassette")!;
 
-const preview = document.getElementById("preview") as HTMLElement;
+const preview = document.getElementById("preview")!;
 
 for (const path of Object.keys(cassettes).sort()) {
   const option = document.createElement("option");

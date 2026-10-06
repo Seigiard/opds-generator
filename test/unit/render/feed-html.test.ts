@@ -286,6 +286,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
     ]);
 
     expect(byClass(parseHtml(renderHtml(model)), "popup__view-btn")).toHaveLength(0);
+    // SAFETY: VIEWABLE_FORMATS is constructed as a mutable Set in src/types.ts; restore it below.
     (VIEWABLE_FORMATS as Set<string>).add("fb2");
 
     try {
@@ -296,6 +297,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
         "/static/read.html#/v/book.fb2/book.fb2",
       );
     } finally {
+      // SAFETY: restore the same concrete Set mutated above after this registry extension test.
       (VIEWABLE_FORMATS as Set<string>).delete("fb2");
     }
   });

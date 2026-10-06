@@ -1,4 +1,5 @@
 import { Gridnav } from "./gridnav.ts";
+import * as v from "valibot";
 
 const POPUP_HASH = /^#book-/;
 
@@ -31,7 +32,9 @@ let closing = false;
 function closePopup(): void {
   if (!popupIsOpen() || closing) return;
 
-  if ((history.state as { popupEntry?: boolean } | null)?.popupEntry) {
+  const state = v.safeParse(v.object({ popupEntry: v.optional(v.boolean()) }), history.state);
+
+  if (state.success && state.output.popupEntry) {
     // A deep-link entry has nothing behind it. location.replace navigates without
     // adding a history entry; empty-fragment navigation resets scroll, so restore it.
     const { scrollX, scrollY } = window;
@@ -90,11 +93,12 @@ export function initGlobal(): void {
 
     if (!grid) return;
     const selector = grid.getAttribute("data-element") || ".card__title a";
-    const target = e.target as HTMLElement;
+    const target = e.target;
 
-    if (target.matches?.(selector)) return;
+    if (target instanceof Element && target.matches(selector)) return;
 
-    if (target.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]"))
+      return;
     const first = grid.querySelector<HTMLElement>(selector);
 
     if (first) {
@@ -104,7 +108,7 @@ export function initGlobal(): void {
   });
 
   document.addEventListener("click", (e) => {
-    const close = (e.target as HTMLElement).closest?.(".popup__close-button");
+    const close = e.target instanceof Element ? e.target.closest(".popup__close-button") : null;
 
     if (close) {
       e.preventDefault();

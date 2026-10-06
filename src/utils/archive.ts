@@ -22,6 +22,7 @@ async function detectArchiveType(filePath: string): Promise<ArchiveType | null> 
     const header = new Uint8Array(8);
     await fh.read(header, 0, 8, 0);
 
+    // SAFETY: MAGIC_BYTES declares exactly the three non-tar archive keys above.
     for (const [type, magic] of Object.entries(MAGIC_BYTES) as [
       Exclude<ArchiveType, "tar">,
       number[],

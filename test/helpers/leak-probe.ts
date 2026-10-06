@@ -168,9 +168,9 @@ for (let i = 0; i < ITERATIONS; i++) {
   }
 }
 
-const first = samples[0] as RssSample;
+const first = samples[0]!;
 
-const last = samples[samples.length - 1] as RssSample;
+const last = samples[samples.length - 1]!;
 
 const result = {
   scenario,

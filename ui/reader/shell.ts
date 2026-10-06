@@ -1,5 +1,6 @@
 import { BOOK_EXTENSIONS, VIEWABLE_FORMATS } from "../../src/types.ts";
 import { parseFragment } from "./fragment.ts";
+import * as v from "valibot";
 
 type TocItem = { label?: string; href?: string; subitems?: TocItem[] | null };
 
@@ -9,15 +10,23 @@ type RelocateDetail = {
 };
 
 interface FoliateView extends HTMLElement {
-  open(book: string | File | object): Promise<void>;
-  prev(): unknown;
-  next(): unknown;
-  goTo(target: string): Promise<unknown>;
-  book: {
-    metadata?: { title?: unknown };
-    toc?: TocItem[] | null;
-  };
+  open(book: string | File | FoliateBook): Promise<void>;
+  prev(): Promise<void>;
+  next(): Promise<void>;
+  goTo(target: string): Promise<FoliateNavigation | undefined>;
+  book: FoliateBook;
   renderer: HTMLElement & { next(): Promise<void> };
+}
+
+interface FoliateNavigation {
+  index: number;
+  anchor?: number | ((doc: Document) => Element | Range);
+}
+
+interface FoliateBook {
+  sections: { id: string | number; load(): Promise<string>; size?: number }[];
+  metadata?: { title?: string | Record<string, string> };
+  toc?: TocItem[] | null;
 }
 
 /** Byte-range-backed file foliate's makePDF consumes — streams instead of downloading whole. */
@@ -75,6 +84,7 @@ const el = <T extends HTMLElement>(id: string): T => {
 
   if (!found) throw new Error(`reader: missing #${id}`);
 
+  // SAFETY: every caller names an ID and its element class from both reader HTML templates.
   return found as T;
 };
 
@@ -86,13 +96,17 @@ function showError(message: string, backHref: string): void {
 }
 
 /** foliate metadata titles are either strings or {lang: title} maps. */
-function bookTitle(raw: unknown): string | undefined {
-  if (typeof raw === "string" && raw) return raw;
+function bookTitle(raw: FoliateBook["metadata"]): string | undefined {
+  const title = v.safeParse(v.string(), raw?.title);
 
-  if (raw && typeof raw === "object") {
-    const first = Object.values(raw)[0];
+  if (title.success && title.output) return title.output;
 
-    if (typeof first === "string" && first) return first;
+  const localized = v.safeParse(v.record(v.string(), v.string()), raw?.title);
+
+  if (localized.success) {
+    const first = Object.values(localized.output)[0];
+
+    if (first) return first;
   }
 
   return undefined;
@@ -132,11 +146,10 @@ function renderToc(items: TocItem[], view: FoliateView, onNavigate: () => void):
 function onRelocate(detail: RelocateDetail, positionEl: HTMLElement): void {
   const parts: string[] = [];
 
-  if (typeof detail.fraction === "number") parts.push(`${Math.round(detail.fraction * 100)}%`);
+  if (detail.fraction !== undefined) parts.push(`${Math.round(detail.fraction * 100)}%`);
   const { current, total } = detail.location ?? {};
 
-  if (typeof current === "number" && typeof total === "number")
-    parts.push(`${current + 1} / ${total}`);
+  if (current !== undefined && total !== undefined) parts.push(`${current + 1} / ${total}`);
   positionEl.textContent = parts.join(" · ");
 }
 
@@ -148,6 +161,7 @@ interface KeyActions {
 
 function bindKeys(doc: Document | Window, actions: KeyActions): void {
   doc.addEventListener("keydown", (event) => {
+    // SAFETY: the DOM keydown event is a KeyboardEvent in both window and document realms.
     const key = (event as KeyboardEvent).key;
 
     if (key === "ArrowLeft") actions.onPrev();
@@ -203,6 +217,7 @@ export async function openInShell({
 
   try {
     await import(/* @vite-ignore */ `${base}/view.js`);
+    // SAFETY: the pinned view.js registers foliate-view with the methods used by this shell.
     view = document.createElement("foliate-view") as FoliateView;
     viewSlot.append(view);
     await view.open(await resolveBook(source, ext, base));
@@ -213,7 +228,7 @@ export async function openInShell({
     return;
   }
 
-  const title = bookTitle(view.book.metadata?.title) ?? filename;
+  const title = bookTitle(view.book.metadata) ?? filename;
   document.title = title;
   titleEl.textContent = title;
 
@@ -221,7 +236,7 @@ export async function openInShell({
   // prev()/next() and leave the position indicator and focus out of order.
   let navBusy = false;
 
-  const navigate = (move: () => unknown): void => {
+  const navigate = (move: () => Promise<void>): void => {
     if (navBusy) return;
     navBusy = true;
     Promise.resolve(move())
@@ -237,10 +252,21 @@ export async function openInShell({
     onReturn: () => window.location.assign(folderPath),
   };
 
-  view.addEventListener("relocate", (event) =>
-    onRelocate((event as CustomEvent<RelocateDetail>).detail, positionEl),
-  );
+  const relocateSchema = v.object({
+    fraction: v.optional(v.number()),
+    location: v.optional(
+      v.object({ current: v.optional(v.number()), total: v.optional(v.number()) }),
+    ),
+  });
+
+  view.addEventListener("relocate", (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail = v.safeParse(relocateSchema, event.detail);
+
+    if (detail.success) onRelocate(detail.output, positionEl);
+  });
   view.addEventListener("load", (event) => {
+    // SAFETY: pinned foliate view.js emits load with the rendered iframe Document in detail.doc.
     const { doc } = (event as CustomEvent<{ doc: Document }>).detail;
     bindKeys(doc, actions);
   });
@@ -292,14 +318,15 @@ async function resolveBook(
   source: string | File,
   ext: string | undefined,
   base: string,
-): Promise<string | File | object> {
-  if (ext !== "pdf" || typeof source !== "string") return source;
+): Promise<string | File | FoliateBook> {
+  if (ext !== "pdf" || source instanceof File) return source;
   const rangeFile = await makeRangeFile(source);
 
   if (!rangeFile) return source;
 
+  // SAFETY: pinned pdf.js exports makePDF, whose sections and metadata conform to FoliateBook.
   const { makePDF } = (await import(/* @vite-ignore */ `${base}/pdf.js`)) as {
-    makePDF: (file: RangeFile) => Promise<object>;
+    makePDF: (file: RangeFile) => Promise<FoliateBook>;
   };
 
   return makePDF(rangeFile);
@@ -340,8 +367,8 @@ export function startReader(): void {
     folderPath: result.folderPath,
     downloadHref: result.fetchPath,
     ext: result.ext,
-  }).catch((error: unknown) => {
-    console.error("reader: unexpected failure", error);
+  }).catch((cause: unknown) => {
+    console.error("reader: unexpected failure", cause);
     showError("Couldn't load this book.", result.folderPath);
   });
 }

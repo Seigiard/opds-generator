@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { fb2HandlerRegistration } from "../../../src/formats/fb2.ts";
 import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
+import { createTempDir, cleanupTempDir } from "../../helpers/fs-helpers.ts";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
@@ -44,6 +45,32 @@ describe("FB2 Handler Integration", () => {
   }
 
   describe("edge cases", () => {
+    for (const nickname of ["123", "true"]) {
+      test(`preserves nickname-only author text ${nickname}`, async () => {
+        // #given the existing FB2 with a nickname-only author; nickname is text in FB2
+        const dir = await createTempDir("fb2-nickname");
+
+        try {
+          const source = await Bun.file(join(FIXTURES_DIR, "Test Book - Test Author.fb2")).text();
+
+          const xml = source.replace(
+            /<author>[\s\S]*?<\/author>/,
+            `<author><nickname>${nickname}</nickname></author>`,
+          );
+
+          if (xml === source) throw new Error("FB2 fixture has no author to replace");
+          const path = join(dir, "nickname.fb2");
+          await Bun.write(path, xml);
+          // #when the real parser and metadata handler decode the book
+          const handler = await fb2HandlerRegistration.create(path);
+          // #then the domain's string author contract preserves the XML text
+          expect(handler?.getMetadata().author).toBe(nickname);
+        } finally {
+          await cleanupTempDir(dir);
+        }
+      });
+    }
+
     test("returns null for non-existent file", async () => {
       const handler = await fb2HandlerRegistration.create("/non/existent/file.fb2");
       expect(handler).toBeNull();

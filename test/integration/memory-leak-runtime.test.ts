@@ -102,7 +102,7 @@ describe("Runtime memory leak isolation (post-Effect migration)", () => {
         return async () => {
           processed++;
 
-          return ok([] as readonly EventType[]);
+          return ok<readonly EventType[]>([]);
         };
       }
 

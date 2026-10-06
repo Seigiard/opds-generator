@@ -326,9 +326,9 @@ describe("nginx integration", () => {
         // the links a browser actually clicks (folder cards, home) must resolve to HTML, not XML
         const html = await htmlRes.text();
 
-        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)]
-          .map((m) => m[1]!)
-          .filter((href) => !href.startsWith("#"));
+        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)].flatMap(
+          (m) => (m[1]!.startsWith("#") ? [] : [m[1]!]),
+        );
 
         for (const href of cardHrefs) {
           expect(href).not.toMatch(/feed\.xml$/);

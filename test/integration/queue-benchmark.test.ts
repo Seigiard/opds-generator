@@ -6,7 +6,7 @@ class ArrayQueue<T> {
   private items: T[] = [];
   private waiters: Array<{
     resolve: (item: T) => void;
-    reject: (reason: unknown) => void;
+    reject: (cause: unknown) => void;
   }> = [];
 
   enqueue(item: T): void {

@@ -2,6 +2,7 @@ import { ok, err, type Result } from "neverthrow";
 import { dirname, join, relative } from "node:path";
 import type { HandlerDeps } from "../../context.ts";
 import type { EventType } from "../types.ts";
+import * as v from "valibot";
 
 export const bookCleanup = async (
   event: EventType,
@@ -19,7 +20,7 @@ export const bookCleanup = async (
   try {
     await deps.fs.rm(bookDataDir, { recursive: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (v.is(v.object({ code: v.literal("ENOENT") }), error)) {
       deps.logger.debug("BookCleanup", "Already removed", { path: relativePath });
     } else {
       return err(error instanceof Error ? error : new Error(String(error)));

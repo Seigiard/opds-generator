@@ -60,7 +60,8 @@ describe("Queue and Consumer Integration", () => {
     const ctx = createTestContext();
 
     ctx.handlers.register("FolderMetaSyncRequested", async (event) => {
-      processedEvents.push((event as { path: string }).path);
+      if (event._tag !== "FolderMetaSyncRequested") throw new Error("Unexpected test event");
+      processedEvents.push(event.path);
 
       return ok([]);
     });

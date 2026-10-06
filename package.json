@@ -36,7 +36,8 @@
     "neverthrow": "^8.2.0",
     "node-unrar-js": "^2.0.2",
     "opds-ts": "^2.1.1",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "valibot": "^1.5.0"
   },
   "devDependencies": {
     "@csstools/postcss-random-function": "^2.0.1",

@@ -4,13 +4,13 @@ import { openInShell } from "../reader/shell.ts";
 
 // Fixtures are opened as File objects so the smoke page needs no nginx/static routing;
 // the shell chrome, foliate load path, and CSP-relevant rendering are identical to prod.
-const fixtures = import.meta.glob("./fixtures/*.epub", {
+const fixtures = import.meta.glob<string>("./fixtures/*.epub", {
   query: "?url",
   import: "default",
   eager: true,
-}) as Record<string, string>;
+});
 
-const select = document.getElementById("fixture") as HTMLSelectElement;
+const select = document.querySelector<HTMLSelectElement>("#fixture")!;
 
 const paths = Object.keys(fixtures).sort();
 
