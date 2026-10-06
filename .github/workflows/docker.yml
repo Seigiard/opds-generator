@@ -31,11 +31,26 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Check formatting
+        run: bun run format
+
+      - name: Check types
+        run: bun --bun tsc --noEmit
+
       - name: Run lint
         run: bun run lint
 
+      - name: Check unused exports and dependencies
+        run: npx knip
+
       - name: Check static/ artifacts freshness
         run: bun run build:ui:check
+
+      - name: Check renderer HTML goldens
+        run: bun run render:check
+
+      - name: Check renderer browser imports
+        run: bun run render:pure
 
       - name: Run tests in Docker
         run: bun run test
