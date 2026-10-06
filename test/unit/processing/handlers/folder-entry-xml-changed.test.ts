@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { folderEntryXmlChanged } from "../../../../src/effect/handlers/folder-entry-xml-changed.ts";
+import { folderEntryXmlChanged } from "../../../../src/processing/handlers/folder-entry-xml-changed.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
-import type { EventType } from "../../../../src/effect/types.ts";
+import type { EventType } from "../../../../src/processing/types.ts";
 
 const deps: HandlerDeps = {
   config: { filesPath: "/files", dataPath: "/data", port: 3000, reconcileInterval: 1800 },

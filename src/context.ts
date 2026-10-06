@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
 import { SimpleQueue } from "./queue.ts";
 import type { LogContext } from "./logging/types.ts";
-import type { EventType } from "./effect/types.ts";
+import type { EventType } from "./processing/types.ts";
 
 export interface ConfigService {
   readonly filesPath: string;

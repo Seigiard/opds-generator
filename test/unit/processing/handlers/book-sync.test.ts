@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { bookSync } from "../../../../src/effect/handlers/book-sync.ts";
+import { bookSync } from "../../../../src/processing/handlers/book-sync.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
-import type { EventType } from "../../../../src/effect/types.ts";
+import type { EventType } from "../../../../src/processing/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, rm, readdir, stat, readFile, readlink, lstat, symlink, unlink } from "node:fs/promises";

@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { parentMetaSync } from "../../../../src/effect/handlers/parent-meta-sync.ts";
+import { parentMetaSync } from "../../../../src/processing/handlers/parent-meta-sync.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
-import type { EventType } from "../../../../src/effect/types.ts";
+import type { EventType } from "../../../../src/processing/types.ts";
 
 const deps: HandlerDeps = {
   config: { filesPath: "/files", dataPath: "/data", port: 3000, reconcileInterval: 1800 },
