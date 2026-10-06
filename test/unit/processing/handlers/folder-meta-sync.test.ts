@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { folderMetaSync } from "../../../../src/effect/handlers/folder-meta-sync.ts";
+import { folderMetaSync } from "../../../../src/processing/handlers/folder-meta-sync.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
-import type { EventType } from "../../../../src/effect/types.ts";
+import type { EventType } from "../../../../src/processing/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, rm, stat, readFile, symlink, unlink, readdir } from "node:fs/promises";

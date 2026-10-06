@@ -16,7 +16,7 @@ src/
 ├── watcher.sh       # inotifywait → POST /events
 ├── context.ts       # AppContext, HandlerDeps, buildContext()
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
-├── effect/          # Event handling (neverthrow + async/await, despite the name)
+├── processing/      # Event handling (neverthrow + async/await)
 │   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
 │   ├── consumer.ts  # Event loop (AbortController-based)
 │   ├── adapters/    # Raw → typed events: books-adapter, data-adapter, sync-plan-adapter
@@ -167,11 +167,11 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 </important>
 
-<important if="you are working on event adapters, the queue, the consumer, or handlers in src/effect/">
+<important if="you are working on event adapters, the queue, the consumer, or handlers in src/processing/">
 
 - Flow: adapters (raw inotify → typed `EventType`) → `SimpleQueue` → consumer loop (`queue.take(signal)`) → handlers.
 - The queue coalesces pending `FolderMetaSyncRequested` events by path and moves them behind later queued work.
-- Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/effect/handlers/book-sync.ts`.
+- Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
 - Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.
 - Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/server.ts`).
 - Avoid watcher loops: the data watcher classifies only `entry.xml`/`_entry.xml` and ignores everything else (including `feed.xml`, `index.html`, `.jsonl`). Check `src/watcher.sh` exclusions when you change written files.
