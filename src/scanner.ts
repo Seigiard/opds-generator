@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
@@ -169,6 +169,24 @@ export async function createSyncPlan(files: FileInfo[], dataPath: string): Promi
   }
 
   return { toProcess, toDelete, folders: foldersToProcess };
+}
+
+// Builds before issue #18 dumped these into the served /data volume and never removed them.
+const LEGACY_HEAP_SNAPSHOTS = ["heap-snapshot-100.json", "heap-snapshot-3000.json"];
+
+export async function removeLegacyHeapSnapshots(dataPath: string): Promise<string[]> {
+  const removed: string[] = [];
+
+  for (const name of LEGACY_HEAP_SNAPSHOTS) {
+    const path = join(dataPath, name);
+
+    if (!(await Bun.file(path).exists())) continue;
+
+    await rm(path, { force: true });
+    removed.push(name);
+  }
+
+  return removed;
 }
 
 export function computeHash(files: FileInfo[]): string {

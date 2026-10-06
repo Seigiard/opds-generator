@@ -27,15 +27,6 @@ function logMemorySnapshot(): void {
   eventCounter++;
   Bun.gc(true);
 
-  if (eventCounter === 100 || eventCounter === 3000) {
-    const snapshotPath = `/data/heap-snapshot-${eventCounter}.json`;
-    void Bun.write(snapshotPath, JSON.stringify(Bun.generateHeapSnapshot()));
-    log.info("Consumer", `Heap snapshot saved to ${snapshotPath}`, {
-      event_type: "handler_complete",
-      events_processed: eventCounter,
-    });
-  }
-
   if (eventCounter % 50 === 0) {
     const mem = process.memoryUsage();
     const jsc = heapStats();
