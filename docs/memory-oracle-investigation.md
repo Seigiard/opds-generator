@@ -3,11 +3,13 @@
 ## Status
 
 The investigation is tracked in [issue #13](https://github.com/Seigiard/opds-generator/issues/13), a follow-up to command/resource ownership in issue #12.
-No application leak or complete fix for the memory oracle was established.
-The existing tests and their limits remain in place.
+No application leak was established. The second round (below, "Oracle redesign")
+changed the probe schedule, added an exact JS-object gate and a calibration test.
+The RSS limits (8, 3 for full-chain, 5 for the handler chain) are unchanged.
+The handler-chain RSS gate remains weak at its limit; see "Known limits".
 
 The experimental patch is preserved in `docs/memory-oracle-experiment.patch`.
-It is research material, not an accepted replacement for the tests.
+It is research material from the first round, superseded by the redesign.
 Apply it in a disposable checkout before using the diagnostic launcher below.
 The patch is based on the normalized, 140-column test files.
 
@@ -226,3 +228,70 @@ process.exit(await child.exited);
 - Validate the entire memory gate, including the unchanged full-chain limit of 3.
 - Distinguish retained live objects from bounded allocator/JIT/cache growth.
 - Record unresolved evidence instead of raising limits or calling a short green run proof of no leak.
+
+## Oracle redesign — second round
+
+Docker test image, Bun 1.4.2. Diagnosis details are in the issue #13 comment of 2026-10-06.
+
+### Causes found
+
+1. **Regime change at iter 0.** Warmup ran a full GC every 10 operations, measurement
+   after every operation. The first floor sample sat 2–3 MB above the next one. Two-point
+   read negative (−0.2 … −7.2) and slope positive (+3.2 … +5.2) on `full-chain`.
+2. **Bounded ramp.** In a matched regime, RSS rises 2–4 MB over the first 400–600
+   operations, then plateaus; multi-MB releases follow. A 300-operation window at limit 3
+   (≈ 0.9 MB) read the ramp as retention. Subprocess commands produce most of it; JSC
+   object counts show no growth.
+3. **Format phase.** The handler chain rotates PDF, CBZ, EPUB. Sampling every 10
+   operations landed after a different format each time: a ~6 MB period-3 sawtooth.
+4. **Masking.** Retained blocks land in already-resident free pages. After ~1000
+   operations, 5 KiB/operation of retention no longer showed in RSS with any estimator
+   (slope, two-point, envelope, block minima).
+
+Not causes (ramp unchanged): `sharp.concurrency(1)`, `sharp.cache(false)`,
+`MIMALLOC_PURGE_DELAY=0`. Idle before the first sample makes the baseline a trough.
+
+No exact native counter is available: Bun's mimalloc `malloc_*` statistics read 0,
+`committed` grows by hundreds of KB per operation, and an LD_PRELOAD malloc/free counter
+misses frees that Bun performs internally.
+
+### Changes
+
+- `test/helpers/leak-probe.ts`: full GC after every warmup operation; warmup 300 and
+  600 measured operations; a sample every 12 operations (a multiple of the format
+  rotation); the handler chain runs in the probe with the original filesystem adapter.
+- Exact JS-object gate: the sum of per-type growth in `heapStats().objectTypeCounts`
+  per operation, limit 0.5. Clean scenarios read 0.002–0.085. Summing only growth keeps
+  JSC code discards (thousands of CodeBlock/Executable/string cells at once) from
+  cancelling growth.
+- `LEAK_PROBE_RETAIN_KB` keeps a new allocation of that size alive per measured operation.
+  A single preallocated pool is not a valid control: it takes resident pages up front.
+- `test/integration/memory-oracle-calibration.test.ts`: `full-chain` with 64 KiB retained
+  per operation must read at or above the chain RSS limit and the object limit.
+- The runtime suite (`SimpleQueue`, consumer) also moved into the probe. In the shared
+  test process it had read −6…−8 KB/iter only because it ran after the heavy in-process
+  handler test; alone it read +0.6…+1.2 against its limit of 1. A queue operation now
+  runs 100 enqueue/take cycles (noise ±0.006 KB per event). The consumer stays at one
+  event per operation: the production consumer runs a full GC per event.
+
+### Calibration
+
+| Condition                                       |                 RSS red | Object reading |
+| ----------------------------------------------- | ----------------------: | -------------: |
+| `full-chain`, clean (limit 3)                   |                    1/11 |          0.003 |
+| `full-chain`, 5 KiB retained                    |                     4/5 |          1.003 |
+| `full-chain`, 64 KiB retained                   | 3/3 (61.8–63.6 KB/iter) |          1.003 |
+| `handler-chain`, clean, phase-aligned (limit 5) |                    0/13 |    0.002–0.003 |
+| `handler-chain`, 8 KiB retained                 |                     1/5 |    1.002–1.003 |
+
+All memory suites: 3 of 3 runs passed, 24/24 tests each. Full `bun run test` after the
+runtime change: 3 of 3 runs passed, 482/482. The `full-chain` clean red (5.11/5.39) came
+from the 10-operation sampling before phase alignment. One earlier full run on this branch
+had a handler-chain RSS red whose value was not captured.
+
+### Known limits
+
+- The handler-chain RSS gate detects 8 KiB/operation of retention in about 1 of 5 runs.
+  Its JS-object gate is exact. Native retention below ~10 KiB per book in the handler
+  chain can pass CI; a long run (≥ 3000 operations, plateau check) is the tool for it.
+- Bounded growth is acceptable: a plateau after the ramp is not a leak.

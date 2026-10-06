@@ -1,138 +1,25 @@
-import { describe, test, expect, afterAll } from "bun:test";
-import { bookSync } from "../../src/effect/handlers/book-sync.ts";
-import { folderSync } from "../../src/effect/handlers/folder-sync.ts";
-import { folderMetaSync } from "../../src/effect/handlers/folder-meta-sync.ts";
-import type { HandlerDeps } from "../../src/context.ts";
-import type { EventType } from "../../src/effect/types.ts";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { mkdir, rm, stat, symlink, unlink } from "node:fs/promises";
+import { describe, test, expect, beforeAll } from "bun:test";
+import { MAX_HANDLER_LEAK_KB, MAX_OBJECTS_PER_ITER, retainedKbPerIter, runProbe } from "../helpers/run-leak-probe.ts";
 
-const TEST_DIR = join(tmpdir(), `opds-memleak-handler-${Date.now()}`);
-
-const FILES_DIR = join(TEST_DIR, "files");
-
-const DATA_DIR = join(TEST_DIR, "data");
-
-const FIXTURES_DIR = "/app/files/test";
-
-const ITERATIONS = 100;
-
-const MAX_LEAK_KB = 5;
-
-const BOOK_FILES = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
-
-const asyncDeps: HandlerDeps = {
-  config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 1800 },
-  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-  fs: {
-    mkdir: async (path, options) => {
-      await mkdir(path, options);
-    },
-    rm: (path, options) => rm(path, options),
-    readdir: async (path) => {
-      const fs = await import("node:fs/promises");
-
-      return fs.readdir(path);
-    },
-    stat: async (path) => {
-      const s = await stat(path);
-
-      return { isDirectory: () => s.isDirectory(), size: s.size };
-    },
-    exists: async (path) => {
-      try {
-        await stat(path);
-
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    writeFile: async (path, content) => {
-      await Bun.write(path, content);
-    },
-    atomicWrite: async (path, content) => {
-      await Bun.write(path, content);
-    },
-    symlink: async (target, path) => {
-      try {
-        await unlink(path);
-      } catch {}
-
-      await symlink(target, path);
-    },
-    unlink: (path) => unlink(path),
-  },
-};
-
-function getRssMb(): number {
-  return process.memoryUsage().rss / 1024 / 1024;
-}
-
-function stabilize(): void {
-  Bun.gc(true);
-  Bun.gc(true);
-  Bun.gc(true);
-}
-
-async function processOneBook(folderName: string, bookFile: string): Promise<void> {
-  const folderPath = join(FILES_DIR, folderName);
-  await mkdir(folderPath, { recursive: true });
-
-  const srcPath = join(FIXTURES_DIR, bookFile);
-  const destPath = join(folderPath, bookFile);
-  const content = await Bun.file(srcPath).arrayBuffer();
-  await Bun.write(destPath, content);
-
-  const folderEvent: EventType = { _tag: "FolderCreated", parent: FILES_DIR, name: folderName };
-  await folderSync(folderEvent, asyncDeps);
-
-  const bookEvent: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
-  await bookSync(bookEvent, asyncDeps);
-
-  const folderDataPath = join(DATA_DIR, folderName);
-  const metaEvent: EventType = { _tag: "FolderMetaSyncRequested", path: folderDataPath };
-  await folderMetaSync(metaEvent, asyncDeps);
-
-  const rootEvent: EventType = { _tag: "FolderMetaSyncRequested", path: DATA_DIR };
-  await folderMetaSync(rootEvent, asyncDeps);
-
-  await rm(join(DATA_DIR, folderName), { recursive: true, force: true });
-  await rm(folderPath, { recursive: true, force: true });
-}
-
-afterAll(async () => {
-  await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
-});
-
+// The handler chain (folder sync → book sync → folder and root feeds, PDF/CBZ/EPUB in
+// turn) runs in the probe subprocess with the same filesystem adapter this test used
+// in-process; sharing the test runner's process faked +10 KB/iter (issue #13).
 describe("Full handler memory leak (target: 0 KB/iter)", () => {
-  test("all formats interleaved (PDF + CBZ + EPUB)", async () => {
-    await mkdir(FILES_DIR, { recursive: true });
-    await mkdir(DATA_DIR, { recursive: true });
+  let result: Awaited<ReturnType<typeof runProbe>>;
 
-    for (let i = 0; i < 100; i++) {
-      const book = BOOK_FILES[i % BOOK_FILES.length]!;
-      await processOneBook(`warmup-${i}`, book);
-
-      if (i % 5 === 0) Bun.gc(true);
-    }
-
-    stabilize();
-
-    const before = getRssMb();
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      const book = BOOK_FILES[i % BOOK_FILES.length]!;
-      await processOneBook(`test-${i}`, book);
-      Bun.gc(true);
-    }
-
-    stabilize();
-    const after = getRssMb();
-    const totalMb = after - before;
-    const perIterKb = (totalMb * 1024) / ITERATIONS;
-    console.log(`  all formats: ${totalMb.toFixed(2)} MB total, ${perIterKb.toFixed(2)} KB/iter (${ITERATIONS} iters)`);
-    expect(perIterKb).toBeLessThan(MAX_LEAK_KB);
+  beforeAll(async () => {
+    result = await runProbe("handler-chain");
   }, 180000);
+
+  test(`all formats interleaved retain less than ${MAX_HANDLER_LEAK_KB} KB of RSS per book`, () => {
+    // #given / #when — the probe processed one book per operation
+    // #then
+    expect(retainedKbPerIter(result)).toBeLessThan(MAX_HANDLER_LEAK_KB);
+  });
+
+  test(`all formats interleaved retain less than ${MAX_OBJECTS_PER_ITER} JS objects per book`, () => {
+    // #given / #when — the probe processed one book per operation
+    // #then
+    expect(result.objectsPerIter).toBeLessThan(MAX_OBJECTS_PER_ITER);
+  });
 });

@@ -50,10 +50,12 @@ dropping `.clone()` for two independent pipelines (decodes the buffer twice; cos
 in the shared process, while the same workload alone measured `−17.48 KB/iter`.
 Extended diagnostics also found red short windows while long-run RSS decreased;
 allocator settings influenced the result but did not stabilize all memory suites.
-This remains unresolved in [#13](https://github.com/Seigiard/opds-generator/issues/13).
-The observations, reproduction launcher and unaccepted experimental patch are recorded
-in [memory-oracle-investigation.md](memory-oracle-investigation.md).
-The existing test workload, assertions and limits remain unchanged.
+[#13](https://github.com/Seigiard/opds-generator/issues/13) traced this to a GC-regime
+change at the first sample, a bounded 2–4 MB ramp, and a period-3 format sawtooth in
+the handler chain. The probe now warms up in the measurement regime, measures 600
+operations after 300 warmup operations, samples every 12, and also gates exact JS
+object growth; a calibration test proves the gates go red on retained memory. Limits
+are unchanged. Details and known limits: [memory-oracle-investigation.md](memory-oracle-investigation.md).
 
 ### 2. e2e — `Event Logging Phase 4: copy folder triggers FolderCreated + BookCreated`
 
