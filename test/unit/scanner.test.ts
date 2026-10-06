@@ -1,5 +1,8 @@
 import { describe, test, expect } from "bun:test";
-import { buildFolderStructure, computeHash } from "../../src/scanner.ts";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { buildFolderStructure, computeHash, removeLegacyHeapSnapshots } from "../../src/scanner.ts";
 import type { FileInfo } from "../../src/types.ts";
 
 function createFileInfo(relativePath: string, size = 1000, mtime = Date.now()): FileInfo {
@@ -175,6 +178,35 @@ describe("scanner", () => {
       const file2 = createFileInfo("book.epub", 1000, 1700000000000.9);
 
       expect(computeHash([file1])).toBe(computeHash([file2]));
+    });
+  });
+
+  describe("removeLegacyHeapSnapshots", () => {
+    test("deletes the snapshots old builds left in /data and keeps the catalogue", async () => {
+      // #given
+      const dataPath = await mkdtemp(join(tmpdir(), "opds-snapshots-"));
+      await Bun.write(join(dataPath, "heap-snapshot-100.json"), "{}");
+      await Bun.write(join(dataPath, "heap-snapshot-3000.json"), "{}");
+      await Bun.write(join(dataPath, "feed.xml"), "<feed/>");
+      await mkdir(join(dataPath, "Author"));
+
+      // #when
+      await removeLegacyHeapSnapshots(dataPath);
+
+      // #then
+      expect((await readdir(dataPath)).sort()).toEqual(["Author", "feed.xml"]);
+      await rm(dataPath, { recursive: true, force: true });
+    });
+
+    test("does nothing when the data directory does not exist yet", async () => {
+      // #given
+      const dataPath = join(tmpdir(), `opds-missing-${crypto.randomUUID()}`);
+
+      // #when
+      const removed = await removeLegacyHeapSnapshots(dataPath);
+
+      // #then
+      expect(removed).toEqual([]);
     });
   });
 });

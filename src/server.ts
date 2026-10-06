@@ -18,7 +18,7 @@ import { parentMetaSync } from "./effect/handlers/parent-meta-sync.ts";
 import { folderEntryXmlChanged } from "./effect/handlers/folder-entry-xml-changed.ts";
 import { folderMetaSync } from "./effect/handlers/folder-meta-sync.ts";
 import { buildContext, type AppContext } from "./context.ts";
-import { scanFiles, createSyncPlan } from "./scanner.ts";
+import { scanFiles, createSyncPlan, removeLegacyHeapSnapshots } from "./scanner.ts";
 
 const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8_000;
 
@@ -76,10 +76,21 @@ async function doSync(ctx: AppContext): Promise<void> {
   log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: duration });
 }
 
+async function removeHeapSnapshotLeftovers(): Promise<void> {
+  try {
+    const removed = await removeLegacyHeapSnapshots(config.dataPath);
+
+    if (removed.length > 0) log.info("InitialSync", "Removed leftover heap snapshots", { file: removed.join(", ") });
+  } catch (error) {
+    log.warn("InitialSync", "Failed to remove leftover heap snapshots", { error: String(error) });
+  }
+}
+
 async function initialSync(ctx: AppContext): Promise<void> {
   isSyncing = true;
 
   try {
+    await removeHeapSnapshotLeftovers();
     await doSync(ctx);
   } finally {
     isSyncing = false;
