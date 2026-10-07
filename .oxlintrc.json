@@ -192,6 +192,8 @@
         "src/formats/types.ts",
         "src/formats/index.ts",
         "src/formats/pdf.ts",
+        "src/formats/mobi.ts",
+        "src/formats/txt.ts",
         "src/formats/legacy-adapter.ts",
         "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",
