@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, Predicate, Queue } from "effect";
 import { log } from "../logging/index.ts";
 import type { HandlerDeps } from "../context.ts";
+import { EffectFileSystem, liveEffectFileSystem } from "../effect-file-system.ts";
 import { generateEventId, getEventPath, logMemorySnapshot, type CatalogueProcessor, type ProcessorStatus } from "./catalogue-processor.ts";
 import { CatalogueDeps, type EffectHandlers } from "./effect-handler.ts";
 import type { EventType } from "./types.ts";
@@ -168,6 +169,7 @@ export function createEffectCatalogueProcessor({ deps, handlers }: EffectCatalog
     ),
     Effect.forever,
     Effect.provideService(CatalogueDeps, deps),
+    Effect.provideService(EffectFileSystem, liveEffectFileSystem),
   );
 
   const start = async (signal: AbortSignal): Promise<void> => {

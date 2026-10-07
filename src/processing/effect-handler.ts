@@ -1,6 +1,7 @@
 import { Cause, Context, Data, Effect, Exit } from "effect";
 import { err, ok, type Result } from "neverthrow";
 import type { HandlerDeps } from "../context.ts";
+import { EffectFileSystem, liveEffectFileSystem, type EffectFileSystemService } from "../effect-file-system.ts";
 import type { Handler } from "./catalogue-processor.ts";
 import type { EventType } from "./types.ts";
 
@@ -18,7 +19,7 @@ class HandlerFailed extends Data.TaggedError("HandlerFailed")<{ readonly cause: 
  */
 export type HandlerError = Error & { readonly _tag: string };
 
-export type EffectHandler = (event: EventType) => Effect.Effect<readonly EventType[], HandlerError, CatalogueDeps>;
+export type EffectHandler = (event: EventType) => Effect.Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>;
 
 export type EffectHandlers = Readonly<Partial<Record<EventType["_tag"], EffectHandler>>>;
 
@@ -58,11 +59,15 @@ export async function runAsPromiseHandler(
   handler: EffectHandler,
   event: EventType,
   { signal, ...deps }: HandlerDeps,
+  effectFs: EffectFileSystemService = liveEffectFileSystem,
 ): Promise<Result<readonly EventType[], Error>> {
-  const exit = await Effect.runPromiseExit(handler(event).pipe(Effect.provideService(CatalogueDeps, deps)), {
-    signal,
-    uninterruptible: true,
-  });
+  const exit = await Effect.runPromiseExit(
+    handler(event).pipe(Effect.provideService(CatalogueDeps, deps), Effect.provideService(EffectFileSystem, effectFs)),
+    {
+      signal,
+      uninterruptible: true,
+    },
+  );
 
   if (Exit.isSuccess(exit)) return ok(exit.value);
 

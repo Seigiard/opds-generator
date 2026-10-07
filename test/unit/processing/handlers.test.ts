@@ -1,9 +1,16 @@
 import { basename, join } from "node:path";
 import { describe, test, expect, beforeEach } from "bun:test";
-import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
+import { Effect } from "effect";
+import { FileSystemNotFound } from "../../../src/effect-file-system.ts";
+import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { folderCleanup as plainFolderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
+import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
 import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
+import { bookCleanup as plainBookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
+import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
+import { createEffectFileSystemTestDouble } from "../../helpers/effect-file-system.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
+import type { Handler } from "../../../src/processing/catalogue-processor.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
 
@@ -109,13 +116,30 @@ const asyncDeps: HandlerDeps = {
   },
 };
 
+const cleanupEffectFs = (handlerDeps: HandlerDeps) =>
+  createEffectFileSystemTestDouble({
+    exists: (path) => Effect.promise(() => handlerDeps.fs.exists(path)),
+    rm: (path, options) => Effect.promise(() => handlerDeps.fs.rm(path, options)),
+  });
+
+const asCleanupHandler =
+  (handler: EffectHandler): Handler =>
+  (event, handlerDeps) =>
+    runAsPromiseHandler(handler, event, handlerDeps, cleanupEffectFs(handlerDeps));
+
+// Issue #36: cleanup handler suites run against the plain and Effect ports.
+const cleanupVariants: { name: string; bookCleanup: Handler; folderCleanup: Handler }[] = [
+  { name: "plain", bookCleanup: plainBookCleanup, folderCleanup: plainFolderCleanup },
+  { name: "effect", bookCleanup: asCleanupHandler(bookCleanupEffect), folderCleanup: asCleanupHandler(folderCleanupEffect) },
+];
+
 describe("Processing Handlers", () => {
   beforeEach(() => {
     mockFs.reset();
     mockLogger.reset();
   });
 
-  describe("folderCleanup", () => {
+  describe.each(cleanupVariants)("folderCleanup ($name)", ({ folderCleanup }) => {
     test("removes data directory for deleted folder", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
 
@@ -133,7 +157,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe("stale deletes", () => {
+  describe.each(cleanupVariants)("stale deletes ($name)", ({ bookCleanup, folderCleanup }) => {
     const existing = (path: string): HandlerDeps => ({ ...asyncDeps, fs: { ...asyncDeps.fs, exists: async (p) => p === path } });
 
     test("bookCleanup keeps the entry when the book exists in the books directory", async () => {
@@ -248,7 +272,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe("bookCleanup", () => {
+  describe.each(cleanupVariants)("bookCleanup ($name)", ({ bookCleanup }) => {
     test("removes data directory for deleted book", async () => {
       const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
 
@@ -268,7 +292,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe("folderCleanup cascade", () => {
+  describe.each(cleanupVariants)("folderCleanup cascade ($name)", ({ folderCleanup }) => {
     test("returns cascade event to regenerate parent feed for nested folders", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
 
@@ -283,5 +307,22 @@ describe("Processing Handlers", () => {
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
     });
+  });
+
+  test("folderCleanup effect recovers when the data directory is already gone", async () => {
+    // #given
+    const missingDataDir = "/test/data/Fiction";
+
+    const effectFs = createEffectFileSystemTestDouble({
+      exists: () => Effect.succeed(false),
+      rm: () =>
+        Effect.fail(new FileSystemNotFound({ operation: "rm", path: missingDataDir, message: `rm ${missingDataDir} failed: ENOENT` })),
+    });
+
+    // #when
+    const result = await runAsPromiseHandler(folderCleanupEffect, folderDeletedEvent("/test/books/", "Fiction"), asyncDeps, effectFs);
+
+    // #then
+    expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
   });
 });
