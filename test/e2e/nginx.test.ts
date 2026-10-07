@@ -278,6 +278,12 @@ describe("nginx integration", () => {
 
       expect(response.status).toBe(404);
     });
+
+    test("GET /status is not proxied to the lifecycle snapshot", async () => {
+      const response = await fetch(`${BASE_URL}/status`);
+
+      expect(response.status).toBe(404);
+    });
   });
 
   describe("initial sync", () => {
@@ -457,6 +463,36 @@ describe("nginx integration", () => {
       });
 
       expect(response.status).toBe(202);
+    });
+
+    test("a forced resync, even a second one while the first runs, answers 202 and never makes an existing feed.xml answer 503", async () => {
+      // #given /resync is enabled and the catalogue is built
+      const enabled = await isResyncEnabled();
+
+      if (!enabled) {
+        console.log("Skipping: /resync not configured");
+
+        return;
+      }
+
+      const headers = { Authorization: `Basic ${Buffer.from("admin:secret").toString("base64")}` };
+
+      // #when two forced resyncs arrive back to back and the feeds are polled while they run
+      const answers = [
+        (await fetch(`${BASE_URL}/resync?force=1`, { headers })).status,
+        (await fetch(`${BASE_URL}/resync?force=1`, { headers })).status,
+      ];
+
+      const polled: number[] = [];
+
+      for (let i = 0; i < 40; i++) {
+        polled.push((await fetch(`${BASE_URL}/feed.xml`)).status, (await fetch(`${BASE_URL}/index.html`)).status);
+        await new Promise((r) => setTimeout(r, 25));
+      }
+
+      // #then both are accepted and the catalogue stayed available
+      expect(answers).toEqual([202, 202]);
+      expect(polled.filter((status) => status !== 200)).toEqual([]);
     });
   });
 });

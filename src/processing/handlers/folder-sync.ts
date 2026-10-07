@@ -1,5 +1,5 @@
 import { ok, err, type Result } from "neverthrow";
-import { join, relative, basename } from "node:path";
+import { dirname, join, relative, basename } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { encodeUrlPath, normalizeFilenameTitle } from "../../utils/processor.ts";
 import type { HandlerDeps } from "../../context.ts";
@@ -36,7 +36,11 @@ export const folderSync = async (event: EventType, deps: HandlerDeps): Promise<R
 
     deps.logger.info("FolderSync", "Done", { path: relativePath });
 
-    return ok([{ _tag: "FolderMetaSyncRequested", path: folderDataDir }] as const);
+    // folderMetaSync rewrites this _entry.xml unchanged for an empty folder and would not refresh the parent, so the parent that must list the new folder is refreshed here.
+    return ok([
+      { _tag: "FolderMetaSyncRequested", path: folderDataDir },
+      { _tag: "FolderMetaSyncRequested", path: dirname(folderDataDir) },
+    ] as const);
   } catch (error) {
     return err(error instanceof Error ? error : new Error(String(error)));
   }

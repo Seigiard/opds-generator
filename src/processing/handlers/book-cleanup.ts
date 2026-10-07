@@ -12,6 +12,13 @@ export const bookCleanup = async (event: EventType, deps: HandlerDeps): Promise<
   const relativePath = relative(deps.config.filesPath, filePath);
   const bookDataDir = join(deps.config.dataPath, relativePath);
 
+  // A delete event can be stale: the source may have come back since it was queued.
+  if (await deps.fs.exists(filePath)) {
+    deps.logger.debug("BookCleanup", "Source exists, skipping stale delete", { path: relativePath });
+
+    return ok([]);
+  }
+
   deps.logger.info("BookCleanup", "Removing", { path: relativePath });
 
   try {

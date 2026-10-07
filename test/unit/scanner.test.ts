@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildFolderStructure, computeHash, removeLegacyHeapSnapshots } from "../../src/scanner.ts";
+import { buildFolderStructure, computeHash, createSyncPlan, removeLegacyHeapSnapshots, scanFiles } from "../../src/scanner.ts";
 import type { FileInfo } from "../../src/types.ts";
 
 function createFileInfo(relativePath: string, size = 1000, mtime = Date.now()): FileInfo {
@@ -208,5 +208,60 @@ describe("scanner", () => {
       // #then
       expect(removed).toEqual([]);
     });
+  });
+});
+
+describe("abortable scans and forced plans", () => {
+  async function tree(): Promise<{ root: string; files: string; data: string }> {
+    const root = await mkdtemp(join(tmpdir(), "opds-scan-"));
+    const files = join(root, "files");
+    const data = join(root, "data");
+    await mkdir(join(files, "A"), { recursive: true });
+    await mkdir(data, { recursive: true });
+    await Bun.write(join(files, "A", "one.epub"), "x");
+    await Bun.write(join(files, "A", "two.epub"), "y");
+
+    return { root, files, data };
+  }
+
+  test("scanFiles rejects with the abort reason when the signal is already aborted", async () => {
+    // #given
+    const { root, files } = await tree();
+    const reason = new Error("stop");
+    // #when
+    const outcome = await scanFiles(files, AbortSignal.abort(reason)).catch((error: Error) => error);
+    // #then
+    expect(outcome).toBe(reason);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("createSyncPlan rejects with the abort reason when the signal is already aborted", async () => {
+    // #given
+    const { root, files, data } = await tree();
+    const scanned = await scanFiles(files);
+    const reason = new Error("stop");
+    // #when
+    const outcome = await createSyncPlan(scanned, data, { signal: AbortSignal.abort(reason) }).catch((error: Error) => error);
+    // #then
+    expect(outcome).toBe(reason);
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a plan skips unchanged books unless forced", async () => {
+    // #given both books already have an entry newer than the source file
+    const { root, files, data } = await tree();
+
+    for (const name of ["one.epub", "two.epub"]) {
+      await mkdir(join(data, "A", name), { recursive: true });
+      await Bun.write(join(data, "A", name, "entry.xml"), "<entry/>");
+    }
+
+    const scanned = await scanFiles(files);
+    // #when
+    const normal = await createSyncPlan(scanned, data);
+    const forced = await createSyncPlan(scanned, data, { force: true });
+    // #then
+    expect({ normal: normal.toProcess.length, forced: forced.toProcess.length }).toEqual({ normal: 0, forced: 2 });
+    await rm(root, { recursive: true, force: true });
   });
 });

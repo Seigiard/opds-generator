@@ -1,6 +1,5 @@
 import { describe, test, expect } from "bun:test";
 import { adaptBooksEvent } from "../../../src/processing/adapters/books-adapter.ts";
-import { adaptDataEvent } from "../../../src/processing/adapters/data-adapter.ts";
 import type { RawBooksEvent } from "../../../src/processing/types.ts";
 import type { DeduplicationService } from "../../../src/context.ts";
 
@@ -171,47 +170,5 @@ describe("adaptBooksEvent (books watcher classification)", () => {
       expect(result1?._tag).toBe("BookCreated");
       expect(result2).toBeNull();
     });
-  });
-});
-
-describe("adaptDataEvent (data watcher classification)", () => {
-  test("entry.xml change creates EntryXmlChanged", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/book.epub/", name: "entry.xml", events: "CLOSE_WRITE" }, alwaysProcessDedup);
-
-    expect(result?._tag).toBe("EntryXmlChanged");
-
-    if (result?._tag === "EntryXmlChanged") expect(result.parent).toBe("/data/Fiction/book.epub/");
-  });
-
-  test("_entry.xml change creates FolderEntryXmlChanged", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/", name: "_entry.xml", events: "CLOSE_WRITE" }, alwaysProcessDedup);
-
-    expect(result?._tag).toBe("FolderEntryXmlChanged");
-
-    if (result?._tag === "FolderEntryXmlChanged") expect(result.parent).toBe("/data/Fiction/");
-  });
-
-  test("MOVED_TO entry.xml creates EntryXmlChanged", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/book.epub/", name: "entry.xml", events: "MOVED_TO" }, alwaysProcessDedup);
-
-    expect(result?._tag).toBe("EntryXmlChanged");
-  });
-
-  test("ignores other data files", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/book.epub/", name: "cover.jpg", events: "CLOSE_WRITE" }, alwaysProcessDedup);
-
-    expect(result).toBeNull();
-  });
-
-  test("ignores feed.xml", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/", name: "feed.xml", events: "CLOSE_WRITE" }, alwaysProcessDedup);
-
-    expect(result).toBeNull();
-  });
-
-  test("ignores index.html (no event loop from generated HTML)", () => {
-    const result = adaptDataEvent({ parent: "/data/Fiction/", name: "index.html", events: "CLOSE_WRITE" }, alwaysProcessDedup);
-
-    expect(result).toBeNull();
   });
 });

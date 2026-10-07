@@ -1,5 +1,5 @@
 import { ok, err, type Result } from "neverthrow";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
@@ -77,6 +77,9 @@ const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
 
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
+
+// opds-ts stamps every Entry with a fresh <updated>, so raw output never equals the previous file.
+const withoutTimestamp = (entryXml: string): string => entryXml.replace(/<updated>[^<]*<\/updated>/, "");
 
 export const folderMetaSync = async (event: EventType, deps: HandlerDeps): Promise<Result<readonly EventType[], Error>> => {
   if (event._tag !== "FolderMetaSyncRequested") return ok([]);
@@ -185,8 +188,18 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
       if (description) entry.setSummary(description);
 
       const entryXml = entry.toXml({ prettyPrint: true });
+      const previousXml = (await deps.fs.exists(entryOutputPath)) ? await Bun.file(entryOutputPath).text() : undefined;
+
+      if (previousXml !== undefined && withoutTimestamp(previousXml) === withoutTimestamp(entryXml)) {
+        deps.logger.debug("FolderMetaSync", "_entry.xml unchanged, parent not refreshed", { path: relativePath });
+
+        return ok([]);
+      }
+
       await deps.fs.atomicWrite(entryOutputPath, entryXml);
       deps.logger.debug("FolderMetaSync", "Updated _entry.xml count", { path: relativePath });
+
+      return ok([{ _tag: "FolderMetaSyncRequested", path: dirname(normalizedDir) }] as const);
     }
 
     return ok([]);

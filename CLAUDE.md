@@ -13,13 +13,14 @@ src/
 ├── constants.ts     # File constants (feed.xml, entry.xml, etc.)
 ├── scanner.ts       # File scanning, sync planning
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
-├── watcher.sh       # inotifywait → POST /events
+├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext()
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
+├── lifecycle/       # Sync lifecycle: transition.ts (pure rules), lifecycle.ts (executes them), disk-scanner.ts
 ├── processing/      # Event handling (neverthrow + async/await)
-│   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
-│   ├── consumer.ts  # Event loop (AbortController-based)
-│   ├── adapters/    # Raw → typed events: books-adapter, data-adapter, sync-plan-adapter
+│   ├── types.ts     # RawBooksEvent, EventType
+│   ├── catalogue-processor.ts # Owns queue, fixed handler registry, consumer loop, pending/active, busy/empty edges
+│   ├── adapters/    # Raw → typed events: books-adapter, sync-plan-adapter
 │   └── handlers/    # book-sync, folder-sync, folder-meta-sync, cleanup, …
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
@@ -69,7 +70,7 @@ The app and tests run in Docker. Do not run the app with bun on the host. Shut c
 | `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                       |
 | `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                                  |
 | `curl http://localhost:8080/feed.xml`                                     | Smoke-check the dev feed                                                         |
-| `curl -u admin:secret http://localhost:8080/resync`                       | Force resync (dev credentials)                                                   |
+| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)             |
 | `bun run start` / `bun run rebuild`                                       | Production compose up / build                                                    |
 | `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                             |
 | `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors                 |
@@ -78,8 +79,8 @@ The app and tests run in Docker. Do not run the app with bun on the host. Shut c
 | `bun run test`                                                            | Unit + integration tests in Docker                                               |
 | `bun run test:unit` / `test:integration` / `test:coverage`                | Subsets / coverage, in Docker                                                    |
 | `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                                |
-| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose)                         |
-| `bun run test:e2e:routing`                                                | Routing e2e only (what CI runs)                                                  |
+| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)           |
+| `bun run test:e2e:routing`                                                | Routing e2e only                                                                 |
 | `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                   |
 | `npx knip`                                                                | Unused exports/deps (`knip.json`)                                                |
 | `bun run build:ui`                                                        | Regenerate `static/` (style.css, main.js, reader.js, read.html, foliate-<hash>/) |
@@ -103,7 +104,7 @@ Run, and fix until clean:
 5. `bun run build:ui` if you touched `ui/` or `src/render`, and commit the regenerated `static/`
 6. `bun run render:golden` if you touched `src/render` markup, and commit the regenerated `test/golden/*.html`
 
-CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus routing e2e only. The event-logging e2e is known-flaky and stays local in `test:all`.
+CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus the full e2e (`test:e2e`: nginx routing and event logging).
 
 </important>
 
@@ -141,9 +142,23 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 </important>
 
+<important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
+
+- `transition(state, input)` in `src/lifecycle/transition.ts` is pure and owns every rule. Phases: `scanning`, `accepting` (no scan, processor busy), `settled` (no scan, processor empty), `stopping`. Inputs: scan requested/finished, processor busy/empty edges, reconcile tick, shutdown. It returns the next state plus effects (`start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`).
+- `createLifecycle` in `lifecycle.ts` runs the effects with plain async. It takes a `CatalogueScanner`, the processor, and a `Clock`, owns the consumer, scan tasks and reconcile timer, and logs a `Lifecycle` entry (from, to, input) per transition. `server.ts` only wires HTTP to it.
+- Reconciliation starts only when `settled`. A scan request during `scanning` sets one coalesced follow-up (force flags OR'd); `POST /resync` then answers `202` (`Resync queued`); there is no `409`.
+- Resync repairs in place (ADR 0001): it never wipes `/data` first, so `feed.xml` never goes back to 503. It runs the same sync plan as reconciliation (mtime-based; the plan deletes entries whose book is gone). `POST /resync?force=1` plans every book for reprocessing. `/resync` always answers `202` (`Resync started` when idle, `Resync queued` during a scan) and `503` only while stopping.
+- `scanFiles` and `createSyncPlan` take an `AbortSignal` and throw its reason per directory, per book and before returning. `createDiskScanner({ filesPath, dataPath })` builds the real scanner for tests.
+- `BookDeleted`/`FolderDeleted` handlers do nothing when the source exists in `/books` at processing time (stale delete).
+- Shutdown: `stop()` enters `stopping`, aborts the active handler and scans, drops pending work and the follow-up scan, awaits owned tasks; `server.ts` races it against the 8 s deadline and exits 0.
+- `disk-scanner.ts` is the real scanner. nginx learns "initializing" from the files, not from Bun: the seed `feed.xml` it writes ends the 503s.
+- Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it; `test/e2e/nginx.test.ts` pins that.
+
+</important>
+
 <important if="you are working on nginx routing, auth, or the Bun HTTP endpoints">
 
-- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books`, `POST /events/data` (watchers), and `POST /resync` (proxied).
+- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books` (the `/books` watcher) and `POST /resync[?force=1]` (proxied; always `202`, see lifecycle notes).
 - Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
 - During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
 - `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.
@@ -169,12 +184,13 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 <important if="you are working on event adapters, the queue, the consumer, or handlers in src/processing/">
 
-- Flow: adapters (raw inotify → typed `EventType`) → `SimpleQueue` → consumer loop (`queue.take(signal)`) → handlers.
+- Flow: adapters (raw inotify → typed `EventType`) → `CatalogueProcessor.submit` → its `SimpleQueue` and consumer loop → handlers. `createCatalogueProcessor({ deps, handlers })` fixes the handler registry at construction; `AppContext` exposes no queue or handlers. `status()` returns `{ pending, active }`; `onBusy`/`onEmpty` report edges (silent after shutdown). Cascades join pending before the active slot clears.
 - The queue coalesces pending `FolderMetaSyncRequested` events by path and moves them behind later queued work.
 - Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
 - Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.
-- Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/server.ts`).
-- Avoid watcher loops: the data watcher classifies only `entry.xml`/`_entry.xml` and ignores everything else (including `feed.xml`, `index.html`, `.jsonl`). Check `src/watcher.sh` exclusions when you change written files.
+- Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/lifecycle/lifecycle.ts`).
+- Cascades are the only propagation. Only `/books` is watched; the processor never writes there, so a handler write cannot feed the watcher back. Keep it that way, and check the `--exclude` in `src/watcher.sh` if you ever write under `/books`. Folder refreshes travel as cascades: `bookSync`, `bookCleanup`, `folderCleanup` and `folderSync` return a refresh of their folder or parent (`folderSync` returns both its own and its parent's), and `folderMetaSync` returns a refresh of its parent only when its `_entry.xml` summary changed, compared without the `<updated>` timestamp opds-ts stamps on every Entry (ADR 0002). The climb therefore stops at the first folder whose count did not change; the folder's own `feed.xml` is always rewritten. A handler that writes or removes `entry.xml`/`_entry.xml` must return the refresh itself; nothing observes `/data`.
+- `busy` fires when work enters an idle processor and `empty` when the last pending event (cascades included) finishes. These edges drive the lifecycle phase, and periodic reconciliation starts only in `settled`, so a lost `empty` edge would block reconciliation. `status()` only feeds `GET /status`. The processor never forces GC per event; the periodic memory snapshot logs at `debug` level.
 - An `index.html` render failure is logged and must not block `feed.xml`.
 
 </important>
@@ -192,6 +208,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 <important if="you are adopting Effect in a module or editing Effect code">
 
 - `effect` is pinned to `4.0.1` and limited to command/resource ownership. Event processing stays neverthrow + async/await with plain discriminated unions.
+- The lifecycle (`src/lifecycle/`) stays plain async. An Effect-scope variant was measured and dropped; see `docs/lifecycle-execution-prototype.md` before reopening it.
 - The vendored `anti-slop-effect` rules run at `error` on Effect-owned modules via the `.oxlintrc.json` override. When another module adopts Effect, add its path to that override.
 - Keep acquisition/release scoped, let native work outlive interruption, and preserve original errors at the Promise boundary.
 - Historical findings in `docs/memory-leak-investigation.md` describe the old runtime; the Docker memory suites check current behavior.

@@ -160,7 +160,7 @@ http {
             if (-d /data$uri) {
                 return 503;
             }
-            # Root feed is seeded first during initial sync / resync; while it is
+            # Root feed is seeded first during the initial sync (a resync never removes it); while it is
             # absent nothing is built yet — everything is "initializing" (503).
             if (!-f /data/feed.xml) {
                 return 503;

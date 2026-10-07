@@ -1,5 +1,5 @@
 import { ok, err, type Result } from "neverthrow";
-import { join, basename, relative } from "node:path";
+import { join, basename, relative, dirname } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { MIME_TYPES } from "../../types.ts";
 import { getHandlerFactory } from "../../formats/index.ts";
@@ -120,7 +120,7 @@ export const bookSync = async (event: EventType, deps: HandlerDeps): Promise<Res
 
     deps.logger.info("BookSync", "Done", { path: relativePath, has_cover: hasCover });
 
-    return ok([]);
+    return ok([{ _tag: "FolderMetaSyncRequested", path: dirname(bookDataDir) }] as const);
   } catch (error) {
     return err(error instanceof Error ? error : new Error(String(error)));
   }

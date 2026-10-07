@@ -132,6 +132,28 @@ describe("Processing Handlers", () => {
     });
   });
 
+  describe("stale deletes", () => {
+    const existing = (path: string): HandlerDeps => ({ ...asyncDeps, fs: { ...asyncDeps.fs, exists: async (p) => p === path } });
+
+    test("bookCleanup keeps the entry when the book exists in the books directory", async () => {
+      // #given the book is back in /books by the time the delete runs
+      const deps = existing("/test/books/Fiction/Book.epub");
+      // #when
+      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "Book.epub"), deps);
+      // #then
+      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+    });
+
+    test("folderCleanup keeps the data when the folder exists in the books directory", async () => {
+      // #given
+      const deps = existing("/test/books/Fiction/Author");
+      // #when
+      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), deps);
+      // #then
+      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+    });
+  });
+
   describe("folderSync", () => {
     test("creates data directory for new folder", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
@@ -169,12 +191,13 @@ describe("Processing Handlers", () => {
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data" });
     });
 
-    test("returns cascade event to generate folder feed.xml", async () => {
+    test("returns cascade events to generate the folder feed.xml and list the folder in its parent", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
-      const cascades = result._unsafeUnwrap();
-      expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
+      expect(result._unsafeUnwrap()).toEqual([
+        { _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" },
+        { _tag: "FolderMetaSyncRequested", path: "/test/data" },
+      ]);
     });
   });
 
@@ -208,10 +231,10 @@ describe("Processing Handlers", () => {
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
 
-    test("returns empty cascades for top-level folder deletion", async () => {
+    test("returns a root refresh for top-level folder deletion, so the root feed drops the folder", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toHaveLength(0);
+      expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
     });
   });
 });
