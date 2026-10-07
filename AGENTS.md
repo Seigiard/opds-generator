@@ -173,7 +173,7 @@ Read `docs/agents/reader.md` first.
 - If cancelled before publication, the existing `entry.xml` stays untouched (images may already be refreshed). Once entry/link publication starts, finish both writes so an entry never lacks its download link.
 - `valibot` validates watcher events, parsed XML values, and reader event details at input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract.
 - Build feed objects with `opds-ts/v1.2` (`Entry`, `Feed`); see `src/utils/opds.ts`.
-- Format dependencies: EPUB/FBZ need `unzip`, PDF `poppler-utils`, DJVU `djvulibre`, comics `node-7z` + `unrar-js`. They exist in the Docker image only.
+- Format dependencies: EPUB/FBZ need `unzip`, PDF `poppler-utils`, DJVU `djvulibre`, comics `7zip` (`7zz`) and `tar`; RAR uses the bundled `node-unrar-js` WASM. The system tools exist in the Docker image only.
 
 </important>
 

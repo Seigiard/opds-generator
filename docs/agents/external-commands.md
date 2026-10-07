@@ -5,7 +5,7 @@ Code: `src/utils/process.ts`.
 ## Command execution
 
 - `src/utils/process.ts` owns command execution through Effect 4 scopes. Native extractors yield the Effect operations directly: `runCommand`, `runCommandText` (fail with `CommandFailed`), and `useTemporaryDirectory` (fails with `TemporaryDirectoryFailed`).
-- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy archive callers (#40). They take a `signal` and reject with the original cause. `runOwned(effect, signal)` runs an Effect for a legacy Promise caller and rejects with the abort reason after release. Remove them with their last caller.
+- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers (#40). No `src/` module calls them any more; the leak probe and the process and queue-consumer tests still do. They take a `signal` and reject with the original cause. `runOwned(effect, signal)` runs an Effect for a legacy Promise caller and rejects with the abort reason after release. Remove them with their last caller.
 - Commands time out after 15 s by default (`timeout` overrides).
 - Timeout or cancellation sends SIGTERM, waits up to 1 s, then SIGKILL and waits for exit.
 - Timeout returns empty stdout, `exitCode: -1`, `timedOut: true`. Cancellation rejects with the caller's abort reason after release.
@@ -20,8 +20,10 @@ Code: `src/utils/process.ts`.
 
 - `src/utils/archive-type.ts`: `detectArchiveType(path)` reads magic bytes as an Effect. Unreadable or unknown input is `null`; the handle closes on every path.
 - `src/utils/zip.ts`: `listZipEntries`, `readZipEntry` run `zipinfo` / `unzip` through `runCommand`. Non-ZIP input, a missing entry, empty output, a nonzero exit, a timeout, or `CommandFailed` yield `[]` / `null`. Recovery uses `Effect.catchTag`, so interruption stays interruption.
-- `src/utils/archive.ts`: `listArchiveEntries`, `readArchiveEntry`, `readArchiveEntryText` are the Effect dispatch for every archive type a format accepts. Formats read archives through them, never through `zip.ts` alone, so a book keeps every previously supported container (an EPUB packed as TAR still extracts). ZIP runs natively. RAR, 7z and TAR cross `legacyVariant`, a temporary `ownedPromise` bridge to their Promise helpers; delete it when those variants move (#46).
-- The Promise `listEntries` / `readEntry` / `readEntryText` in the same file run that dispatch through `runOwned` for legacy comic callers. Remove them with their last caller (#47).
+- `src/utils/archive.ts`: `listArchiveEntries`, `readArchiveEntry`, `readArchiveEntryText` are the Effect dispatch for every archive type a format accepts. Formats read archives through them, never through `zip.ts` alone, so a book keeps every previously supported container (an EPUB packed as TAR still extracts). ZIP and TAR listings drop directory entries; 7z and RAR listings keep them.
+  - 7z (`7zz`) and TAR (`tar`) run through `runCommand` with the same recovery as ZIP: `[]` / `null` on a failure, timeout or empty output; interruption stays interruption.
+  - RAR runs node-unrar-js WASM inside `useTemporaryDirectory`. Extraction and the read of the extracted file cross uninterruptibly, so the directory is removed only after both finish. node-unrar-js routes every extractor through one shared WASM instance, so RAR work runs under a one-permit semaphore; overlapping extractions otherwise write into each other's directories.
+- The Promise `listEntries` / `readEntry` in the same file run that dispatch through `runOwned` for the leak probe's `list-entries` / `read-entry` scenarios. Remove them with their last caller (#47).
 
 ## Effect scope
 

@@ -69,8 +69,8 @@ Reading: under matched conditions the native and baseline DJVU paths give overla
 
 Stopping (`test/integration/processing/djvu-stop.test.ts`):
 
-- Cover command: from abort to processor stop, 0.4 to 4.0 ms over six full-suite runs. The `ddjvu` child exits, its page directory is removed, the previous `entry.xml` stays, and no download link or cover is created.
-- Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 33 to 57 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
+- Cover command: from abort to processor stop, 0.4 to 4.0 ms over seven full-suite runs. The `ddjvu` child exits, its page directory is removed, the previous `entry.xml` stays, and no download link or cover is created.
+- Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 33 to 70 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
 - Metadata commands: interruption ends both `djvused` children before the extraction ends, as interruption and not as `ExtractionFailed`.
 - Calibration: each scenario fails when its ownership is removed. Without `Effect.uninterruptible` on the sharp call, the processor stops before release and sharp finds no TIFF. With the `djvused` commands behind an abandoned Promise, both children stay alive. With the cover command uninterruptible, the processor is still running after 5 s and the child is alive.
 
@@ -88,3 +88,18 @@ Objects per operation: `list-entries` and `read-entry` 0.083 to 0.087 before, 0.
 
 - EPUB ZIP stop (`test/integration/processing/epub-zip-stop.test.ts`, `--rerun-each=20`): 0.6 to 1.2 ms, one run 4.7 ms. The `unzip` child exits, its output directory is removed, the previous `entry.xml` stays, and no download link is created.
 - Calibration: reading the entry through a Promise bridge without the fiber's interruption fails the test with `childAlive: true` and `outputDirectoryExists: true`.
+
+## Comics, RAR, 7z and TAR (#46)
+
+Host: macOS Docker Desktop, 2026-10-08, with other worktrees running Docker work. The new probes `archive-rar`, `archive-7z` and `archive-tar` list the sample comic and read its last page through the Effect dispatch in each operation; their limit is the plain 8 KB per operation. Base and branch runs alternated three rounds; the base copy (206eece) ran the same probe file over its legacy bridge.
+
+| Probe       | Base (206eece), slope per run | #46, slope per run                  |
+| ----------- | ----------------------------- | ----------------------------------- |
+| archive-rar | -15.01, 4.09, 8.45            | 5.91, 7.29, 3.20, -18.76, 4.26      |
+| archive-7z  | -3.03, -12.03, -4.52          | -1.48, -9.54, -1.16, -34.21, -20.83 |
+| archive-tar | 2.07, 5.59, 2.46              | 2.65, 5.58, 8.38, 2.86, 4.20        |
+
+Objects per operation: 0.003 to 0.090 on both sides. Each side has one run at or above 8: base `archive-rar` 8.45, #46 `archive-tar` 8.38. The other runs overlap, so neither is evidence of retention; under host load these probes sit close to their limit.
+
+- Comic stops (`test/integration/processing/comic-archive-stop.test.ts`): TAR 1.1 to 2.0 ms and 7z 1.1 to 2.2 ms, with both optional-metadata reads killed and their outputs removed. The RAR stop waits for the held read of the extracted cover (about 100 ms, the test's hold), then removes the temporary directory. The previous `entry.xml` stays and no download link is created.
+- Calibration: a shell read through a Promise bridge without the fiber's interruption, and a CoMet read detached from the extraction fiber, fail the shell cases with `childrenAlive: true`. An interruptible read of the extracted RAR file fails the RAR cases.

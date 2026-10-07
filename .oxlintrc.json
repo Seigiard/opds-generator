@@ -194,6 +194,7 @@
         "src/formats/pdf.ts",
         "src/formats/djvu.ts",
         "src/formats/epub.ts",
+        "src/formats/comic.ts",
         "src/utils/zip.ts",
         "src/utils/archive-type.ts",
         "src/utils/archive.ts",
