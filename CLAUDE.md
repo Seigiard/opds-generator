@@ -16,6 +16,7 @@ src/
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext()
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
+├── lifecycle/       # Sync lifecycle: transition.ts (pure rules), lifecycle.ts (executes them), disk-scanner.ts
 ├── processing/      # Event handling (neverthrow + async/await)
 │   ├── types.ts     # RawBooksEvent, EventType
 │   ├── catalogue-processor.ts # Owns queue, fixed handler registry, consumer loop, pending/active, busy/empty edges
@@ -138,6 +139,16 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 - foliate-js and its pdf.js run attacker-supplied book content. Bump the submodule on upstream security advisories. Follow `ui/vendor/VENDOR.md`. `test/unit/reader/vendor-posture.test.ts` pins the iframe sandbox and `isEvalSupported: false`; a change there needs a security re-review.
 - The playground serves no CSP. Run the AE3/AE6 security checks against the Docker dev server, per `ui/reader/SMOKE.md`.
 - The Docker image ships committed `static/` only; the container never needs the submodule.
+
+</important>
+
+<important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
+
+- `transition(state, input)` in `src/lifecycle/transition.ts` is pure and owns every rule. Phases: `scanning`, `accepting` (no scan, processor busy), `settled` (no scan, processor empty), `stopping`. Inputs: scan requested/finished, processor busy/empty edges, reconcile tick, shutdown. It returns the next state plus effects (`start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`).
+- `createLifecycle` in `lifecycle.ts` runs the effects with plain async. It takes a `CatalogueScanner`, the processor, and a `Clock`, owns the consumer, scan tasks and reconcile timer, and logs a `Lifecycle` entry (from, to, input) per transition. `server.ts` only wires HTTP to it.
+- Reconciliation starts only when `settled`. A scan request during `scanning` sets one coalesced follow-up (force flags OR'd); the HTTP layer still answers 409 until the resync-in-place change lands.
+- `disk-scanner.ts` is the real scanner. nginx learns "initializing" from the files, not from Bun: the seed `feed.xml` it writes ends the 503s.
+- Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it; `test/e2e/nginx.test.ts` pins that.
 
 </important>
 

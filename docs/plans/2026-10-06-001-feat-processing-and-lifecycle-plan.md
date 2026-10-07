@@ -28,7 +28,7 @@ Review base: b204f0b57ef62e1b96fbad59c7613c458653970c
 - [x] P4 · #21 refresh a parent only when the child summary changed
       Done: `folderMetaSync` writes `_entry.xml` and returns the parent refresh only on a content
       change (timestamp-insensitive if `opds-ts` embeds one); #21 acceptance checks 1–2 pass.
-- [ ] P5 · #15 pure lifecycle transition and module
+- [x] P5 · #15 pure lifecycle transition and module
       Done: pure `transition(state, input)` + lifecycle module (scanner and clock injected) replace
       `isReady`/`isSyncing` and the detached tasks in `src/server.ts`; `Lifecycle` log entry per
       transition; internal `GET /status` on Bun (not proxied); reconciliation only when Settled

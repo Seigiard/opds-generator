@@ -34,6 +34,15 @@ export interface LogContext {
   books_delete?: number;
   folders_count?: number;
 
+  // Lifecycle context
+  from?: string;
+  to?: string;
+  input?: string;
+  scan_kind?: string;
+  scan_force?: boolean;
+  follow_up?: "none" | "plain" | "forced";
+  reason?: string;
+
   // Result context
   has_cover?: boolean;
   entries_count?: number;

@@ -278,6 +278,12 @@ describe("nginx integration", () => {
 
       expect(response.status).toBe(404);
     });
+
+    test("GET /status is not proxied to the lifecycle snapshot", async () => {
+      const response = await fetch(`${BASE_URL}/status`);
+
+      expect(response.status).toBe(404);
+    });
   });
 
   describe("initial sync", () => {
