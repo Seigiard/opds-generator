@@ -1,5 +1,8 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from "bun:test";
 import * as v from "valibot";
+
+// Tests poll for events up to 20 s, so bun's 5 s default would cut them off.
+setDefaultTimeout(40000);
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
@@ -70,9 +73,38 @@ async function getLogsSince(since: string): Promise<LogEntry[]> {
     .filter((e): e is LogEntry => e !== null);
 }
 
-// Helper: wait for events to be processed
-async function waitForProcessing(ms: number = 2000): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Helper: poll the container logs until the predicate holds, so assertions wait on the
+// events themselves instead of a fixed window that the inotify fan-out can outrun.
+async function waitForLogs(since: string, predicate: (logs: LogEntry[]) => boolean, timeoutMs: number = 20000): Promise<LogEntry[]> {
+  const deadline = Date.now() + timeoutMs;
+  let logs = await getLogsSince(since);
+
+  while (!predicate(logs) && Date.now() < deadline) {
+    await sleep(500);
+    logs = await getLogsSince(since);
+  }
+
+  return logs;
+}
+
+// Helper: poll a URL until it returns the wanted availability
+async function waitForUrl(relativePath: string, wanted: boolean, timeoutMs: number = 20000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if ((await dataExists(relativePath)) === wanted) return true;
+
+    await sleep(500);
+  }
+
+  return (await dataExists(relativePath)) === wanted;
+}
+
+// Helper: has the handler for this event finished
+function hasCompleted(logs: LogEntry[], eventTag: string, pathContains: string): boolean {
+  return findHandlerEvents(logs, eventTag, pathContains).some((e) => e.event_type === "handler_complete");
 }
 
 // Helper: check if file exists in /data
@@ -123,9 +155,8 @@ describe("Event Logging E2E", () => {
       await execInContainer(
         `rm -rf ${BOOKS_DIR}/${TEST_FOLDER} ${BOOKS_DIR}/${TEST_FOLDER}-copy ${BOOKS_DIR}/${TEST_FOLDER}-duplicate ${BOOKS_DIR}/test-events-book1.pdf ${BOOKS_DIR}/test-events-book3.pdf`,
       );
-      // Wait for initial sync AND cleanup events to be processed
-      // The consumer may still be processing initial sync events when container becomes healthy
-      await waitForProcessing(10000);
+      // The processor may still be draining initial sync events when the container becomes healthy
+      await sleep(10000);
     },
     { timeout: 15000 },
   );
@@ -141,26 +172,19 @@ describe("Event Logging E2E", () => {
     test("create folder triggers FolderCreated event", async () => {
       const before = getDockerTimestamp();
 
-      // Create test folder inside container
       await execInContainer(`mkdir -p ${BOOKS_DIR}/${TEST_FOLDER}`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", TEST_FOLDER));
 
-      // Should have FolderCreated event
-      const folderCreatedLogs = findEvents(logs, "FolderCreated", TEST_FOLDER);
-      expect(folderCreatedLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "FolderCreated", TEST_FOLDER).length).toBeGreaterThan(0);
 
-      // Should have handler_start and handler_complete for FolderCreated
       const handlerLogs = findHandlerEvents(logs, "FolderCreated", TEST_FOLDER);
       expect(handlerLogs.some((e) => e.event_type === "handler_start")).toBe(true);
       expect(handlerLogs.some((e) => e.event_type === "handler_complete")).toBe(true);
     });
 
     test("folder data structure is created", async () => {
-      // /data/test-events/feed.xml should exist
-      const feedExists = await dataExists(`${TEST_FOLDER}/feed.xml`);
-      expect(feedExists).toBe(true);
+      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, true)).toBe(true);
     });
   });
 
@@ -168,46 +192,47 @@ describe("Event Logging E2E", () => {
     test("add book1 triggers BookCreated event", async () => {
       const before = getDockerTimestamp();
 
-      // Copy PDF to test folder inside container
       await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf"`);
-      await waitForProcessing(3000); // PDF processing takes longer
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "BookCreated", "test-events-book1.pdf"));
 
-      // Should have BookCreated event
-      const bookCreatedLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
-      expect(bookCreatedLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookCreated", "test-events-book1.pdf").length).toBeGreaterThan(0);
 
-      // Should have handler events
       const handlerLogs = findHandlerEvents(logs, "BookCreated", "test-events-book1.pdf");
       expect(handlerLogs.some((e) => e.event_type === "handler_start")).toBe(true);
       expect(handlerLogs.some((e) => e.event_type === "handler_complete")).toBe(true);
     });
 
     test("book1 data structure is created", async () => {
-      // entry.xml should exist
-      const entryExists = await dataExists(`${TEST_FOLDER}/test-events-book1.pdf/entry.xml`);
-      expect(entryExists).toBe(true);
+      expect(await waitForUrl(`${TEST_FOLDER}/test-events-book1.pdf/entry.xml`, true)).toBe(true);
     });
 
     test("add book2 triggers BookCreated event", async () => {
       const before = getDockerTimestamp();
 
-      // Copy another PDF inside container
       await execInContainer(`cp "${FIXTURE_PDF}" "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book2.pdf"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "BookCreated", "test-events-book2.pdf"));
 
-      // Should have BookCreated event
-      const bookCreatedLogs = findEvents(logs, "BookCreated", "test-events-book2.pdf");
-      expect(bookCreatedLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookCreated", "test-events-book2.pdf").length).toBeGreaterThan(0);
     });
 
-    test("feed.xml contains both books", async () => {
-      const response = await fetch(`${BASE_URL}/${TEST_FOLDER}/feed.xml`);
-      expect(response.ok).toBe(true);
-      const xml = await response.text();
+    test("feed.xml contains both books once the cascade refreshes the folder", async () => {
+      const deadline = Date.now() + 20000;
+      let xml = "";
+
+      while (Date.now() < deadline) {
+        const response = await fetch(`${BASE_URL}/${TEST_FOLDER}/feed.xml`);
+
+        if (response.ok) {
+          xml = await response.text();
+
+          if (xml.includes("test-events-book1.pdf") && xml.includes("test-events-book2.pdf")) break;
+        }
+
+        await sleep(500);
+      }
+
       expect(xml).toContain("test-events-book1.pdf");
       expect(xml).toContain("test-events-book2.pdf");
     });
@@ -217,123 +242,101 @@ describe("Event Logging E2E", () => {
     test("move book1 to root triggers BookDeleted + BookCreated", async () => {
       const before = getDockerTimestamp();
 
-      // Move book1 from test-events/ to root inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(
+        before,
+        (l) => hasCompleted(l, "BookDeleted", "test-events-book1.pdf") && hasCompleted(l, "BookCreated", "test-events-book1.pdf"),
+      );
 
-      // Should have BookDeleted from folder
-      const deletedLogs = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
-      expect(deletedLogs.length).toBeGreaterThan(0);
-
-      // Should have BookCreated in root
-      const createdLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
-      expect(createdLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookDeleted", "test-events-book1.pdf").length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookCreated", "test-events-book1.pdf").length).toBeGreaterThan(0);
     });
 
     test("rename book1 to book3 triggers BookDeleted + BookCreated", async () => {
       const before = getDockerTimestamp();
 
-      // Rename in root inside container
       await execInContainer(`mv "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(
+        before,
+        (l) => hasCompleted(l, "BookDeleted", "test-events-book1.pdf") && hasCompleted(l, "BookCreated", "test-events-book3.pdf"),
+      );
 
-      // Should have BookDeleted for book1
-      const deletedLogs = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
-      expect(deletedLogs.length).toBeGreaterThan(0);
-
-      // Should have BookCreated for book3
-      const createdLogs = findEvents(logs, "BookCreated", "test-events-book3.pdf");
-      expect(createdLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookDeleted", "test-events-book1.pdf").length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookCreated", "test-events-book3.pdf").length).toBeGreaterThan(0);
     });
 
     test("copy book3 to book1 triggers BookCreated", async () => {
+      // The adapter drops events for the same path within 500 ms of the last one, and the
+      // previous step ended with a BookDeleted for book1.
+      await sleep(1000);
+
       const before = getDockerTimestamp();
 
-      // Copy back inside container
       await execInContainer(`cp "${BOOKS_DIR}/test-events-book3.pdf" "${BOOKS_DIR}/test-events-book1.pdf"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "BookCreated", "test-events-book1.pdf"));
 
-      // Should have BookCreated for book1
-      const createdLogs = findEvents(logs, "BookCreated", "test-events-book1.pdf");
-      expect(createdLogs.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookCreated", "test-events-book1.pdf").length).toBeGreaterThan(0);
     });
 
     test("delete book1 and book3 triggers BookDeleted", async () => {
       const before = getDockerTimestamp();
 
-      // Delete both books inside container
       await execInContainer(`rm "${BOOKS_DIR}/test-events-book1.pdf" "${BOOKS_DIR}/test-events-book3.pdf"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(
+        before,
+        (l) => hasCompleted(l, "BookDeleted", "test-events-book1.pdf") && hasCompleted(l, "BookDeleted", "test-events-book3.pdf"),
+      );
 
-      // Should have BookDeleted for both
-      const deleted1 = findEvents(logs, "BookDeleted", "test-events-book1.pdf");
-      const deleted3 = findEvents(logs, "BookDeleted", "test-events-book3.pdf");
-      expect(deleted1.length).toBeGreaterThan(0);
-      expect(deleted3.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookDeleted", "test-events-book1.pdf").length).toBeGreaterThan(0);
+      expect(findEvents(logs, "BookDeleted", "test-events-book3.pdf").length).toBeGreaterThan(0);
     });
   });
 
   describe("Phase 4: Folder operations", () => {
     test(
-      "copy folder triggers FolderCreated + BookCreated for contents",
+      "copy folder triggers FolderCreated and creates the copy's feed",
       async () => {
         const before = getDockerTimestamp();
 
-        // Copy folder inside container
         await execInContainer(`cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`);
-        await waitForProcessing(5000);
 
-        const logs = await getLogsSince(before);
+        const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", `${TEST_FOLDER}-copy`));
 
-        // Should have FolderCreated
-        const folderCreated = findEvents(logs, "FolderCreated", `${TEST_FOLDER}-copy`);
-        expect(folderCreated.length).toBeGreaterThan(0);
+        expect(findEvents(logs, "FolderCreated", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
 
-        // Should have BookCreated for book2 (the only book left in folder)
-        const bookCreated = findEvents(logs, "BookCreated", "test-events-book2.pdf");
-        expect(bookCreated.length).toBeGreaterThan(0);
+        // Files copied into a brand-new folder can land before inotifywait adds its watch,
+        // so their BookCreated events are not guaranteed; the folder's feed is.
+        expect(await waitForUrl(`${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
       },
-      { timeout: 15000 },
+      { timeout: 40000 },
     );
 
     test("rename folder triggers FolderDeleted + FolderCreated", async () => {
       const before = getDockerTimestamp();
 
-      // Rename folder inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-copy" "${BOOKS_DIR}/${TEST_FOLDER}-duplicate"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(
+        before,
+        (l) => hasCompleted(l, "FolderDeleted", `${TEST_FOLDER}-copy`) && hasCompleted(l, "FolderCreated", `${TEST_FOLDER}-duplicate`),
+      );
 
-      // Should have FolderDeleted for -copy
-      const deleted = findEvents(logs, "FolderDeleted", `${TEST_FOLDER}-copy`);
-      expect(deleted.length).toBeGreaterThan(0);
-
-      // Should have FolderCreated for -duplicate
-      const created = findEvents(logs, "FolderCreated", `${TEST_FOLDER}-duplicate`);
-      expect(created.length).toBeGreaterThan(0);
+      expect(findEvents(logs, "FolderDeleted", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
+      expect(findEvents(logs, "FolderCreated", `${TEST_FOLDER}-duplicate`).length).toBeGreaterThan(0);
     });
 
     test("move folder into another triggers events", async () => {
       const before = getDockerTimestamp();
 
-      // Move -duplicate into test-events inside container
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-duplicate" "${BOOKS_DIR}/${TEST_FOLDER}/${TEST_FOLDER}-duplicate"`);
-      await waitForProcessing(3000);
 
-      const logs = await getLogsSince(before);
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", `${TEST_FOLDER}/${TEST_FOLDER}-duplicate`));
 
-      // Should have some folder events
       const folderLogs = logs.filter((e) => e.event_tag?.includes("Folder") && e.path?.includes("duplicate"));
-
       expect(folderLogs.length).toBeGreaterThan(0);
     });
   });
@@ -344,27 +347,22 @@ describe("Event Logging E2E", () => {
       async () => {
         const before = getDockerTimestamp();
 
-        // Delete entire test folder inside container
         await execInContainer(`rm -rf "${BOOKS_DIR}/${TEST_FOLDER}"`);
-        await waitForProcessing(5000);
 
-        const logs = await getLogsSince(before);
+        const logs = await waitForLogs(
+          before,
+          (l) => hasCompleted(l, "FolderDeleted", TEST_FOLDER) && l.some((e) => e.event_tag === "BookDeleted"),
+          30000,
+        );
 
-        // Should have FolderDeleted
-        const folderDeleted = findEvents(logs, "FolderDeleted", TEST_FOLDER);
-        expect(folderDeleted.length).toBeGreaterThan(0);
-
-        // Should have BookDeleted for remaining books
-        const bookDeleted = logs.filter((e) => e.event_tag === "BookDeleted");
-        expect(bookDeleted.length).toBeGreaterThan(0);
+        expect(findEvents(logs, "FolderDeleted", TEST_FOLDER).length).toBeGreaterThan(0);
+        expect(logs.filter((e) => e.event_tag === "BookDeleted").length).toBeGreaterThan(0);
       },
-      { timeout: 15000 },
+      { timeout: 40000 },
     );
 
     test("data structure is cleaned up", async () => {
-      // /data/test-events/ should not exist
-      const feedExists = await dataExists(`${TEST_FOLDER}/feed.xml`);
-      expect(feedExists).toBe(false);
+      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, false)).toBe(true);
     });
   });
 });

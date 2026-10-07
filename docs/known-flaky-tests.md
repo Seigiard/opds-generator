@@ -57,25 +57,23 @@ operations after 300 warmup operations, samples every 12, and also gates exact J
 object growth; a calibration test proves the gates go red on retained memory. Limits
 are unchanged. Details and known limits: [memory-oracle-investigation.md](memory-oracle-investigation.md).
 
-### 2. e2e — `Event Logging Phase 4: copy folder triggers FolderCreated + BookCreated`
+### 2. e2e event-logging — **FIXED 2026-10-07**
 
-**Symptom:** intermittent failure in `bun run test:e2e`.
+**Was:** intermittent failure in `bun run test:e2e`, mostly `Phase 4: copy folder`.
 
-**Cause:** inotify event-timing — the watcher occasionally races the assertion window when a folder
-copy fans out into `FolderCreated` + `BookCreated` events.
+**Causes:** the assertions slept a fixed 3-5 s after each filesystem change, so they raced
+inotify and the handler queue. Separately, the copy-folder test expected `BookCreated` for files
+inside a freshly copied folder. Those files can land before `inotifywait -r` watches the new
+folder, so the event is not guaranteed (the periodic reconcile picks them up later).
 
-**How to apply:** re-run `bun run test:e2e` before treating a single failure as a regression.
+**Fix:** `test/e2e/event-logging.test.ts` now polls the container logs and the served feeds until
+the expected handler completes (20 s ceiling), and the copy-folder test asserts only what is
+guaranteed (`FolderCreated` and the copy's `feed.xml`). It no longer assumes the removed `/data`
+watcher.
 
-**CI scope (2026-07-15):** CI runs `bun run test:e2e:routing` (only `test/e2e/nginx.test.ts` — the
-reader security/routing checks: CSP, cache, 206, `/resync` CSRF), **not** the full `test:e2e`. When
-`test:e2e` was first added to CI (PR #6) this event-logging test flaked immediately and reddened an
-otherwise-clean build, so CI was narrowed to the routing suite. `event-logging.test.ts` still runs
-in local `bun run test:all`.
-
-**Once this flake is fixed** (make the copy-fan-out assertion wait on the events deterministically
-instead of a fixed window), **widen CI back to the full suite:** point the `Run e2e tests` step in
-`.github/workflows/docker.yml` at `bun run test:e2e` again and drop `test:e2e:routing` from
-`package.json` if nothing else uses it.
+**Verified:** 10 consecutive green runs of the file against one e2e container. CI now runs the full
+`bun run test:e2e` (routing and event logging). Re-run once on a single unexplained failure, as for
+any e2e.
 
 ### Post-fix CI observation (2026-09-09) — full-chain threshold raised 1 → 3 KB/iter
 
@@ -98,6 +96,4 @@ leak drives both estimators past 3. Re-tighten if chain metrics hold above 3 on 
 
 ### Follow-up
 
-Item 1 is fixed (see the post-fix note above for the CI-noise threshold adjustment); item 2 (e2e
-event-logging inotify race) remains open — the re-run rule still applies to it, and CI stays
-narrowed to `test:e2e:routing` until it is de-flaked.
+Items 1 and 2 are fixed; see the notes above for the CI-noise threshold adjustment on item 1.

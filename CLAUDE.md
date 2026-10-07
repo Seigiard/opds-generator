@@ -78,8 +78,8 @@ The app and tests run in Docker. Do not run the app with bun on the host. Shut c
 | `bun run test`                                                            | Unit + integration tests in Docker                                               |
 | `bun run test:unit` / `test:integration` / `test:coverage`                | Subsets / coverage, in Docker                                                    |
 | `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                                |
-| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose)                         |
-| `bun run test:e2e:routing`                                                | Routing e2e only (what CI runs)                                                  |
+| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)           |
+| `bun run test:e2e:routing`                                                | Routing e2e only                                                                 |
 | `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                   |
 | `npx knip`                                                                | Unused exports/deps (`knip.json`)                                                |
 | `bun run build:ui`                                                        | Regenerate `static/` (style.css, main.js, reader.js, read.html, foliate-<hash>/) |
@@ -103,7 +103,7 @@ Run, and fix until clean:
 5. `bun run build:ui` if you touched `ui/` or `src/render`, and commit the regenerated `static/`
 6. `bun run render:golden` if you touched `src/render` markup, and commit the regenerated `test/golden/*.html`
 
-CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus routing e2e only. The event-logging e2e is known-flaky and stays local in `test:all`.
+CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus the full e2e (`test:e2e`: nginx routing and event logging).
 
 </important>
 
@@ -174,7 +174,8 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 - Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
 - Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.
 - Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/server.ts`).
-- Only `/books` is watched. Folder refreshes travel as cascades: `bookSync`, `bookCleanup`, `folderCleanup` and `folderSync` return a refresh of their folder or parent, and `folderMetaSync` returns a refresh of its parent until the root (ADR 0002). A handler that writes or removes `entry.xml`/`_entry.xml` must return the refresh itself; nothing observes `/data`.
+- Cascades are the only propagation. Only `/books` is watched; the processor never writes there, so a handler write cannot feed the watcher back. Keep it that way, and check the `--exclude` in `src/watcher.sh` if you ever write under `/books`. Folder refreshes travel as cascades: `bookSync`, `bookCleanup`, `folderCleanup` and `folderSync` return a refresh of their folder or parent, and `folderMetaSync` returns a refresh of its parent until the root (ADR 0002). A handler that writes or removes `entry.xml`/`_entry.xml` must return the refresh itself; nothing observes `/data`.
+- `busy` fires when work enters an idle processor and `empty` when the last pending event (cascades included) finishes. Periodic reconciliation reads `status()` and skips while work is pending. The processor never forces GC per event; the periodic memory snapshot logs at `debug` level.
 - An `index.html` render failure is logged and must not block `feed.xml`.
 
 </important>

@@ -51,12 +51,11 @@ let eventCounter = 0;
 
 function logMemorySnapshot(): void {
   eventCounter++;
-  Bun.gc(true);
 
   if (eventCounter % 50 === 0) {
     const mem = process.memoryUsage();
     const jsc = heapStats();
-    log.info("Consumer", "Memory snapshot", {
+    log.debug("Consumer", "Memory snapshot", {
       event_type: "handler_complete",
       events_processed: eventCounter,
       heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
@@ -211,8 +210,6 @@ export function createCatalogueProcessor({ deps, handlers }: CatalogueProcessorO
       // Cascades are already pending here, so the active slot clears into a non-empty state.
       settle();
       logMemorySnapshot();
-
-      if (eventCounter % 100 === 0) Bun.gc(true);
     }
   };
 
