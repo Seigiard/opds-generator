@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, beforeEach, afterAll, spyOn } from "bun:test";
 import { bookSyncEffect } from "../../../../src/processing/handlers/book-sync-effect.ts";
 import { runAsPromiseHandler, type TestHandlerDeps } from "../../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
@@ -323,6 +323,153 @@ describe("bookSync handler", () => {
       cover: false,
       link: join(FILES_DIR, "My_Broken_Novel.epub"),
     });
+  });
+
+  test.each(["Test Book - Test Author.mobi", "Test Book - Test Author.azw3"])(
+    "publishes %s with metadata, embedded cover, thumbnail, download link and a folder refresh",
+    async (name) => {
+      // #given a known source book
+      const bookPath = join(FILES_DIR, name);
+      await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, name)));
+
+      // #when
+      const result = await bookSync(bookCreatedEvent(name), deps);
+
+      // #then
+      const bookDir = join(DATA_DIR, name);
+      const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+      const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
+      expect({
+        cascade: result._unsafeUnwrap(),
+        title: entry.includes("<title>Test Book</title>"),
+        author: entry.includes("<name>Test Author</name>"),
+        cover: entry.includes('rel="http://opds-spec.org/image"'),
+        thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+        link: await readlink(join(bookDir, name)),
+        thumbFormat: thumb.format,
+      }).toEqual({
+        cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+        title: true,
+        author: true,
+        cover: true,
+        thumbnail: true,
+        link: bookPath,
+        thumbFormat: "jpeg",
+      });
+      await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+    },
+  );
+
+  test("publishes a TXT book under its filename title without a cover", async () => {
+    // #given
+    const name = "My_Plain_Notes.txt";
+    const bookPath = join(FILES_DIR, name);
+    await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, "sample_text.txt")));
+
+    // #when
+    const result = await bookSync(bookCreatedEvent(name), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>My Plain Notes</title>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      link: await readlink(join(bookDir, name)),
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      cover: false,
+      link: bookPath,
+    });
+  });
+
+  test("uses the filename title when a MOBI header is unreadable", async () => {
+    // #given a file that is not a PalmDB book
+    await Bun.write(join(FILES_DIR, "Broken_Kindle_Book.azw3"), "not a mobi");
+
+    // #when
+    await bookSync(bookCreatedEvent("Broken_Kindle_Book.azw3"), deps);
+
+    // #then
+    const entry = await readFile(join(DATA_DIR, "Broken_Kindle_Book.azw3", "entry.xml"), "utf-8");
+    expect(entry.includes("<title>Broken Kindle Book</title>")).toBe(true);
+  });
+
+  /** Holds `Bun.file(path)[method]()` until `release()`, so a stop can arrive while the read is running. */
+  function holdBookRead(path: string, method: "arrayBuffer" | "exists") {
+    const originalFile = Bun.file.bind(Bun);
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
+
+    // SAFETY: the mock takes the string-path overload the extractors call and returns the real BunFile for it.
+    const fileSpy = spyOn(Bun, "file").mockImplementation(((target: string, options?: BlobPropertyBag) => {
+      const file = originalFile(target, options);
+
+      if (target !== path) return file;
+
+      if (method === "exists") {
+        const exists = file.exists.bind(file);
+        file.exists = () => {
+          markStarted();
+
+          return gate.then(exists);
+        };
+      } else {
+        const arrayBuffer = file.arrayBuffer.bind(file);
+        file.arrayBuffer = () => {
+          markStarted();
+
+          return gate.then(arrayBuffer);
+        };
+      }
+
+      return file;
+    }) as typeof Bun.file);
+
+    return { started, release: () => release(), restore: () => fileSpy.mockRestore() };
+  }
+
+  test.each([
+    { name: "Held.mobi", source: "Test Book - Test Author.mobi", method: "arrayBuffer" as const },
+    { name: "Held.txt", source: "sample_text.txt", method: "exists" as const },
+  ])("a stop during the $name read waits for the read and publishes nothing", async ({ name, source, method }) => {
+    // #given a book with a previous entry whose source read is running
+    const bookPath = join(FILES_DIR, name);
+    const bookDir = join(DATA_DIR, name);
+    await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, source)));
+    await mkdir(bookDir);
+    await Bun.write(join(bookDir, "entry.xml"), "previous entry");
+    const held = holdBookRead(bookPath, method);
+    const controller = new AbortController();
+    const reason = new Error("shutdown");
+    const stoppableDeps: TestHandlerDeps = { ...deps, signal: controller.signal };
+
+    try {
+      const result = bookSync(bookCreatedEvent(name), stoppableDeps);
+      await held.started;
+
+      // #when the stop arrives mid-read
+      controller.abort(reason);
+      const beforeRelease = await Promise.race([result.then(() => "settled"), Bun.sleep(100).then(() => "waiting")]);
+      held.release();
+      const outcome = await result;
+
+      // #then the handler waited for the read, ended as stopped, and left the previous entry without a link
+      expect({
+        beforeRelease,
+        error: outcome._unsafeUnwrapErr(),
+        entry: await Bun.file(join(bookDir, "entry.xml")).text(),
+        linkExists: await lstat(join(bookDir, name)).then(
+          () => true,
+          () => false,
+        ),
+      }).toEqual({ beforeRelease: "waiting", error: reason, entry: "previous entry", linkExists: false });
+    } finally {
+      held.release();
+      held.restore();
+    }
   });
 
   const PDF_INFO = `Title:          Cover Failure Metadata

@@ -195,6 +195,8 @@
         "src/formats/epub.ts",
         "src/utils/zip.ts",
         "src/utils/archive-type.ts",
+        "src/formats/mobi.ts",
+        "src/formats/txt.ts",
         "src/formats/legacy-adapter.ts",
         "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",
