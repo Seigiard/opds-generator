@@ -48,6 +48,7 @@ export const folderSyncEffect = Effect.fn("folderSync")(function* (event: EventT
 
   const discovered = yield* Effect.interruptible(discoverContents(folderPath, folderDataDir));
 
+  // folderMetaSync rewrites this _entry.xml unchanged for an empty folder and would not refresh the parent.
   return [
     CatalogueEvent.FolderMetaSyncRequested({ path: folderDataDir }),
     CatalogueEvent.FolderMetaSyncRequested({ path: dirname(folderDataDir) }),
@@ -57,6 +58,7 @@ export const folderSyncEffect = Effect.fn("folderSync")(function* (event: EventT
 
 const discoverContents = Effect.fnUntraced(function* (folderPath: string, folderDataDir: string) {
   const fs = yield* EffectFileSystem;
+  // inotifywait adds its watch to a new folder only after the create event, so anything copied in meanwhile raises no event.
   const names = yield* fs.readdir(folderPath).pipe(Effect.mapError((cause) => new FolderSyncFailed(failure(folderPath, cause))));
   const found: EventType[] = [];
 
@@ -77,6 +79,7 @@ const discoverContents = Effect.fnUntraced(function* (folderPath: string, folder
       .exists(join(folderDataDir, name, ENTRY_FILE))
       .pipe(Effect.mapError((cause) => new FolderSyncFailed(failure(join(folderDataDir, name), cause))));
 
+    // A book that got its own event is already processed or queued; skip it instead of extracting twice.
     if (BOOK_EXTENSIONS.includes(ext) && !entryExists) found.push(CatalogueEvent.BookCreated({ parent: folderPath, name }));
   }
 

@@ -14,7 +14,7 @@ class FolderCleanupSourceProbeFailed extends Data.TaggedError("FolderCleanupSour
 
 class FolderCleanupRemoveFailed extends Data.TaggedError("FolderCleanupRemoveFailed")<FailureProps> {}
 
-/** Issue #36: Effect port of `folderCleanup`. Only a missing data dir is a recovered removal error. */
+/** Only a missing data dir is a recovered removal error. */
 export const folderCleanupEffect = Effect.fn("folderCleanup")(function* (event: EventType) {
   if (!Predicate.isTagged(event, "FolderDeleted")) return [];
 
@@ -24,6 +24,7 @@ export const folderCleanupEffect = Effect.fn("folderCleanup")(function* (event: 
   const relativePath = relative(config.filesPath, folderPath);
   const folderDataDir = join(config.dataPath, relativePath);
 
+  // A delete event can be stale: the source may have come back since it was queued.
   const sourceExists = yield* fs
     .exists(folderPath)
     .pipe(Effect.mapError((cause) => new FolderCleanupSourceProbeFailed(failure(folderPath, cause))));

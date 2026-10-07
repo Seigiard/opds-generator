@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, neverthrow event pipeline migrating to Effect 4 (ADR 0003), Effect 4 for command ownership, nginx in front, everything runs in Docker.
+OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, Effect 4 event pipeline (ADR 0003), Effect 4 for command ownership, nginx in front, everything runs in Docker.
 
 `AGENTS.md` is the single source of truth for project context (`CLAUDE.md` is a symlink to it). Update it in the same change when you alter architecture, dependencies, commands, gotchas, or project structure. Deep topics live in `docs/agents/`; update the matching file there too.
 
@@ -186,7 +186,7 @@ Read `docs/agents/reader.md` first.
 
 <important if="a memory or RSS test fails, or you are touching the memory gates">
 
-Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per queue or consumer event) plus JS-object growth below 0.5 per operation (per event for the batched queue and consumer scenarios). `memory-oracle-calibration.test.ts` proves both go red on retained memory. Keep the limits fixed: a red run is a finding, not a threshold to raise. The handler-chain RSS gate is weak at its limit.
+Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per consumer event) plus JS-object growth below 0.5 per operation (per event for the batched consumer scenario). `memory-oracle-calibration.test.ts` proves both go red on retained memory. Keep the limits fixed: a red run is a finding, not a threshold to raise. The handler-chain RSS gate is weak at its limit.
 
 </important>
 

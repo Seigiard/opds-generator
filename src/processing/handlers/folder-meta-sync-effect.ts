@@ -219,6 +219,7 @@ const sortByAuthorTitle = (a: EntryWithTitle, b: EntryWithTitle): number => {
   return titleCmp !== 0 ? titleCmp : naturalSort(a.dirName, b.dirName);
 };
 
+// opds-ts stamps every Entry with a fresh <updated>, so raw output never equals the previous file.
 const withoutTimestamp = (entryXml: string): string => entryXml.replace(/<updated>[^<]*<\/updated>/, "");
 
 function failure(path: string, cause: unknown): FailureProps {

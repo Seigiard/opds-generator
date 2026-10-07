@@ -28,7 +28,7 @@ class ExtractionFailed extends Data.TaggedError("ExtractionFailed")<FailureProps
 const NO_METADATA = { meta: { title: "" }, hasCover: false };
 
 /**
- * The Effect 4 variant of `bookSync` (issue #25). Shutdown may interrupt only the preparation:
+ * `bookSync` shutdown may interrupt only the preparation:
  * every Promise boundary in it is owned, so an interrupted book waits for its extraction to settle
  * and leaves the previous `entry.xml` untouched. Publication runs in the uninterruptible handler
  * context, so both writes always finish.

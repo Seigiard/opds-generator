@@ -14,7 +14,7 @@ class BookCleanupSourceProbeFailed extends Data.TaggedError("BookCleanupSourcePr
 
 class BookCleanupRemoveFailed extends Data.TaggedError("BookCleanupRemoveFailed")<FailureProps> {}
 
-/** Issue #36: Effect port of `bookCleanup`. Only a missing data dir is a recovered removal error. */
+/** Only a missing data dir is a recovered removal error. */
 export const bookCleanupEffect = Effect.fn("bookCleanup")(function* (event: EventType) {
   if (!Predicate.isTagged(event, "BookDeleted")) return [];
 
@@ -24,6 +24,7 @@ export const bookCleanupEffect = Effect.fn("bookCleanup")(function* (event: Even
   const relativePath = relative(config.filesPath, filePath);
   const bookDataDir = join(config.dataPath, relativePath);
 
+  // A delete event can be stale: the source may have come back since it was queued.
   const sourceExists = yield* fs
     .exists(filePath)
     .pipe(Effect.mapError((cause) => new BookCleanupSourceProbeFailed(failure(filePath, cause))));
