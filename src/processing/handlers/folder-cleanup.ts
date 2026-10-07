@@ -25,11 +25,8 @@ export const folderCleanup = async (event: EventType, deps: HandlerDeps): Promis
   }
 
   deps.logger.info("FolderCleanup", "Done", { path: relativePath });
-  const parentDataDir = dirname(folderDataDir);
 
-  if (parentDataDir !== deps.config.dataPath && parentDataDir !== ".") {
-    return ok([{ _tag: "FolderMetaSyncRequested", path: parentDataDir }] as const);
-  }
+  if (relativePath === "") return ok([]);
 
-  return ok([]);
+  return ok([{ _tag: "FolderMetaSyncRequested", path: dirname(folderDataDir) }] as const);
 };

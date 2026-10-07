@@ -5,17 +5,14 @@ import { FEED_FILE } from "./constants.ts";
 import { buildFeedModel } from "./render/feed-model.ts";
 import { renderXml } from "./render/feed-xml.ts";
 import { log } from "./logging/index.ts";
-import { isRawBooksEvent, isRawDataEvent } from "./processing/types.ts";
+import { isRawBooksEvent } from "./processing/types.ts";
 import { adaptBooksEvent } from "./processing/adapters/books-adapter.ts";
-import { adaptDataEvent } from "./processing/adapters/data-adapter.ts";
 import { adaptSyncPlan } from "./processing/adapters/sync-plan-adapter.ts";
 import { createCatalogueProcessor, type CatalogueProcessor } from "./processing/catalogue-processor.ts";
 import { bookSync } from "./processing/handlers/book-sync.ts";
 import { bookCleanup } from "./processing/handlers/book-cleanup.ts";
 import { folderSync } from "./processing/handlers/folder-sync.ts";
 import { folderCleanup } from "./processing/handlers/folder-cleanup.ts";
-import { parentMetaSync } from "./processing/handlers/parent-meta-sync.ts";
-import { folderEntryXmlChanged } from "./processing/handlers/folder-entry-xml-changed.ts";
 import { folderMetaSync } from "./processing/handlers/folder-meta-sync.ts";
 import { buildContext } from "./context.ts";
 import { scanFiles, createSyncPlan, removeLegacyHeapSnapshots } from "./scanner.ts";
@@ -165,8 +162,6 @@ async function main(): Promise<void> {
         BookDeleted: bookCleanup,
         FolderCreated: folderSync,
         FolderDeleted: folderCleanup,
-        EntryXmlChanged: parentMetaSync,
-        FolderEntryXmlChanged: folderEntryXmlChanged,
         FolderMetaSyncRequested: folderMetaSync,
       },
     });
@@ -201,31 +196,6 @@ async function main(): Promise<void> {
             return new Response("OK", { status: 202 });
           } catch (error) {
             log.error("Server", "Failed to process books event", error);
-
-            return new Response("Error", { status: 500 });
-          }
-        }
-
-        if (req.method === "POST" && url.pathname === "/events/data") {
-          if (!isReady) return new Response("Queue not ready", { status: 503 });
-
-          try {
-            const body = await req.json();
-
-            if (!isRawDataEvent(body)) {
-              log.warn("Server", "Invalid data event schema", { body });
-
-              return new Response("Invalid event", { status: 400 });
-            }
-
-            const event = adaptDataEvent(body, ctx.dedup);
-
-            if (event === null) return new Response("Deduplicated", { status: 202 });
-            processor.submit(event);
-
-            return new Response("OK", { status: 202 });
-          } catch (error) {
-            log.error("Server", "Failed to process data event", error);
 
             return new Response("Error", { status: 500 });
           }

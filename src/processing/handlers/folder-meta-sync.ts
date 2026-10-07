@@ -1,5 +1,5 @@
 import { ok, err, type Result } from "neverthrow";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { Entry } from "opds-ts/v1.2";
 import { stripXmlDeclaration, naturalSort, extractTitle, extractAuthor } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
@@ -188,6 +188,9 @@ async function generateFeed(deps: HandlerDeps, normalizedDir: string, relativePa
       await deps.fs.atomicWrite(entryOutputPath, entryXml);
       deps.logger.debug("FolderMetaSync", "Updated _entry.xml count", { path: relativePath });
     }
+
+    // Every refresh walks up to the root, so a change below is never left out of an ancestor's counts.
+    if (relativePath !== "") return ok([{ _tag: "FolderMetaSyncRequested", path: dirname(normalizedDir) }] as const);
 
     return ok([]);
   } catch (error) {

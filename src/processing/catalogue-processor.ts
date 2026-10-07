@@ -44,8 +44,6 @@ export function getEventPath(event: EventType): string | undefined {
 
   if ("parent" in event && "name" in event) return join(event.parent, event.name);
 
-  if ("parent" in event) return event.parent;
-
   return undefined;
 }
 

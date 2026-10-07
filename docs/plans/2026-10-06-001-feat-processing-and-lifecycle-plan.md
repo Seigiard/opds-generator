@@ -16,7 +16,7 @@ Review base: b204f0b57ef62e1b96fbad59c7613c458653970c
       accounting, busy/empty edges and a status snapshot; `AppContext` exposes no `queue`/`handlers`;
       `register` removed; ordering tests unchanged and green; unit tests for edges (no false
       "empty" between cascade and active end, no edges after shutdown).
-- [ ] P2 · #20 cascades replace the data watcher (ADR 0002)
+- [x] P2 · #20 cascades replace the data watcher (ADR 0002)
       Done: `bookSync` returns its folder refresh, `folderMetaSync` returns its parent refresh;
       `EntryXmlChanged`, `FolderEntryXmlChanged`, `parentMetaSync`, `folderEntryXmlChanged`,
       `data-adapter.ts`, `POST /events/data`, the `/data` inotifywait and their tests are gone;

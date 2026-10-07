@@ -208,10 +208,10 @@ describe("Processing Handlers", () => {
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
 
-    test("returns empty cascades for top-level folder deletion", async () => {
+    test("returns a root refresh for top-level folder deletion, so the root feed drops the folder", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toHaveLength(0);
+      expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
     });
   });
 });

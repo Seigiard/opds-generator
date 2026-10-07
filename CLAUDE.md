@@ -13,13 +13,13 @@ src/
 ├── constants.ts     # File constants (feed.xml, entry.xml, etc.)
 ├── scanner.ts       # File scanning, sync planning
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
-├── watcher.sh       # inotifywait → POST /events
+├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext()
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
 ├── processing/      # Event handling (neverthrow + async/await)
-│   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
+│   ├── types.ts     # RawBooksEvent, EventType
 │   ├── catalogue-processor.ts # Owns queue, fixed handler registry, consumer loop, pending/active, busy/empty edges
-│   ├── adapters/    # Raw → typed events: books-adapter, data-adapter, sync-plan-adapter
+│   ├── adapters/    # Raw → typed events: books-adapter, sync-plan-adapter
 │   └── handlers/    # book-sync, folder-sync, folder-meta-sync, cleanup, …
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
@@ -143,7 +143,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 <important if="you are working on nginx routing, auth, or the Bun HTTP endpoints">
 
-- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books`, `POST /events/data` (watchers), and `POST /resync` (proxied).
+- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books` (the `/books` watcher) and `POST /resync` (proxied).
 - Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
 - During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
 - `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.
@@ -174,7 +174,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 - Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
 - Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.
 - Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/server.ts`).
-- Avoid watcher loops: the data watcher classifies only `entry.xml`/`_entry.xml` and ignores everything else (including `feed.xml`, `index.html`, `.jsonl`). Check `src/watcher.sh` exclusions when you change written files.
+- Only `/books` is watched. Folder refreshes travel as cascades: `bookSync`, `bookCleanup`, `folderCleanup` and `folderSync` return a refresh of their folder or parent, and `folderMetaSync` returns a refresh of its parent until the root (ADR 0002). A handler that writes or removes `entry.xml`/`_entry.xml` must return the refresh itself; nothing observes `/data`.
 - An `index.html` render failure is logged and must not block `feed.xml`.
 
 </important>
