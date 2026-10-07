@@ -35,9 +35,9 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 
 ## Effect prototype (#25)
 
-- `createEffectCatalogueProcessor`, `bookSyncEffect`, `bookCleanupEffect`, and `folderCleanupEffect` meet the same contract as the plain code. `server.ts` does not use them. Findings and go/no-go: `docs/effect-processing-prototype.md`.
+- `createEffectCatalogueProcessor`, `bookSyncEffect`, `folderSyncEffect`, `folderMetaSyncEffect`, `bookCleanupEffect`, and `folderCleanupEffect` meet the same contract as the plain code. `server.ts` does not use them. Findings and go/no-go: `docs/effect-processing-prototype.md`.
 - Suites run against both variants through `describe.each`; `test/helpers/effect-variants.ts` builds the Effect registry. `test/helpers/leak-probe.ts` also has `lifecycle-scan-effect`, the per-drain memory gate for the Effect processor.
 - In Effect handlers, cross a Promise boundary only through `ownedPromise`. `Effect.tryPromise` abandons the Promise on interruption, and the handler outlives `stop()`.
-- `src/effect-file-system.ts` is the Effect `FileSystemService` for the migration. It exposes tagged errno failures. Unlike the Promise service, `exists` fails on `ENOENT`, and `symlink` does not unlink the old path first; the caller decides how to recover.
+- `src/effect-file-system.ts` is the Effect `FileSystemService` for the migration. It exposes tagged errno failures and can wrap the current Promise filesystem for the processor/test boundary. Unlike the Promise service, `symlink` does not unlink the old path first; the caller decides how to recover.
 - An object that keeps a signal (a format handler keeps the factory's for `getCover()`) lives inside one `ownedPromise`. Each bridge has its own signal, so a second bridge leaves the kept one dead.
 - Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.

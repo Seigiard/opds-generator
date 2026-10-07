@@ -18,5 +18,5 @@ The prototype in #25 (`docs/effect-processing-prototype.md`) ran the processor, 
 ## Consequences
 
 - `tsc` checks that failure tags exist and that acquired resources have a scope. It checks that every failure class is handled only where a caller narrows the error type; the handler registry widens it to `HandlerError`. It does not catch an Effect that is never yielded.
-- `Effect.tryPromise` and `Effect.promise` must not be used in handlers: they abandon the Promise on interruption. `anti-slop-effect/no-direct-effect-promise-in-handlers` enforces `ownedPromise` in Effect handler modules. An object that keeps a signal, such as a format handler, lives inside one `ownedPromise`.
+- `Effect.tryPromise` and `Effect.promise` must not be used in handlers: they abandon the Promise on interruption. `opds/no-direct-effect-promise` enforces this across the whole tree; only uninterruptible crossings and lines disabled with a reason pass. An object that keeps a signal, such as a format handler, lives inside one `ownedPromise`.
 - The Effect processor reaches its RSS plateau later and a few MB higher. The consumer gates measure per event over batches of 100, so that warmup does not read as retention; the limit is unchanged.

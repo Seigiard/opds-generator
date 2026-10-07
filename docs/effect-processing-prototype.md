@@ -143,14 +143,24 @@ The decision record is `docs/adr/0003-effect-owns-event-processing.md` (status: 
 Each step is one PR. The plain variant keeps working until step 5.
 
 1. **Settle the consumer gate.** Done in this prototype: both consumer gates run 100 events per operation, and the calibration test covers `consumer-enqueue-effect`.
-2. **Handler bridge as the only Promise crossing.** Done in #32: `anti-slop-effect/no-direct-effect-promise-in-handlers` forbids `Effect.tryPromise` / `Effect.promise` in Effect handler modules, so every crossing goes through `ownedPromise`. The bridge module is exempt.
-3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. Keep `describe.each` over both variants for their suites. Decide per swallow listed in the inventory whether it stays a recovered tagged error or becomes a failure. `bookCleanup` and `folderCleanup` are done in #36: a missing cleanup target is recovered; other source-probe and removal errors fail the handler.
+2. **Handler bridge as the only Promise crossing.** Done in #32: `opds/no-direct-effect-promise` forbids an interruptible `Effect.tryPromise` / `Effect.promise` anywhere in the tree, so every crossing goes through `ownedPromise`. Uninterruptible crossings pass; the intended ones (the bridge cancel effect, the child-process waits in `process.ts`) carry a disable comment with the reason.
+3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. `folderSyncEffect` and `folderMetaSyncEffect` are done in #35. `bookCleanupEffect` and `folderCleanupEffect` are done in #36: a missing cleanup target is recovered; other source-probe and removal errors fail the handler. Keep `describe.each` over both variants for their suites. Decide per swallow listed in the inventory whether it stays a recovered tagged error or becomes a failure.
 4. **`FileSystemService` as an Effect service** with typed errno failures. Done in #34: the service lives beside the Promise service; ported handlers can use it instead of wrapping `fs` Promises one by one. `process.ts` drops `runOwned` for callers that are Effects.
 5. **Switch `server.ts` to the Effect processor**, behind the gates from step 1, `handler-chain-effect`, and the per-drain gate for the Effect processor (`lifecycle-scan-effect`). Remove `fromPromiseHandler`, the plain processor, `SimpleQueue` and the plain handlers in the same PR, and the `describe.each` parameters with them.
 6. **Format extraction** (optional, separate decision): factories and `archive.ts` as Effects, which removes the `throwIfAborted` convention there too. Lifecycle stays plain async (#16) unless its scanner, clock and processor are all Effects by then.
 
 ## What is in the tree
 
-- Prototype code: `src/processing/catalogue-processor-effect.ts`, `src/processing/effect-handler.ts`, `src/processing/handlers/book-sync-effect.ts`, `src/processing/handlers/book-cleanup-effect.ts`, `src/processing/handlers/folder-cleanup-effect.ts`, and `bookEntryXml` / the exported helpers in the plain modules.
+- Prototype code: `src/processing/catalogue-processor-effect.ts`, `src/processing/effect-handler.ts`, `src/processing/handlers/book-sync-effect.ts`, `src/processing/handlers/folder-sync-effect.ts`, `src/processing/handlers/folder-meta-sync-effect.ts`, `src/processing/handlers/book-cleanup-effect.ts`, `src/processing/handlers/folder-cleanup-effect.ts`, and `bookEntryXml` / the exported helpers in the plain modules.
 - Tests: `describe.each` over both variants in the suites listed in [Setup](#setup), `test/helpers/effect-variants.ts`, and the new `test/unit/processing/processor-shutdown.test.ts`.
 - Probe scenarios `handler-chain-effect` (gated in `memory-leak-handler.test.ts`), `consumer-enqueue-effect` (gated in `memory-leak-runtime.test.ts`, calibrated in `memory-oracle-calibration.test.ts`), and `lifecycle-scan-effect` (the per-drain Effect processor gate, gated in `memory-leak-lifecycle.test.ts` and calibrated in `memory-oracle-calibration.test.ts`).
+
+## Folder handler port decisions (#35)
+
+The swallowed `folderMetaSync` errors from the inventory keep their plain behavior in the Effect port:
+
+- Source folder `stat` failure stays recovered as "source deleted" and returns no cascades. Reconciliation must tolerate a source folder that disappeared between events.
+- Data folder read failure stays recovered as an empty feed. The handler logs a warning, writes `feed.xml` and `index.html`, and lets the normal `_entry.xml` comparison decide whether to refresh the parent.
+- `index.html` write failure stays recovered and logged. `feed.xml` is the OPDS contract, so browser HTML must not block the feed.
+
+`folderSync` has no recovered errors today. Its Effect port turns filesystem failures into `FolderSyncFailed`, preserving the plain handler's `err` result at the processor boundary.
