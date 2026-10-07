@@ -10,6 +10,7 @@ import {
 // Each cycle is one scan (or one start-scan-stop). The limits are the runtime limits, unchanged.
 const scenarios = [
   { name: "lifecycle-scan", label: "Lifecycle repeated scans" },
+  { name: "lifecycle-scan-effect", label: "Effect lifecycle repeated scans" },
   { name: "lifecycle-restart", label: "Lifecycle start/scan/stop" },
 ];
 

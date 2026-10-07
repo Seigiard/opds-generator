@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import {
+  LIFECYCLE_CYCLES_PER_OP,
   MAX_CHAIN_LEAK_KB,
   MAX_OBJECTS_PER_ITER,
   MAX_RUNTIME_LEAK_KB,
@@ -49,5 +50,21 @@ describe("Memory oracle calibration: consumer per-event gate", () => {
     // #given / #when — the Effect consumer with a known retained allocation per event
     // #then
     expect(retainedKbPerIter(result) / QUEUE_EVENTS_PER_OP).toBeGreaterThanOrEqual(MAX_RUNTIME_LEAK_KB);
+  });
+});
+
+const LIFECYCLE_RETAIN_KB_PER_CYCLE = 4;
+
+describe("Memory oracle calibration: Effect lifecycle per-drain gate", () => {
+  let result: Awaited<ReturnType<typeof runProbe>>;
+
+  beforeAll(async () => {
+    result = await runProbe("lifecycle-scan-effect", { retainKb: LIFECYCLE_RETAIN_KB_PER_CYCLE * LIFECYCLE_CYCLES_PER_OP });
+  }, 120000);
+
+  test(`${LIFECYCLE_RETAIN_KB_PER_CYCLE} KiB retained per Effect drain reads at or above the runtime RSS limit`, () => {
+    // #given / #when — the Effect lifecycle scan with a known retained allocation per drain
+    // #then
+    expect(retainedKbPerIter(result) / LIFECYCLE_CYCLES_PER_OP).toBeGreaterThanOrEqual(MAX_RUNTIME_LEAK_KB);
   });
 });
