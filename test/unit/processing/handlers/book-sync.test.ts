@@ -5,6 +5,7 @@ import { runAsPromiseHandler } from "../../../../src/processing/effect-handler.t
 import type { Handler } from "../../../../src/processing/catalogue-processor.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
+import { mockPdfInfo, mockPdfToPpmSpawnFailure, resetMocks } from "../../../helpers/mock-tools.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, rm, readdir, stat, readFile, readlink, lstat, symlink, unlink } from "node:fs/promises";
@@ -73,12 +74,14 @@ const variants: { name: string; bookSync: Handler }[] = [
 
 describe.each(variants)("bookSync handler ($name)", ({ bookSync }) => {
   beforeEach(async () => {
+    resetMocks();
     await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(FILES_DIR, { recursive: true });
     await mkdir(DATA_DIR, { recursive: true });
   });
 
   afterAll(async () => {
+    resetMocks();
     await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
   });
 
@@ -221,6 +224,29 @@ describe.each(variants)("bookSync handler ($name)", ({ bookSync }) => {
 
     expect(coverExists).toBe(true);
     expect(thumbExists).toBe(true);
+  });
+
+  test("keeps PDF metadata when the cover command fails to spawn", async () => {
+    // #given
+    mockPdfInfo(`Title:          Spawn Failure Metadata
+Author:         PDF Author
+Pages:          7
+`);
+    mockPdfToPpmSpawnFailure(new Error("pdftoppm missing"));
+    await Bun.write(join(FILES_DIR, "metadata.pdf"), "fake pdf");
+
+    // #when
+    await bookSync(bookCreatedEvent("metadata.pdf"), deps);
+
+    // #then
+    const entry = await readFile(join(DATA_DIR, "metadata.pdf", "entry.xml"), "utf-8");
+    expect({
+      title: entry.includes("<title>Spawn Failure Metadata</title>"),
+      author: entry.includes("<name>PDF Author</name>"),
+      extent: entry.includes("<dc:extent>7 pages</dc:extent>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+    }).toEqual({ title: true, author: true, extent: true, cover: false, thumbnail: false });
   });
 
   test("handles nested folder structure", async () => {

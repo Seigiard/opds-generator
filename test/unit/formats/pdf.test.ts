@@ -1,5 +1,9 @@
-import { describe, test, expect } from "bun:test";
-import { parsePdfInfoOutput, stripSourceFileExtension } from "../../../src/formats/pdf.ts";
+import { afterEach, describe, test, expect } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { parsePdfInfoOutput, pdfHandlerRegistration, stripSourceFileExtension } from "../../../src/formats/pdf.ts";
+import { mockPdfInfo, mockPdfToPpmHangUntilKilled, resetMocks } from "../../helpers/mock-tools.ts";
 
 const PDFX_OUTPUT = `Title:           Grimwild
 Author:          Oddity Press
@@ -15,6 +19,10 @@ PDF subtype:    PDF/X-4
     Subtitle:      Part 7: Complete exchange of printing data (PDF/X-4) and partial exchange of printing data with external profile reference (PDF/X-4p) using PDF 1.6
     Standard:      ISO 15930-7
 `;
+
+afterEach(() => {
+  resetMocks();
+});
 
 describe("parsePdfInfoOutput", () => {
   test("ignores indented PDF subtype block so document title survives", () => {
@@ -82,5 +90,31 @@ describe("stripSourceFileExtension", () => {
 
     // #then
     expect(title).toBe("Grimwild");
+  });
+});
+
+describe("PDF cover extraction", () => {
+  test("propagates cancellation while the cover command is running", async () => {
+    // #given
+    const directory = await mkdtemp(join(tmpdir(), "opds-pdf-test-"));
+    const filePath = join(directory, "cancel.pdf");
+    const controller = new AbortController();
+    const reason = new Error("shutdown");
+    mockPdfInfo(PDFX_OUTPUT);
+    mockPdfToPpmHangUntilKilled();
+
+    try {
+      await Bun.write(filePath, "fake pdf");
+      const handler = await pdfHandlerRegistration.create(filePath, controller.signal);
+
+      // #when
+      const cover = handler!.getCover();
+      controller.abort(reason);
+
+      // #then
+      await expect(cover).rejects.toBe(reason);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

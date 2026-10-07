@@ -1,4 +1,5 @@
 import { spyOn, type Mock } from "bun:test";
+import { writeSync } from "node:fs";
 
 type SpawnResult = {
   stdout: ReadableStream<Uint8Array>;
@@ -11,7 +12,7 @@ type SpawnResult = {
 
 interface MockConfig {
   pdfinfo?: string;
-  pdftoppm?: Buffer;
+  pdftoppm?: Buffer | Error | "hang";
   magick?: boolean;
 }
 
@@ -28,6 +29,12 @@ function createReadableStream(data: string | Buffer): ReadableStream<Uint8Array>
       controller.close();
     },
   });
+}
+
+function writeStdoutOption(options: any, data: string | Buffer): void {
+  if (!Number.isInteger(options?.stdout)) return;
+
+  writeSync(options.stdout, Buffer.isBuffer(data) ? data : Buffer.from(data));
 }
 
 function createEmptyStream(): ReadableStream<Uint8Array> {
@@ -49,6 +56,23 @@ function createMockSpawnResult(stdout: string | Buffer, exitCode = 0): SpawnResu
   };
 }
 
+function createHangingSpawnResult(): SpawnResult {
+  let finish!: (exitCode: number) => void;
+
+  const exited = new Promise<number>((resolve) => {
+    finish = resolve;
+  });
+
+  return {
+    stdout: createEmptyStream(),
+    stderr: createEmptyStream(),
+    exited,
+    exitCode: null,
+    kill: () => finish(143),
+    pid: 12345,
+  };
+}
+
 export function mockPdfInfo(output: string): void {
   mockConfig.pdfinfo = output;
   setupSpawnSpy();
@@ -56,6 +80,16 @@ export function mockPdfInfo(output: string): void {
 
 export function mockPdfToPpm(imageBuffer: Buffer): void {
   mockConfig.pdftoppm = imageBuffer;
+  setupSpawnSpy();
+}
+
+export function mockPdfToPpmSpawnFailure(error: Error): void {
+  mockConfig.pdftoppm = error;
+  setupSpawnSpy();
+}
+
+export function mockPdfToPpmHangUntilKilled(): void {
+  mockConfig.pdftoppm = "hang";
   setupSpawnSpy();
 }
 
@@ -74,11 +108,22 @@ function setupSpawnSpy(): void {
     const command = cmdArray[0];
 
     if (command === "pdfinfo" && mockConfig.pdfinfo !== undefined) {
+      writeStdoutOption(options, mockConfig.pdfinfo);
+
       // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
       return createMockSpawnResult(mockConfig.pdfinfo) as any;
     }
 
     if (command === "pdftoppm" && mockConfig.pdftoppm !== undefined) {
+      if (mockConfig.pdftoppm instanceof Error) throw mockConfig.pdftoppm;
+
+      if (mockConfig.pdftoppm === "hang") {
+        // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
+        return createHangingSpawnResult() as any;
+      }
+
+      writeStdoutOption(options, mockConfig.pdftoppm);
+
       // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
       return createMockSpawnResult(mockConfig.pdftoppm) as any;
     }
