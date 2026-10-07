@@ -38,7 +38,7 @@ async function removeHeapSnapshotLeftovers(dataPath: string): Promise<void> {
   }
 }
 
-/** The nginx 503 gate reads `/data/feed.xml`: it is absent until the seed below writes it, and no scan ever removes it. */
+/** The nginx 503 gate reads `/data/feed.xml`: it is absent until the seed below writes it after a successful scan, and no scan ever removes it. */
 export function createDiskScanner({ filesPath, dataPath }: { readonly filesPath: string; readonly dataPath: string }): CatalogueScanner {
   return {
     async scan(request, signal) {
@@ -48,7 +48,6 @@ export function createDiskScanner({ filesPath, dataPath }: { readonly filesPath:
       const startTime = Date.now();
 
       await mkdir(dataPath, { recursive: true });
-      await seedRootFeed(dataPath);
 
       const files = await scanFiles(filesPath, signal);
       log.info("InitialSync", "Books found", { books_found: files.length });
@@ -61,6 +60,8 @@ export function createDiskScanner({ filesPath, dataPath }: { readonly filesPath:
       });
 
       signal.throwIfAborted();
+      // Seeding ends the nginx 503s, so it waits until the books directory has been read and planned.
+      await seedRootFeed(dataPath);
       const events = adaptSyncPlan(plan, filesPath);
       log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: Date.now() - startTime });
 

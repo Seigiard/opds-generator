@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       reconcileIntervalSeconds: config.reconcileInterval,
     });
 
-    lifecycle.start();
+    const initialScan = lifecycle.start();
     log.info("Server", "Lifecycle started");
 
     const server = Bun.serve({
@@ -87,8 +87,7 @@ async function main(): Promise<void> {
 
     log.info("Server", "Listening", { port: server.port });
 
-    const shutdown = async () => {
-      log.info("Server", "Shutting down");
+    const exitAfterStop = async (code: number) => {
       server.stop();
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -103,8 +102,21 @@ async function main(): Promise<void> {
         log.warn("Server", "Shutdown deadline reached; active work or cleanup is unfinished");
       }
 
-      process.exit(0);
+      process.exit(code);
     };
+
+    const shutdown = () => {
+      log.info("Server", "Shutting down");
+
+      return exitAfterStop(0);
+    };
+
+    // The lifecycle already logged the scan error; exiting non-zero lets Docker restart instead of serving an empty catalogue.
+    initialScan.catch(() => {
+      log.error("Server", "Initial scan failed; exiting");
+
+      return exitAfterStop(1);
+    });
 
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);

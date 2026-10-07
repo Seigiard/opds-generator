@@ -191,27 +191,61 @@ describe("Lifecycle", () => {
     await lifecycle.stop();
   });
 
-  test("a failed scan still ends in Settled and the next request runs", async () => {
-    // #given a scanner that throws once
+  test("a failed resync still ends in Settled and the next request runs", async () => {
+    // #given a scanner whose second scan (the resync) throws once
     let calls = 0;
 
     const { lifecycle, scans } = fixture({
       scan: async () => {
-        if (++calls === 1) throw new Error("disk gone");
+        if (++calls === 2) throw new Error("disk gone");
 
         return [];
       },
     });
 
-    // #when
     lifecycle.start();
+    await flush();
+    // #when a resync fails and another one is requested
+    lifecycle.requestScan({ kind: "resync", force: false });
     await flush();
     const state = lifecycle.status().state;
     lifecycle.requestScan({ kind: "resync", force: false });
     await flush();
     // #then
     expect(state).toBe("settled");
-    expect(scans).toHaveLength(2);
+    expect(scans).toHaveLength(3);
+    await lifecycle.stop();
+  });
+
+  test("a failed initial scan enters Stopping, rejects start() with the error and refuses requests", async () => {
+    // #given a scanner that throws on the initial scan
+    const { lifecycle, scans } = fixture({
+      scan: async () => {
+        throw new Error("books unreadable");
+      },
+    });
+
+    // #when
+    const outcome = await lifecycle.start().then(
+      () => "resolved",
+      (error: Error) => error.message,
+    );
+
+    // #then
+    expect(outcome).toBe("books unreadable");
+    expect(lifecycle.status().state).toBe("stopping");
+    expect(lifecycle.requestScan({ kind: "resync", force: false })).toBe("rejected");
+    expect(scans).toHaveLength(1);
+    await lifecycle.stop();
+  });
+
+  test("start() resolves once the initial scan succeeds", async () => {
+    // #given
+    const { lifecycle } = fixture();
+    // #when
+    const outcome = await lifecycle.start().then(() => "resolved");
+    // #then
+    expect(outcome).toBe("resolved");
     await lifecycle.stop();
   });
 

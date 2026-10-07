@@ -21,7 +21,7 @@ The service has received a stop signal and takes no new work.
 _Avoid_: Shutting down
 
 **Initial sync**:
-The scan that runs once when the service starts.
+The scan that runs once when the service starts. If it fails, the service exits with code 1 instead of serving an empty catalogue.
 
 **Reconciliation**:
 A periodic scan that repairs drift between the books directory and the catalogue.
