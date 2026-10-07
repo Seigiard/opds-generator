@@ -27,7 +27,8 @@
     "render:pure": "bun ui/scripts/render-purity.ts",
     "dev:ui": "vite --config ui/vite.config.ts",
     "fixtures:pull": "bun ui/scripts/fixtures-pull.ts",
-    "test:all": "bun run build:ui:check && bun run render:check && bun run render:pure && bun run test && bun run test:e2e"
+    "test:all": "bun run build:ui:check && bun run render:check && bun run render:pure && bun run test && bun run test:e2e",
+    "postinstall": "simple-git-hooks || true"
   },
   "dependencies": {
     "effect": "4.0.1",
@@ -46,18 +47,20 @@
     "@types/bun": "latest",
     "autoprefixer": "^10.5.3",
     "cssnano": "^7.1.9",
+    "nano-staged": "^1.0.2",
     "oxfmt": "^0.21.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "postcss": "^8.5.19",
     "postcss-nesting": "^13.0.2",
+    "simple-git-hooks": "^2.14.0",
     "vite": "^6.4.3"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
-  "lint-staged": {
-    "*": "oxfmt --no-error-on-unmatched-pattern"
+  "simple-git-hooks": {
+    "pre-commit": "./node_modules/.bin/nano-staged"
   },
   "knip": {
     "entry": [
