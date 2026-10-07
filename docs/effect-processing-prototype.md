@@ -124,7 +124,7 @@ Effect.runPromise(tempDir);
 - **Errors that become `unknown` or plain `Error`.** `process.ts` (`catch: (cause) => cause`), the initial scan error in `lifecycle.ts`, `new Error("Queue take failed unexpectedly")` in the processor (drops the original), and the `instanceof Error ? … : new Error(String(…))` wrap in every handler.
 - **No signal at all.** `FileSystemService`, `folderMetaSync`, `bookCleanup`, `folderCleanup`, the sharp pipelines, `mobi` (reads the whole file), `txt`, plain `fb2`, `detectArchiveType`.
 - **Stays Promise-based.** The `Bun.serve` `fetch` handler (`POST /events/books`, `POST /resync`, `GET /status`), the SIGTERM/SIGINT handlers and the shutdown deadline in `server.ts`. `runOwned` in `process.ts` is the existing Effect-to-Promise bridge and becomes unnecessary once its callers are Effects.
-- Two likely bugs found on the way, not fixed here: `pdf.ts` `extractCover` has no `try`, so a `pdftoppm` spawn failure reaches `bookSync` and drops the PDF's metadata; `lifecycle.ts` `void task.finally(…)` leaves the derived Promise without a handler, so a rejecting `processor.start` is an unhandled rejection.
+- Two likely bugs found on the way: `pdf.ts` `extractCover` has no `try`, so a `pdftoppm` spawn failure reaches `bookSync` and drops the PDF's metadata; `lifecycle.ts` formerly left the derived `task.finally(…)` Promise without a handler, so a rejecting `processor.start` became an unhandled rejection. The lifecycle bug was fixed in #31.
 
 ## Recommendation
 

@@ -80,8 +80,12 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
   const initialScan = Promise.withResolvers<void>();
 
   const own = (task: Promise<unknown>): void => {
-    tasks.add(task);
-    void task.finally(() => tasks.delete(task));
+    const observed = task.catch((cause) => {
+      log.error("Lifecycle", "Owned task failed", cause);
+    });
+
+    tasks.add(observed);
+    void observed.then(() => tasks.delete(observed));
   };
 
   const runScan = async (request: ScanRequest): Promise<void> => {
