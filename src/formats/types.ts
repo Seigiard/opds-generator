@@ -42,16 +42,3 @@ export interface FormatExtractorRegistration {
   readonly extensions: readonly string[];
   readonly extract: Extractor;
 }
-
-/** Legacy Promise contract, kept only until every format implements `Extractor` (#40). */
-export interface FormatHandler {
-  getMetadata(): BookMetadata;
-  getCover(): Promise<Buffer | null>;
-}
-
-export type FormatHandlerFactory = (filePath: string, signal?: AbortSignal) => Promise<FormatHandler | null>;
-
-export interface FormatHandlerRegistration {
-  extensions: string[];
-  create: FormatHandlerFactory;
-}

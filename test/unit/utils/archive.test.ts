@@ -3,7 +3,8 @@ import { Cause, Effect, Exit } from "effect";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { listArchiveEntries, listEntries, readArchiveEntry, readArchiveEntryText, readEntry } from "../../../src/utils/archive.ts";
+import * as unrar from "node-unrar-js";
+import { listArchiveEntries, readArchiveEntry, readArchiveEntryText } from "../../../src/utils/archive.ts";
 import { installHangingCommands, isAlive, waitForHangingChild, type HangingChild } from "../../helpers/hanging-command.ts";
 import { FIXTURES_DIR, SAMPLE_IMAGE_SHA256, SAMPLE_IMAGES, buildComic, sampleImage, sha256 } from "../../helpers/comic-archives.ts";
 
@@ -329,20 +330,32 @@ describe("RAR entry reads through a temporary directory", () => {
     expect((await readdir(tmpdir())).filter((name) => name.startsWith("rar-"))).toEqual(before);
   });
 
-  test("overlapping reads each return their own entry", async () => {
-    // #given rounds of reads started together, whose native extractions overlap without coordination
-    const rounds = Array.from({ length: 10 }, () =>
-      Effect.all(
-        SAMPLE_IMAGES.map((image) => readArchiveEntry(CBR, image)),
-        { concurrency: "unbounded" },
-      ),
+  test("reads whose extractors are created together each return their own entry", async () => {
+    // #given node-unrar-js keeps the last created extractor on its one shared WASM instance. Warm that instance,
+    // then hold each created extractor until a second one exists, or until 300 ms pass when none can be created.
+    await run(readArchiveEntry(CBR, SAMPLE_IMAGES[3]!));
+    const createExtractor = unrar.createExtractorFromFile;
+    const bothCreated = Promise.withResolvers<void>();
+    let created = 0;
+
+    const spy = spyOn(unrar, "createExtractorFromFile").mockImplementation(async (options) => {
+      const extractor = await createExtractor(options);
+
+      if (++created === 2) bothCreated.resolve();
+      await Promise.race([bothCreated.promise, Bun.sleep(300)]);
+
+      return extractor;
+    });
+
+    cleanups.push(async () => spy.mockRestore());
+
+    // #when two pages are read at the same time
+    const pages = await run(
+      Effect.all([readArchiveEntry(CBR, SAMPLE_IMAGES[0]!), readArchiveEntry(CBR, SAMPLE_IMAGES[1]!)], { concurrency: "unbounded" }),
     );
 
-    // #when
-    const pages = await Promise.all(rounds.map((round) => run(round)));
-
     // #then
-    expect(pages.map((round) => round.map(sha256))).toEqual(Array.from({ length: 10 }, () => [...SAMPLE_IMAGE_SHA256]));
+    expect(pages.map(sha256)).toEqual([SAMPLE_IMAGE_SHA256[0], SAMPLE_IMAGE_SHA256[1]]);
   });
 });
 
@@ -383,57 +396,4 @@ describe("readArchiveEntryText", () => {
     // #then
     expect(text).toBeNull();
   });
-});
-
-describe("Promise wrappers for legacy callers", () => {
-  async function abortWhileRunning(command: string, start: (signal: AbortSignal) => Promise<string[] | Buffer | null>) {
-    const ready = await hang([command]);
-    const controller = new AbortController();
-    const reason = new Error("stop");
-
-    const outcome = start(controller.signal).then(
-      (value) => ({ settled: "resolved", value }),
-      (error: Error) => ({ settled: "rejected", value: error === reason ? "abort reason" : String(error) }),
-    );
-
-    const child = await waitForHangingChild(ready(command));
-    cleanups.push(async () => {
-      if (isAlive(child.pid)) process.kill(child.pid, "SIGKILL");
-    });
-
-    controller.abort(reason);
-
-    return { ...(await outcome), childAlive: isAlive(child.pid) };
-  }
-
-  test("listEntries and readEntry resolve with the dispatch results", async () => {
-    // #given / #when
-    const results = { entries: await listEntries(CB7), page: sha256(await readEntry(CBT, SAMPLE_IMAGES[3]!)) };
-    // #then
-    expect(results).toEqual({ entries: SAMPLE_IMAGES, page: SAMPLE_IMAGE_SHA256[3] });
-  });
-
-  test("aborting a ZIP listing rejects with the abort reason after the command is gone", async () => {
-    // #given / #when
-    const outcome = await abortWhileRunning("zipinfo", (signal) => listEntries(CBZ, signal));
-    // #then
-    expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
-  }, 15_000);
-
-  test("aborting a ZIP entry read rejects with the abort reason after the command is gone", async () => {
-    // #given / #when
-    const outcome = await abortWhileRunning("unzip", (signal) =>
-      readEntry(join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip"), "Test Book - Test Author.fb2", signal),
-    );
-
-    // #then
-    expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
-  }, 15_000);
-
-  test("aborting a TAR entry read rejects with the abort reason after the command is gone", async () => {
-    // #given / #when
-    const outcome = await abortWhileRunning("tar", (signal) => readEntry(CBT, SAMPLE_IMAGES[0]!, signal));
-    // #then
-    expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
-  }, 15_000);
 });

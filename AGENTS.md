@@ -25,9 +25,9 @@ src/
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
 │   ├── feed-html.ts  # renderHtml(model) → index.html
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (cassettes + playground)
-├── formats/         # Extractor per format; index.ts is the registry; legacy-adapter.ts bridges unmigrated formats
+├── formats/         # Effect extractor per format; index.ts is the registry
 ├── logging/         # Flat JSON logger to stdout
-└── utils/           # archive (Effect dispatch over all archive types + legacy Promise wrappers), zip, archive-type, image, process (Effect commands + legacy Promise wrappers), processor, opds, owned-promise (Effect↔Promise bridge)
+└── utils/           # archive (Effect dispatch over all archive types), zip, archive-type, image, process (Effect commands + temporary directories), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
 ├── styles/          # CSS sources + four fixed cover variants → static/style.css
@@ -169,7 +169,6 @@ Read `docs/agents/reader.md` first.
 
 - A format exports a `FormatExtractorRegistration` whose `extract(filePath)` returns `Effect<ExtractedBook, ExtractionFailed>` (`src/formats/types.ts`), and is listed in `src/formats/index.ts`. Follow `pdf.ts` (commands), `djvu.ts` (concurrent commands, native work on a temporary file) or `epub.ts` / `fb2.ts` (entries through the archive dispatch in `src/utils/archive.ts`): yield `runCommand` / `useTemporaryDirectory` from `src/utils/process.ts`, recover a cover failure as `cover: null` with the metadata kept, and fail with `ExtractionFailed` only when no usable result exists. Interruption is not a failure; recover with `Effect.catchTag`, which leaves it alone.
 - A format that runs no command (`mobi.ts`, `txt.ts`, plain `fb2.ts`) crosses its file read with `Effect.tryPromise(...).pipe(Effect.uninterruptible)`: a stop waits for the read, then takes effect before parsing. Parsing stays synchronous; a parser throw becomes `ExtractionFailed`.
-- Expand-contract (#40): formats not yet migrated keep the legacy `FormatHandlerRegistration` (factory with an optional shutdown signal, `getMetadata`, `getCover`) behind `legacyExtractorRegistration` in `src/formats/legacy-adapter.ts`. In that code, rethrow cancellation through fallback catches. Delete the legacy contract with the last legacy format.
 - If cancelled before publication, the existing `entry.xml` stays untouched (images may already be refreshed). Once entry/link publication starts, finish both writes so an entry never lacks its download link.
 - `valibot` validates watcher events, parsed XML values, and reader event details at input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract.
 - Build feed objects with `opds-ts/v1.2` (`Entry`, `Feed`); see `src/utils/opds.ts`.

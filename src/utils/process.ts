@@ -11,10 +11,6 @@ interface CommandOptions {
   timeout?: number;
 }
 
-interface SpawnWithTimeoutOptions extends CommandOptions {
-  signal?: AbortSignal;
-}
-
 interface SpawnResult {
   stdout: ArrayBuffer;
   exitCode: number;
@@ -130,51 +126,6 @@ export function useTemporaryDirectory<A, E, R>(
       Effect.mapError((cause) => new TemporaryDirectoryFailed({ prefix, ...failure(cause) })),
       Effect.flatMap(use),
     ),
-  );
-}
-
-/**
- * Temporary Promise bridge for legacy callers (#40): runs `effect`, interrupts it when `signal` aborts, and rejects
- * with the abort reason once the effect has released its resources. Remove it with the last legacy caller.
- */
-export async function runOwned<T, E>(effect: Effect.Effect<T, E>, signal?: AbortSignal): Promise<T> {
-  signal?.throwIfAborted();
-
-  try {
-    const result = await Effect.runPromise(effect, { signal });
-    signal?.throwIfAborted();
-
-    return result;
-  } catch (error) {
-    signal?.throwIfAborted();
-    throw error;
-  }
-}
-
-export function spawnWithTimeout(options: SpawnWithTimeoutOptions): Promise<SpawnResult> {
-  return runOwned(Effect.scoped(executeCommand(options)), options.signal);
-}
-
-export async function spawnWithTimeoutText(
-  options: SpawnWithTimeoutOptions,
-): Promise<{ stdout: string; exitCode: number; timedOut: boolean }> {
-  const result = await spawnWithTimeout(options);
-
-  return { stdout: textDecoder.decode(result.stdout), exitCode: result.exitCode, timedOut: result.timedOut };
-}
-
-export function withTemporaryDirectory<T>(prefix: string, use: (directory: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
-  return runOwned(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const directory = yield* temporaryDirectory(prefix);
-
-        // The callback may read temporary files through native work (sharp/unrar).
-        // Wait for it even on interruption; cancellable commands observe the caller's signal.
-        return yield* Effect.tryPromise({ try: () => use(directory), catch: (cause) => cause }).pipe(Effect.uninterruptible);
-      }),
-    ),
-    signal,
   );
 }
 

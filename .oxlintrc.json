@@ -201,7 +201,6 @@
         "src/formats/fb2.ts",
         "src/formats/mobi.ts",
         "src/formats/txt.ts",
-        "src/formats/legacy-adapter.ts",
         "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",
         "src/processing/catalogue-processor-effect.ts",

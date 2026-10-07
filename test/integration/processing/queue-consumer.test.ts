@@ -7,12 +7,14 @@
  * - Pending folder refreshes coalesce behind later work
  */
 import { describe, test, expect } from "bun:test";
+import { Cause, Effect, Exit } from "effect";
 import { ok } from "neverthrow";
 import { getEventPath } from "../../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
-import { spawnWithTimeout } from "../../../src/utils/process.ts";
-import { toEffectTestHandlers, type TestHandlers } from "../../helpers/effect-test-handlers.ts";
+import type { EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { runCommand } from "../../../src/utils/process.ts";
+import { toEffectTestHandlers } from "../../helpers/effect-test-handlers.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -54,34 +56,31 @@ describe("Catalogue processor integration", () => {
     };
 
     let pid: number | undefined;
-    let commandFailure: unknown;
+    let commandExit = "running";
 
-    const handlers: TestHandlers = {
-      BookCreated: async (_event, handlerDeps) => {
-        try {
-          await spawnWithTimeout({
-            command: [
-              process.execPath,
-              "-e",
-              `
-              require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
-              setInterval(() => {}, 100);
-            `,
-            ],
-            // Above the test timeout: a child that is not cancelled outlives the test and turns it red.
-            timeout: 60_000,
-            signal: handlerDeps.signal,
-          });
-        } catch (error) {
-          commandFailure = error;
-          throw error;
-        }
+    const runLongCommand: EffectHandler = () =>
+      runCommand({
+        command: [
+          process.execPath,
+          "-e",
+          `
+          require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+          setInterval(() => {}, 100);
+        `,
+        ],
+        // Above the test timeout: a child that is not cancelled outlives the test and turns it red.
+        timeout: 60_000,
+      }).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            commandExit = Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause) ? "interrupted" : "ended";
+          }),
+        ),
+        Effect.interruptible,
+        Effect.as([{ _tag: "FolderMetaSyncRequested", path: "/test/data" } as const]),
+      );
 
-        return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
-      },
-    };
-
-    const processor = createEffectCatalogueProcessor({ deps, handlers: toEffectTestHandlers(handlers) });
+    const processor = createEffectCatalogueProcessor({ deps, handlers: { BookCreated: runLongCommand } });
     const consumerTask = processor.start(controller.signal);
 
     try {
@@ -106,8 +105,7 @@ describe("Catalogue processor integration", () => {
       }
 
       // #then
-      expect({ alive, errors }).toEqual({ alive: false, errors: [] });
-      expect(commandFailure).toEqual(expect.objectContaining({ name: "AbortError" }));
+      expect({ alive, errors, commandExit }).toEqual({ alive: false, errors: [], commandExit: "interrupted" });
     } finally {
       controller.abort(reason);
       await consumerTask;

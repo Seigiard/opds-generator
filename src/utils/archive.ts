@@ -2,7 +2,7 @@ import { Effect, Semaphore } from "effect";
 import { createExtractorFromFile } from "node-unrar-js";
 import { join } from "node:path";
 import { detectArchiveType } from "./archive-type.ts";
-import { runCommand, runCommandText, runOwned, useTemporaryDirectory } from "./process.ts";
+import { runCommand, runCommandText, useTemporaryDirectory } from "./process.ts";
 import { listZipEntries, readZipEntry } from "./zip.ts";
 
 /**
@@ -51,16 +51,6 @@ export function readArchiveEntry(filePath: string, entryPath: string): Effect.Ef
 
 export function readArchiveEntryText(filePath: string, entryPath: string): Effect.Effect<string | null> {
   return readArchiveEntry(filePath, entryPath).pipe(Effect.map((buffer) => (buffer ? buffer.toString("utf-8") : null)));
-}
-
-// Temporary Promise wrappers for the leak probe (#40), over the Effect dispatch above. Remove them with the last one (#47).
-
-export function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
-  return runOwned(listArchiveEntries(filePath), signal);
-}
-
-export function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  return runOwned(readArchiveEntry(filePath, entryPath), signal);
 }
 
 function listCommandEntries(command: string[], parse: (stdout: string) => string[]): Effect.Effect<string[]> {

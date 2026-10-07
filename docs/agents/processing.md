@@ -41,5 +41,4 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - `src/effect-file-system.ts` is the Effect `FileSystemService`. It exposes tagged errno failures and wraps the current Promise filesystem for the processor/test boundary. The adapter keeps the Promise service's unlink-first `symlink` behavior.
 - `bookSync` yields the registry's `extract(filePath)` inside its interruptible preparation and recovers `ExtractionFailed` with the filename fallback. Interruption leaves the previous entry and link untouched.
 - Extraction memory and stopping values, and how to compare them: `docs/effect-extraction-baseline.md`.
-- `src/formats/legacy-adapter.ts` runs a legacy handler's factory, metadata, and cover read inside one `ownedPromise`: the handler keeps the factory's signal for `getCover()`, and each bridge has its own signal, so a second bridge leaves the kept one dead.
 - Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.

@@ -103,3 +103,37 @@ Objects per operation: 0.003 to 0.090 on both sides. Each side has one run at or
 
 - Comic stops (`test/integration/processing/comic-archive-stop.test.ts`): TAR 1.1 to 2.0 ms and 7z 1.1 to 2.2 ms, with both optional-metadata reads killed and their outputs removed. The RAR stop waits for the held read of the extracted cover (about 100 ms, the test's hold), then removes the temporary directory. The previous `entry.xml` stays and no download link is created.
 - Calibration: a shell read through a Promise bridge without the fiber's interruption, and a CoMet read detached from the extraction fiber, fail the shell cases with `childrenAlive: true`. An interruptible read of the extracted RAR file fails the RAR cases.
+
+## Contract removal (#47)
+
+#47 removed the legacy format adapter, the legacy handler types and the Promise wrappers (`spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory`, `runOwned`, archive `listEntries` / `readEntry`). The leak probe now runs the `spawn-*`, `list-entries`, `read-entry` and `full-chain` scenarios through `Effect.runPromise` of the native operations, and each of these operations must return data (an exit code 0, a nonempty listing, a page), so a scenario cannot pass by doing no work.
+
+### Memory
+
+Host: macOS Docker Desktop, 2026-10-08, load average 5 to 7. Image `opds40-47-test` (same lockfile as 7082baa). Each run is `docker run --rm` of `bun test/helpers/leak-probe.ts <scenario>` with read-only mounts of one tree: base is `git archive 7082baa` (before #41, with its own probe file), branch is an rsync mirror of the #47 tree checked with `diff -rq`. Base and branch alternated; all 42 runs exited 0. Values are slope / two-point KB per operation and objects per operation.
+
+| Probe                | Base (7082baa)                                                                                 | #47                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| handler-chain-effect | -3.90 / -6.79, 0.002; 0.14 / 0.56, 0.007; -3.16 / -1.73, 0.002                                 | -6.50 / 0.87, 0.002; -6.07 / -1.57, 0.002; 2.04 / 4.96, 0.002                              |
+| full-chain           | -1.17 / -0.55, 0.015; 2.32 / 2.64, 0.003; 2.33 / 2.85, 0.003                                   | 0.59 / 0.96, 0.003; 0.32 / 0.63, 0.003; -6.86 / -32.91, 0.003                              |
+| list-entries         | -52.99 / -36.97, 0.085; 3.43 / 4.23, 0.087; 1.83 / 2.19, 0.083                                 | 2.14 / 1.74, 0.082; 2.20 / 1.93, 0.082; 2.00 / 1.98, 0.083                                 |
+| read-entry           | -20.65 / -12.86; 2.40 / 2.18; 1.84 / 2.33; 1.77 / 1.99; 0.58 / 1.41; 2.34 / 3.01 (0.085–0.087) | 3.50 / 3.63; 3.88 / 3.85; 3.19 / 2.65; 2.53 / 1.88; 2.18 / 1.63; 2.28 / 2.08 (0.083–0.085) |
+| spawn-echo           | 1.47 / 1.95, 0.073; 0.49 / 0.83, 0.073; 0.71 / 1.21, 0.075                                     | 1.59 / 2.49, 0.068; 0.31 / 1.65, 0.070; 0.78 / 1.42, 0.070                                 |
+| spawn-zipinfo        | 0.45 / 1.22, 0.073; 1.03 / 1.15, 0.073; 0.55 / 1.63, 0.075                                     | 1.29 / 1.53, 0.070; 1.70 / 2.25, 0.068; 0.93 / 1.95, 0.070                                 |
+
+Reading: every value is below its limit (8; 5 for `handler-chain-effect`, 3 for `full-chain`), and objects per operation are the same or lower on #47. `read-entry` is the one probe whose RSS sits higher: the first three rounds did not overlap, so three more alternated rounds were run; the #47 median is then about 0.9 KB per operation above base, the ranges touch (base 2.34, #47 2.18), and object growth is equal. #44 recorded the same small shift when ZIP reads moved to the Effect dispatch. It is below the probe's resolution for retention (`docs/memory-oracle-investigation.md`, "Known limits") and is recorded here, not explained.
+
+Full suite on the #47 tree (641 pass, 0 fail): `handler-chain-effect` -3.55 / -0.55, `archive-rar` 5.80, `archive-7z` -12.85, `archive-tar` 5.80, `consumer-enqueue-effect` -2.25, `lifecycle-scan-effect` 5.31 per 10 cycles; processor shutdown medians 25.2 and 26.4 ms, leftover 0.
+
+### Stopping
+
+`bun test --rerun-each=20` of the five stop suites, 200 pass, from abort to processor stop: PDF cover 0.4–1.0 ms; DJVU cover command 0.4–0.8 ms, native conversion after release 43.6–56.2 ms; EPUB ZIP 0.6–2.8 ms; FBZ `zipinfo` 0.6–2.7 ms, `unzip` 0.6–1.3 ms; CBT 0.4–6.9 ms; CB7 0.4–1.2 ms; CBR 103.0–115.7 ms (the test's 100 ms hold of the extracted-cover read). These match the slice values above.
+
+### Retired tests and their owners
+
+- `test/unit/formats/legacy-adapter.test.ts` (adapter only): no legacy handler remains. Cover-failure-keeps-metadata is owned per format (`pdf.test.ts`, `djvu.test.ts`, `comic.test.ts`, `epub.test.ts`, `fb2.test.ts` cover-failure cases and the `book-sync.test.ts` publications); stopping during a running cover is owned by `pdf-cover-stop.test.ts` and the other `*-stop.test.ts` suites.
+- `process.test.ts` `spawnWithTimeout`: missing executable → `runCommand` "a missing executable fails with CommandFailed and releases acquired descriptors"; cancellation of a SIGTERM-ignoring child → `runCommand` "interruption reaps a child that ignores SIGTERM and releases its output"; timeout → `runCommand` "a timeout kills a child that ignores SIGTERM and releases its output"; stdout, binary output and nonzero exit → the three new `runCommand` result tests.
+- `process.test.ts` `withTemporaryDirectory`: uncancellable reader → `useTemporaryDirectory` "interruption keeps the directory until an uninterruptible native read settles"; callback failure → `useTemporaryDirectory` "releases its directory after the work fails".
+- `archive.test.ts` "Promise wrappers for legacy callers": dispatch results → the `listArchiveEntries` / `readArchiveEntry` suites; ZIP listing and read abort → `zip.test.ts` "interruption stays interruption, kills the listing/read command and releases its output"; TAR read abort → `archive.test.ts` "interruption of a tar read stays interruption and kills the command".
+- `archive.test.ts` "overlapping reads each return their own entry" (uncalibrated: green without the semaphore) → "reads whose extractors are created together each return their own entry". The new test warms the shared WASM instance, then holds each real `createExtractorFromFile` result until a second extractor exists (300 ms fallback). With the RAR semaphore removed it fails (a page reads as `null`: the first extraction wrote into the second read's directory); with it, it passes. Concurrent cold calls each build their own WASM instance, which is why the old test could not collide.
+- `queue-consumer.test.ts` "shutdown cancels active command work" kept its scenario and now runs `runCommand` inside an Effect handler instead of a Promise handler with a signal. Calibrated: with `runCommand` made uninterruptible it times out with the child alive.

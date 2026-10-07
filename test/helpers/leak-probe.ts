@@ -12,9 +12,9 @@
  * LEAK_PROBE_RETAIN_KB keeps that many KiB live per measured operation. It is the
  * calibration control: the gate must go red with it at its limit and green without it.
  */
-import { spawnWithTimeoutText } from "../../src/utils/process.ts";
+import { runCommandText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
-import { listArchiveEntries, listEntries, readArchiveEntry, readEntry } from "../../src/utils/archive.ts";
+import { listArchiveEntries, readArchiveEntry } from "../../src/utils/archive.ts";
 import { Effect } from "effect";
 import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
@@ -128,15 +128,15 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       };
 
     case "spawn-echo":
-      return () => spawnWithTimeoutText({ command: ["echo", "hello"] }).then(() => {});
+      return () => runWorkload(runCommandText({ command: ["echo", "hello"] }), ({ exitCode }) => exitCode === 0, "echo");
     case "spawn-zipinfo":
-      return () => spawnWithTimeoutText({ command: ["zipinfo", "-1", EPUB_PATH] }).then(() => {});
+      return () => runWorkload(runCommandText({ command: ["zipinfo", "-1", EPUB_PATH] }), ({ exitCode }) => exitCode === 0, "zipinfo");
     case "list-entries":
-      return () => listEntries(CBZ_PATH).then(() => {});
+      return () => runWorkload(listArchiveEntries(CBZ_PATH), (entries) => entries.length > 0, "CBZ listing");
     case "read-entry": {
       const image = await findCbzImage();
 
-      return () => readEntry(CBZ_PATH, image).then(() => {});
+      return () => runWorkload(readArchiveEntry(CBZ_PATH, image), (page) => page !== null && page.byteLength > 0, "CBZ page read");
     }
 
     // The same page images in each archive type: RAR runs native WASM extraction, 7z and TAR run commands.
@@ -161,11 +161,10 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       const image = await findCbzImage();
 
       return async (i) => {
-        const buf = await readEntry(CBZ_PATH, image);
+        const buf = await Effect.runPromise(readArchiveEntry(CBZ_PATH, image));
 
-        if (buf) {
-          await saveCoverAndThumbnail(buf, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
-        }
+        if (!buf) throw new Error("No page read from the CBZ");
+        await saveCoverAndThumbnail(buf, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
       };
     }
 
@@ -181,6 +180,11 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     default:
       throw new Error(`Unknown scenario: ${name}`);
   }
+}
+
+// A scenario whose operation silently does nothing must not pass the gate by avoiding the workload.
+async function runWorkload<A>(effect: Effect.Effect<A, unknown>, didWork: (result: A) => boolean, label: string): Promise<void> {
+  if (!didWork(await Effect.runPromise(effect))) throw new Error(`${label} did no work`);
 }
 
 // One listing and one page read per operation through the Effect archive dispatch. A dispatch that silently
@@ -373,7 +377,7 @@ function buildContext(): AppContext {
 }
 
 async function findCbzImage(): Promise<string> {
-  const entries = await listEntries(CBZ_PATH);
+  const entries = await Effect.runPromise(listArchiveEntries(CBZ_PATH));
   const image = entries.find((e) => /\.(jpg|jpeg|png)$/i.test(e));
 
   if (!image) throw new Error("No image in test CBZ");
