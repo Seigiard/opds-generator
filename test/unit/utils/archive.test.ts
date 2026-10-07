@@ -3,14 +3,7 @@ import { Cause, Effect, Exit } from "effect";
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  listArchiveEntries,
-  listEntries,
-  readArchiveEntry,
-  readArchiveEntryText,
-  readEntry,
-  readEntryText,
-} from "../../../src/utils/archive.ts";
+import { listArchiveEntries, listEntries, readArchiveEntry, readArchiveEntryText, readEntry } from "../../../src/utils/archive.ts";
 import { installHangingCommands, isAlive, waitForHangingChild, type HangingChild } from "../../helpers/hanging-command.ts";
 import { FIXTURES_DIR, SAMPLE_IMAGE_SHA256, SAMPLE_IMAGES, buildComic, sampleImage, sha256 } from "../../helpers/comic-archives.ts";
 
@@ -393,7 +386,7 @@ describe("readArchiveEntryText", () => {
 });
 
 describe("Promise wrappers for legacy callers", () => {
-  async function abortWhileRunning(command: string, start: (signal: AbortSignal) => Promise<string[] | Buffer | string | null>) {
+  async function abortWhileRunning(command: string, start: (signal: AbortSignal) => Promise<string[] | Buffer | null>) {
     const ready = await hang([command]);
     const controller = new AbortController();
     const reason = new Error("stop");
@@ -427,10 +420,10 @@ describe("Promise wrappers for legacy callers", () => {
     expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
   }, 15_000);
 
-  test("aborting a ZIP text read rejects with the abort reason after the command is gone", async () => {
+  test("aborting a ZIP entry read rejects with the abort reason after the command is gone", async () => {
     // #given / #when
     const outcome = await abortWhileRunning("unzip", (signal) =>
-      readEntryText(join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip"), "Test Book - Test Author.fb2", signal),
+      readEntry(join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip"), "Test Book - Test Author.fb2", signal),
     );
 
     // #then

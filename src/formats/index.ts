@@ -2,7 +2,7 @@ import type { Extractor, FormatExtractorRegistration } from "./types.ts";
 import { legacyExtractorRegistration } from "./legacy-adapter.ts";
 import { epubExtractorRegistration } from "./epub.ts";
 import { comicExtractorRegistration } from "./comic.ts";
-import { fb2HandlerRegistration } from "./fb2.ts";
+import { fb2ExtractorRegistration } from "./fb2.ts";
 import { mobiExtractorRegistration } from "./mobi.ts";
 import { pdfExtractorRegistration } from "./pdf.ts";
 import { txtExtractorRegistration } from "./txt.ts";
@@ -11,7 +11,7 @@ import { djvuHandlerRegistration } from "./djvu.ts";
 const registrations: FormatExtractorRegistration[] = [
   epubExtractorRegistration,
   comicExtractorRegistration,
-  legacyExtractorRegistration(fb2HandlerRegistration),
+  fb2ExtractorRegistration,
   mobiExtractorRegistration,
   pdfExtractorRegistration,
   txtExtractorRegistration,

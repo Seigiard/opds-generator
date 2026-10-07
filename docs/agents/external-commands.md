@@ -14,7 +14,7 @@ Code: `src/utils/process.ts`.
 - `src/utils/archive.ts`: `listArchiveEntries`, `readArchiveEntry`, `readArchiveEntryText` are the Effect dispatch for every archive type a format accepts. Formats read archives through them, never through `zip.ts` alone, so a book keeps every previously supported container (an EPUB packed as TAR still extracts). ZIP and TAR listings drop directory entries; 7z and RAR listings keep them.
   - 7z (`7zz`) and TAR (`tar`) run through `runCommand` with the same recovery as ZIP: `[]` / `null` on a failure, timeout or empty output; interruption stays interruption.
   - RAR runs node-unrar-js WASM inside `useTemporaryDirectory`. Extraction and the read of the extracted file cross uninterruptibly, so the directory is removed only after both finish. node-unrar-js routes every extractor through one shared WASM instance, so RAR work runs under a one-permit semaphore; overlapping extractions otherwise write into each other's directories.
-- The Promise `listEntries` / `readEntry` / `readEntryText` in the same file run that dispatch through `runOwned` for legacy FB2 callers and the leak probe. Remove them with their last caller (#47).
+- The Promise `listEntries` / `readEntry` in the same file run that dispatch through `runOwned` for the leak probe's `list-entries` / `read-entry` scenarios. Remove them with their last caller (#47).
 
 ## Effect scope
 

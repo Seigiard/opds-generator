@@ -53,7 +53,7 @@ export function readArchiveEntryText(filePath: string, entryPath: string): Effec
   return readArchiveEntry(filePath, entryPath).pipe(Effect.map((buffer) => (buffer ? buffer.toString("utf-8") : null)));
 }
 
-// Temporary Promise wrappers for legacy callers (#40), over the Effect dispatch above. Remove them with the last one (#47).
+// Temporary Promise wrappers for the leak probe (#40), over the Effect dispatch above. Remove them with the last one (#47).
 
 export function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
   return runOwned(listArchiveEntries(filePath), signal);
@@ -61,10 +61,6 @@ export function listEntries(filePath: string, signal?: AbortSignal): Promise<str
 
 export function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
   return runOwned(readArchiveEntry(filePath, entryPath), signal);
-}
-
-export function readEntryText(filePath: string, entryPath: string, signal?: AbortSignal): Promise<string | null> {
-  return runOwned(readArchiveEntryText(filePath, entryPath), signal);
 }
 
 function listCommandEntries(command: string[], parse: (stdout: string) => string[]): Effect.Effect<string[]> {
