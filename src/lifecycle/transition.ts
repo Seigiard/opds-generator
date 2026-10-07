@@ -42,7 +42,9 @@ export type LifecycleEffect =
   | { readonly type: "arm-reconcile-timer" }
   | { readonly type: "skip-reconcile"; readonly reason: SkipReason }
   /** Cancel running scan work and the consumer. */
-  | { readonly type: "abort-work" };
+  | { readonly type: "abort-work" }
+  /** The initial scan failed, so the service cannot serve a catalogue; the owner must exit non-zero. */
+  | { readonly type: "fail-startup" };
 
 interface Transition {
   readonly state: LifecycleState;
@@ -92,6 +94,13 @@ export function transition(state: LifecycleState, input: LifecycleInput): Transi
 
     case "scan-finished": {
       if (state.phase !== "scanning") return { state, effects: [] };
+
+      if (!input.ok && state.scan?.kind === "initial") {
+        return {
+          state: { ...state, phase: "stopping", scan: null, followUp: null },
+          effects: [{ type: "abort-work" }, { type: "fail-startup" }],
+        };
+      }
 
       const armTimer: LifecycleEffect[] = state.scan?.kind === "initial" ? [{ type: "arm-reconcile-timer" }] : [];
 

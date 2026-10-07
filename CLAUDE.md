@@ -144,14 +144,15 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 <important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
 
-- `transition(state, input)` in `src/lifecycle/transition.ts` is pure and owns every rule. Phases: `scanning`, `accepting` (no scan, processor busy), `settled` (no scan, processor empty), `stopping`. Inputs: scan requested/finished, processor busy/empty edges, reconcile tick, shutdown. It returns the next state plus effects (`start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`).
+- `transition(state, input)` in `src/lifecycle/transition.ts` is pure and owns every rule. Phases: `scanning`, `accepting` (no scan, processor busy), `settled` (no scan, processor empty), `stopping`. Inputs: scan requested/finished, processor busy/empty edges, reconcile tick, shutdown. It returns the next state plus effects (`start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`, `fail-startup`).
 - `createLifecycle` in `lifecycle.ts` runs the effects with plain async. It takes a `CatalogueScanner`, the processor, and a `Clock`, owns the consumer, scan tasks and reconcile timer, and logs a `Lifecycle` entry (from, to, input) per transition. `server.ts` only wires HTTP to it.
+- A failed initial scan fails fast: `scan-finished` with `ok: false` and kind `initial` enters `stopping` and emits `abort-work` then `fail-startup`. `start()` returns a promise that rejects with the scan's error; `server.ts` catches it, logs once, runs the shared stop-with-8 s-deadline path and exits 1, so Docker restarts the container. A failed resync or reconcile scan is only logged and ends `settled`/`accepting`.
 - Reconciliation starts only when `settled`. A scan request during `scanning` sets one coalesced follow-up (force flags OR'd); `POST /resync` then answers `202` (`Resync queued`); there is no `409`.
 - Resync repairs in place (ADR 0001): it never wipes `/data` first, so `feed.xml` never goes back to 503. It runs the same sync plan as reconciliation (mtime-based; the plan deletes entries whose book is gone). `POST /resync?force=1` plans every book for reprocessing. `/resync` always answers `202` (`Resync started` when idle, `Resync queued` during a scan) and `503` only while stopping.
 - `scanFiles` and `createSyncPlan` take an `AbortSignal` and throw its reason per directory, per book and before returning. `createDiskScanner({ filesPath, dataPath })` builds the real scanner for tests.
 - `BookDeleted`/`FolderDeleted` handlers do nothing when the source exists in `/books` at processing time (stale delete).
 - Shutdown: `stop()` enters `stopping`, aborts the active handler and scans, drops pending work and the follow-up scan, awaits owned tasks; `server.ts` races it against the 8 s deadline and exits 0.
-- `disk-scanner.ts` is the real scanner. nginx learns "initializing" from the files, not from Bun: the seed `feed.xml` it writes ends the 503s.
+- `disk-scanner.ts` is the real scanner. nginx learns "initializing" from the files, not from Bun: the seed `feed.xml` it writes ends the 503s. The seed is written only after `/books` was read and planned, so a failed initial scan never reports healthy.
 - Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it; `test/e2e/nginx.test.ts` pins that.
 
 </important>

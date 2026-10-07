@@ -96,6 +96,26 @@ describe("transition", () => {
     expect(result.state).toEqual(state({}));
   });
 
+  test("a failed resync or reconcile scan lands in Settled and arms nothing", () => {
+    // #given
+    const kinds = ["resync", "reconcile"] as const;
+    // #when
+    const results = kinds.map((kind) => transition(scanning({ kind, force: false }), { type: "scan-finished", ok: false }));
+    // #then
+    expect(results.map((r) => r.state)).toEqual([state({}), state({})]);
+    expect(results.map((r) => r.effects)).toEqual([[], []]);
+  });
+
+  test("a failed initial scan enters Stopping, drops the follow-up, aborts work and fails startup", () => {
+    // #given an initial scan with a queued follow-up
+    const running = { ...scanning({ kind: "initial", force: false }), followUp: { force: true } };
+    // #when
+    const result = transition(running, { type: "scan-finished", ok: false });
+    // #then
+    expect(result.state).toEqual(state({ phase: "stopping" }));
+    expect(result.effects).toEqual([{ type: "abort-work" }, { type: "fail-startup" }]);
+  });
+
   test("the finished initial scan arms the reconcile timer once", () => {
     // #given
     const initial = scanning({ kind: "initial", force: false });

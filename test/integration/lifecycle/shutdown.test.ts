@@ -89,6 +89,33 @@ describe("server shutdown and resync answers", () => {
     expect(outcome.ms).toBeLessThan(DEADLINE_MS);
   });
 
+  test("a missing books directory fails the initial scan and exits with code 1 before the deadline", async () => {
+    // #given a server whose books directory does not exist
+    const started = Date.now();
+
+    const child = Bun.spawn(["bun", SERVER], {
+      env: {
+        ...process.env,
+        FILES: join(tmpdir(), "opds-no-such-books"),
+        DATA: await mkdtemp(join(tmpdir(), "opds-data-")),
+        PORT: String(nextPort++),
+        RECONCILE_INTERVAL: "0",
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+
+    cleanups.push(async () => {
+      child.kill("SIGKILL");
+    });
+
+    // #when
+    const code = await child.exited;
+    // #then
+    expect(code).toBe(1);
+    expect(Date.now() - started).toBeLessThan(DEADLINE_MS + 5_000);
+  });
+
   test("resyncs are always answered 202, never 409, however many arrive", async () => {
     // #given a server working on its first scan and queue
     const { child, base } = await launch();

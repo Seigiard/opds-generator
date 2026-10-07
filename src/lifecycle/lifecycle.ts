@@ -58,8 +58,11 @@ interface LifecycleStatus {
 type ScanAdmission = "started" | "queued" | "rejected";
 
 interface Lifecycle {
-  /** Starts the consumer and the initial scan. */
-  start(): void;
+  /**
+   * Starts the consumer and the initial scan. Resolves when the initial scan succeeds or the lifecycle stops first;
+   * rejects with the scan's error when the initial scan fails, after the lifecycle has entered `stopping`.
+   */
+  start(): Promise<void>;
   requestScan(request: ScanRequest): ScanAdmission;
   /** False once stopping; watcher events are refused from then on. */
   accepting(): boolean;
@@ -73,6 +76,8 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
   const { signal } = controller;
   const tasks = new Set<Promise<unknown>>();
   let state = INITIAL_STATE;
+  let initialError: unknown;
+  const initialScan = Promise.withResolvers<void>();
 
   const own = (task: Promise<unknown>): void => {
     tasks.add(task);
@@ -88,9 +93,13 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
       if (!signal.aborted) processor.submit(events);
       ok = true;
     } catch (error) {
+      if (request.kind === "initial") initialError = error;
+
       if (!signal.aborted) log.error("Lifecycle", "Scan failed", error, { scan_kind: request.kind });
     } finally {
       dispatch({ type: "scan-finished", ok });
+
+      if (request.kind === "initial") initialScan.resolve();
     }
   };
 
@@ -120,6 +129,9 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
         break;
       case "abort-work":
         controller.abort();
+        break;
+      case "fail-startup":
+        initialScan.reject(initialError);
         break;
     }
   };
@@ -156,6 +168,8 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
       processor.onBusy(() => dispatch({ type: "processor-busy" }));
       processor.onEmpty(() => dispatch({ type: "processor-empty" }));
       dispatch({ type: "scan-requested", request: { kind: "initial", force: false } });
+
+      return initialScan.promise;
     },
 
     requestScan(request) {
