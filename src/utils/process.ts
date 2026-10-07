@@ -133,7 +133,11 @@ export function useTemporaryDirectory<A, E, R>(
   );
 }
 
-async function runOwned<T, E>(effect: Effect.Effect<T, E>, signal?: AbortSignal): Promise<T> {
+/**
+ * Temporary Promise bridge for legacy callers (#40): runs `effect`, interrupts it when `signal` aborts, and rejects
+ * with the abort reason once the effect has released its resources. Remove it with the last legacy caller.
+ */
+export async function runOwned<T, E>(effect: Effect.Effect<T, E>, signal?: AbortSignal): Promise<T> {
   signal?.throwIfAborted();
 
   try {

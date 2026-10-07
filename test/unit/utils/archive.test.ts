@@ -1,10 +1,75 @@
-import { describe, test, expect } from "bun:test";
+import { afterEach, describe, test, expect } from "bun:test";
 import { listEntries, readEntry, readEntryText } from "../../../src/utils/archive.ts";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { installHangingCommands, isAlive, waitForHangingChild } from "../../helpers/hanging-command.ts";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
+const cleanups: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup();
+});
+
+async function abortWhileRunning(command: string, run: (signal: AbortSignal) => Promise<string[] | Buffer | null>) {
+  const root = await mkdtemp(join(tmpdir(), "archive-abort-"));
+  const { ready, restore } = await installHangingCommands([command], root);
+  const controller = new AbortController();
+  const reason = new Error("stop");
+
+  const outcome = run(controller.signal).then(
+    (value) => ({ settled: "resolved", value }),
+    (error: Error) => ({ settled: "rejected", value: error === reason ? "abort reason" : String(error) }),
+  );
+
+  const child = await waitForHangingChild(ready(command));
+  cleanups.push(async () => {
+    restore();
+
+    if (isAlive(child.pid)) process.kill(child.pid, "SIGKILL");
+    await rm(root, { recursive: true, force: true });
+  });
+
+  controller.abort(reason);
+
+  return { ...(await outcome), childAlive: isAlive(child.pid) };
+}
+
 describe("utils/archive", () => {
+  describe("Cancellation through the Promise wrappers", () => {
+    test("aborting a ZIP listing rejects with the abort reason after the command is gone", async () => {
+      // #given / #when
+      const outcome = await abortWhileRunning("zipinfo", (signal) =>
+        listEntries(join(FIXTURES_DIR, "bobby_make_believe_sample.cbz"), signal),
+      );
+
+      // #then
+      expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
+    }, 15_000);
+
+    test("aborting a ZIP entry read rejects with the abort reason after the command is gone", async () => {
+      // #given / #when
+      const outcome = await abortWhileRunning("unzip", (signal) =>
+        readEntry(join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip"), "Test Book - Test Author.fb2", signal),
+      );
+
+      // #then
+      expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
+    }, 15_000);
+
+    test("aborting a TAR entry read through the legacy bridge rejects with the abort reason after the command is gone", async () => {
+      // #given / #when
+      const outcome = await abortWhileRunning("tar", (signal) =>
+        readEntry(join(FIXTURES_DIR, "bobby_make_believe_sample.cbt"), "ComicInfo.xml", signal),
+      );
+
+      // #then
+      expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
+    }, 15_000);
+  });
+
   describe("listEntries", () => {
     test("lists entries from CBZ (ZIP)", async () => {
       const cbzPath = join(FIXTURES_DIR, "bobby_make_believe_sample.cbz");

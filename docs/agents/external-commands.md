@@ -5,7 +5,7 @@ Code: `src/utils/process.ts`.
 ## Command execution
 
 - `src/utils/process.ts` owns command execution through Effect 4 scopes. Native extractors yield the Effect operations directly: `runCommand`, `runCommandText` (fail with `CommandFailed`), and `useTemporaryDirectory` (fails with `TemporaryDirectoryFailed`).
-- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy archive callers (#40). They take a `signal` and reject with the original cause. Remove them with their last caller.
+- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy archive callers (#40). They take a `signal` and reject with the original cause. `runOwned(effect, signal)` runs an Effect for a legacy Promise caller and rejects with the abort reason after release. Remove them with their last caller.
 - Commands time out after 15 s by default (`timeout` overrides).
 - Timeout or cancellation sends SIGTERM, waits up to 1 s, then SIGKILL and waits for exit.
 - Timeout returns empty stdout, `exitCode: -1`, `timedOut: true`. Cancellation rejects with the caller's abort reason after release.
@@ -15,6 +15,13 @@ Code: `src/utils/process.ts`.
 - Run sibling commands with `Effect.all([...], { concurrency })`: a failure or interruption of one interrupts and awaits the others, so no child outlives the extraction. Recover with `Effect.catchTag` / `mapError`, which leave interruption alone (see `src/formats/djvu.ts`).
 - `withTemporaryDirectory` callbacks await all work that uses their files. The Promise is uninterruptible, so native sharp/unrar work finishes before cleanup.
 - Shutdown signals are installed before initial sync. The 8 s hard deadline stays. On expiry it logs unfinished work before exit.
+
+## Archives
+
+- `src/utils/archive-type.ts`: `detectArchiveType(path)` reads magic bytes as an Effect. Unreadable or unknown input is `null`; the handle closes on every path.
+- `src/utils/zip.ts`: `listZipEntries`, `readZipEntry` run `zipinfo` / `unzip` through `runCommand`. Non-ZIP input, a missing entry, empty output, a nonzero exit, a timeout, or `CommandFailed` yield `[]` / `null`. Recovery uses `Effect.catchTag`, so interruption stays interruption.
+- `src/utils/archive.ts`: `listArchiveEntries`, `readArchiveEntry`, `readArchiveEntryText` are the Effect dispatch for every archive type a format accepts. Formats read archives through them, never through `zip.ts` alone, so a book keeps every previously supported container (an EPUB packed as TAR still extracts). ZIP runs natively. RAR, 7z and TAR cross `legacyVariant`, a temporary `ownedPromise` bridge to their Promise helpers; delete it when those variants move (#46).
+- The Promise `listEntries` / `readEntry` / `readEntryText` in the same file run that dispatch through `runOwned` for legacy comic and FB2 callers. Remove them with their last caller (#47).
 
 ## Effect scope
 

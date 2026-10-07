@@ -55,3 +55,18 @@ Stopping (`test/integration/processing/djvu-stop.test.ts`):
 - Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 38 to 41 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
 - Metadata commands: interruption ends both `djvused` children before the extraction ends, as interruption and not as `ExtractionFailed`.
 - Calibration: each scenario fails when its ownership is removed. Without `Effect.uninterruptible` on the sharp call, the processor stops before release and sharp finds no TIFF. With the `djvused` commands behind an abandoned Promise, both children stay alive. With the cover command uninterruptible, the processor is still running after 5 s and the child is alive.
+
+## EPUB and ZIP (#44)
+
+Host: macOS Docker Desktop, 2026-10-07, load average 7 to 8. `list-entries` and `read-entry` now run the shared Effect ZIP operations through the Promise wrappers; `handler-chain-effect` runs the native EPUB extractor. Base and branch runs alternated.
+
+| Probe                | Base (55d6210), slope per run | #44, slope per run           |
+| -------------------- | ----------------------------- | ---------------------------- |
+| list-entries         | 1.81, 1.75, 1.07, 1.73        | 3.78, 1.70, 6.26, 2.03, 1.93 |
+| read-entry           | 1.08, 2.04, 2.69, 1.79        | 3.22, 3.32, 1.25, 2.93, 2.61 |
+| handler-chain-effect | -7.78, -30.65                 | -42.75, 0.42, -13.91         |
+
+Objects per operation: `list-entries` and `read-entry` 0.083 to 0.087 before, 0.073 to 0.078 after; `handler-chain-effect` 0.002 on both. All gates passed. The ZIP median is about 0.3 KB per operation higher, with one 6.26 run against the limit of 8.
+
+- EPUB ZIP stop (`test/integration/processing/epub-zip-stop.test.ts`, `--rerun-each=20`): 0.6 to 1.2 ms, one run 4.7 ms. The `unzip` child exits, its output directory is removed, the previous `entry.xml` stays, and no download link is created.
+- Calibration: reading the entry through a Promise bridge without the fiber's interruption fails the test with `childAlive: true` and `outputDirectoryExists: true`.

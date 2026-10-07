@@ -27,7 +27,7 @@ src/
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (cassettes + playground)
 ├── formats/         # Extractor per format; index.ts is the registry; legacy-adapter.ts bridges unmigrated formats
 ├── logging/         # Flat JSON logger to stdout
-└── utils/           # archive, image, process (Effect commands + legacy Promise wrappers), processor, opds, owned-promise (Effect↔Promise bridge)
+└── utils/           # archive (Effect dispatch over all archive types + legacy Promise wrappers), zip, archive-type, image, process (Effect commands + legacy Promise wrappers), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
 ├── styles/          # CSS sources + four fixed cover variants → static/style.css
@@ -167,7 +167,7 @@ Read `docs/agents/reader.md` first.
 
 <important if="you are adding a format handler or changing format extraction or cancellation in src/formats/">
 
-- A format exports a `FormatExtractorRegistration` whose `extract(filePath)` returns `Effect<ExtractedBook, ExtractionFailed>` (`src/formats/types.ts`), and is listed in `src/formats/index.ts`. Follow `pdf.ts`, and `djvu.ts` for concurrent commands and native work on a temporary file: yield `runCommand` / `useTemporaryDirectory` from `src/utils/process.ts`, recover a cover failure as `cover: null` with the metadata kept, and fail with `ExtractionFailed` only when no usable result exists. Interruption is not a failure; recover with `Effect.catchTag`, which leaves it alone.
+- A format exports a `FormatExtractorRegistration` whose `extract(filePath)` returns `Effect<ExtractedBook, ExtractionFailed>` (`src/formats/types.ts`), and is listed in `src/formats/index.ts`. Follow `pdf.ts` (commands), `djvu.ts` (concurrent commands, native work on a temporary file) or `epub.ts` (entries through the archive dispatch in `src/utils/archive.ts`): yield `runCommand` / `useTemporaryDirectory` from `src/utils/process.ts`, recover a cover failure as `cover: null` with the metadata kept, and fail with `ExtractionFailed` only when no usable result exists. Interruption is not a failure; recover with `Effect.catchTag`, which leaves it alone.
 - A format that runs no command (`mobi.ts`, `txt.ts`) crosses its file read with `Effect.tryPromise(...).pipe(Effect.uninterruptible)`: a stop waits for the read, then takes effect before parsing. Parsing stays synchronous; a parser throw becomes `ExtractionFailed`.
 - Expand-contract (#40): formats not yet migrated keep the legacy `FormatHandlerRegistration` (factory with an optional shutdown signal, `getMetadata`, `getCover`) behind `legacyExtractorRegistration` in `src/formats/legacy-adapter.ts`. In that code, rethrow cancellation through fallback catches. Delete the legacy contract with the last legacy format.
 - If cancelled before publication, the existing `entry.xml` stays untouched (images may already be refreshed). Once entry/link publication starts, finish both writes so an entry never lacks its download link.
