@@ -46,7 +46,11 @@ export const liveEffectFileSystem: EffectFileSystemService = {
 
       return { isDirectory: () => s.isDirectory(), size: s.size };
     }),
-  exists: (path) => fsEffect("exists", path, async () => (await access(path), true)),
+  // Only a missing path answers false; any other errno (EACCES, ELOOP, …) is a failure, not "absent".
+  exists: (path) =>
+    fsEffect("exists", path, async () => (await access(path), true)).pipe(
+      Effect.catchTag("FileSystemNotFound", () => Effect.succeed(false)),
+    ),
   writeFile: (path, content) => fsEffect("writeFile", path, async () => Bun.write(path, content).then(() => undefined)),
   atomicWrite: (path, content) =>
     fsEffect("atomicWrite", path, async () => {

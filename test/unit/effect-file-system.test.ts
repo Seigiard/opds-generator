@@ -8,7 +8,6 @@ import {
   EffectFileSystem,
   FileSystemAlreadyExists,
   FileSystemFailure,
-  FileSystemNotFound,
   FileSystemPermissionDenied,
 } from "../../src/effect-file-system.ts";
 import { createEffectFileSystemTestDouble } from "../helpers/effect-file-system.ts";
@@ -16,18 +15,16 @@ import { createEffectFileSystemTestDouble } from "../helpers/effect-file-system.
 const TEST_DIR = join(tmpdir(), `opds-effect-fs-test-${Date.now()}`);
 
 describe("Effect FileSystemService", () => {
-  test("fails exists with FileSystemNotFound for a missing path", async () => {
+  test("answers exists with false for a missing path", async () => {
     // #given
     const missingPath = join(TEST_DIR, "missing.txt");
     await rm(TEST_DIR, { recursive: true, force: true });
 
     // #when
-    const failure = await Effect.runPromise(Effect.flip(liveEffectFileSystem.exists(missingPath)));
+    const found = await Effect.runPromise(liveEffectFileSystem.exists(missingPath));
 
     // #then
-    expect(failure).toEqual(
-      new FileSystemNotFound({ operation: "exists", path: missingPath, message: `exists ${missingPath} failed: ENOENT` }),
-    );
+    expect(found).toBe(false);
   });
 
   test("writes through live atomicWrite", async () => {
