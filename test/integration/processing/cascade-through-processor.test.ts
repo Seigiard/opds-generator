@@ -14,7 +14,7 @@ import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, stat, symlink, unlink, readdir, readFile } from "node:fs/promises";
+import { mkdir, rm, stat, symlink, unlink, readdir, readFile, utimes } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-processor-cascade-${Date.now()}`);
 
@@ -206,7 +206,7 @@ describe("Cascades through the catalogue processor", () => {
     expect(paths).toEqual([join(DATA_DIR, "Poetry"), DATA_DIR]);
   });
 
-  test("a book added to a nested folder refreshes every feed.xml up to the root", async () => {
+  test("a book added to a nested folder refreshes the folders whose summary changed, and stops where it did not", async () => {
     // #given
     await makeSourceFolders("Fiction/SciFi");
     const first = run();
@@ -227,9 +227,9 @@ describe("Cascades through the catalogue processor", () => {
     expect({
       sciFiHasBook: sciFi.includes("Test Book"),
       fictionShowsSciFiCount: fiction.includes("📚 1"),
-      rootRegenerated: updatedOf(root) !== rootBefore,
+      rootRefreshed: updatedOf(root) !== rootBefore,
       rootListsFiction: root.includes("Fiction"),
-    }).toEqual({ sciFiHasBook: true, fictionShowsSciFiCount: true, rootRegenerated: true, rootListsFiction: true });
+    }).toEqual({ sciFiHasBook: true, fictionShowsSciFiCount: true, rootRefreshed: false, rootListsFiction: true });
   });
 
   test("removing a top-level folder refreshes the root feed", async () => {
@@ -248,6 +248,80 @@ describe("Cascades through the catalogue processor", () => {
     await stop();
     // #then
     expect({ before, after: (await feed()).includes("Fiction") }).toEqual({ before: true, after: false });
+  });
+
+  test("a book whose title changed refreshes its folder only, and the ancestor feeds keep their mtime", async () => {
+    // #given
+    await makeSourceFolders("Fiction/SciFi");
+    await addBook("Fiction/SciFi");
+    const first = run();
+    let done = first.idle();
+    first.processor.submit({ _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" });
+    first.processor.submit({ _tag: "FolderCreated", parent: join(FILES_DIR, "Fiction"), name: "SciFi" });
+    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name: EPUB });
+    await done;
+    const longAgo = new Date("2020-01-01T00:00:00Z");
+    const ancestors = [join(DATA_DIR, "feed.xml"), join(DATA_DIR, "Fiction", "feed.xml")];
+
+    for (const path of ancestors) await utimes(path, longAgo, longAgo);
+    // An unreadable epub falls back to the filename as title, so the book's title changes without a new file.
+    await Bun.write(join(FILES_DIR, "Fiction", "SciFi", EPUB), "not an epub");
+    await unlink(join(DATA_DIR, "Fiction", "SciFi", EPUB, EPUB));
+    done = first.idle();
+    // #when
+    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name: EPUB });
+    await done;
+    await first.stop();
+    const mtimes = await Promise.all(ancestors.map(async (path) => (await stat(path)).mtimeMs));
+    const sciFi = await feed("Fiction", "SciFi");
+    // #then
+    expect({
+      sciFiHasNewTitle: sciFi.includes("<title>Test Book Test Author</title>"),
+      sciFiKeepsOldTitle: sciFi.includes("<title>Test Book</title>"),
+      mtimes,
+    }).toEqual({
+      sciFiHasNewTitle: true,
+      sciFiKeepsOldTitle: false,
+      mtimes: [longAgo.getTime(), longAgo.getTime()],
+    });
+  });
+
+  test("a book added to a folder whose count changes at every level rewrites every feed.xml up to the root", async () => {
+    // #given
+    await makeSourceFolders("Fiction");
+    const first = run();
+    let done = first.idle();
+    first.processor.submit({ _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" });
+    await done;
+    const longAgo = new Date("2020-01-01T00:00:00Z");
+    const feeds = [join(DATA_DIR, "feed.xml"), join(DATA_DIR, "Fiction", "feed.xml")];
+
+    for (const path of feeds) await utimes(path, longAgo, longAgo);
+    await addBook("Fiction");
+    done = first.idle();
+    // #when
+    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction"), name: EPUB });
+    await done;
+    await first.stop();
+    const rewritten = await Promise.all(feeds.map(async (path) => (await stat(path)).mtimeMs > longAgo.getTime()));
+    // #then
+    expect(rewritten).toEqual([true, true]);
+  });
+
+  test("a new empty folder shows up in its parent's feed", async () => {
+    // #given
+    await makeSourceFolders("Fiction/SciFi");
+    const first = run();
+    let done = first.idle();
+    first.processor.submit({ _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" });
+    await done;
+    done = first.idle();
+    // #when
+    first.processor.submit({ _tag: "FolderCreated", parent: join(FILES_DIR, "Fiction"), name: "SciFi" });
+    await done;
+    await first.stop();
+    // #then
+    expect((await feed("Fiction")).includes("/Fiction/SciFi/feed.xml")).toBe(true);
   });
 
   test("removing a book refreshes the folder feed up to the root", async () => {

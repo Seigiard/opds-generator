@@ -25,7 +25,7 @@ Review base: b204f0b57ef62e1b96fbad59c7613c458653970c
       Done: no forced `Bun.gc(true)`; memory snapshot logged at `debug`; `test/e2e/event-logging.test.ts`
       rewritten for the `/books`-only path; memory gates green with unchanged limits; `CLAUDE.md`
       pipeline section, watcher-loop gotcha and project map updated.
-- [ ] P4 · #21 refresh a parent only when the child summary changed
+- [x] P4 · #21 refresh a parent only when the child summary changed
       Done: `folderMetaSync` writes `_entry.xml` and returns the parent refresh only on a content
       change (timestamp-insensitive if `opds-ts` embeds one); #21 acceptance checks 1–2 pass.
 - [ ] P5 · #15 pure lifecycle transition and module

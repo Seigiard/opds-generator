@@ -169,12 +169,13 @@ describe("Processing Handlers", () => {
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data" });
     });
 
-    test("returns cascade event to generate folder feed.xml", async () => {
+    test("returns cascade events to generate the folder feed.xml and list the folder in its parent", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
-      const cascades = result._unsafeUnwrap();
-      expect(cascades).toHaveLength(1);
-      expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
+      expect(result._unsafeUnwrap()).toEqual([
+        { _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" },
+        { _tag: "FolderMetaSyncRequested", path: "/test/data" },
+      ]);
     });
   });
 
