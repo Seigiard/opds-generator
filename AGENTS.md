@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, neverthrow event pipeline, Effect 4 only for command ownership, nginx in front, everything runs in Docker.
+OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, neverthrow event pipeline migrating to Effect 4 (ADR 0003), Effect 4 for command ownership, nginx in front, everything runs in Docker.
 
 `AGENTS.md` is the single source of truth for project context (`CLAUDE.md` is a symlink to it). Update it in the same change when you alter architecture, dependencies, commands, gotchas, or project structure. Deep topics live in `docs/agents/`; update the matching file there too.
 

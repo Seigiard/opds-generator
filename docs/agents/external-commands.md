@@ -15,8 +15,8 @@ Code: `src/utils/process.ts`.
 
 ## Effect scope
 
-- `effect` is pinned to `4.0.1` and limited to command and resource ownership. Event processing stays neverthrow + async/await with plain discriminated unions.
-- Exception: the #25 prototype (`catalogue-processor-effect.ts`, `effect-handler.ts`, `handlers/book-sync-effect.ts`) is not wired into `server.ts`. ADR 0003 is proposed; see `docs/effect-processing-prototype.md`.
+- `effect` is pinned to `4.0.1`. It owns command and resource ownership, and by ADR 0003 event processing too. The migration is in progress: `server.ts` still runs the plain neverthrow processor and handlers.
+- New processing code follows ADR 0003: Effect handlers with tagged errors, Promise crossings through `ownedPromise`. The Effect processor and `bookSyncEffect` exist beside the plain code (`docs/effect-processing-prototype.md` has the migration plan).
 - The vendored `anti-slop-effect` rules run at `error` on Effect-owned modules via the `.oxlintrc.json` override. When another module adopts Effect, add its path to that override.
 - Keep acquisition and release scoped, let native work outlive interruption, and preserve original errors at the Promise boundary.
 - `docs/memory-leak-investigation.md` describes the old runtime. The Docker memory suites check current behavior.

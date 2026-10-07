@@ -136,7 +136,7 @@ Go, against the decision rule "not worse than plain on memory, shutdown and code
 - **Type safety: better on failures and resources.** Exhaustive failure handling (where a caller narrows the error), checked failure tags, and scoped resources are compile-time checks only in Effect. Dependencies and forgotten awaits are equal. Cancellation leaves the error channel, so the documented "rethrow the abort through every fallback" convention goes away.
 - **Development experience: better, with three traps to fence in code.** The `anti-slop-effect` rules caught the manual-tag habits at once. All three traps (`tryPromise` abandons work; interruption beats a finished result; a kept signal outlives its bridge) are invisible to `tsc`. The migration must make `ownedPromise` and the "uninterruptible handler, interruptible phases" rule the only way handlers cross a Promise boundary, and keep the shutdown test that proved the first trap.
 
-The decision record is `docs/adr/0003-effect-owns-event-processing.md` (status: proposed).
+The decision record is `docs/adr/0003-effect-owns-event-processing.md` (status: accepted).
 
 ## Migration plan
 
