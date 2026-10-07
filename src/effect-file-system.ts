@@ -1,5 +1,6 @@
 import { Context, Data, Effect } from "effect";
 import { access, mkdir, readdir, rename, rm, stat, symlink, unlink } from "node:fs/promises";
+import { ownedPromise } from "./processing/effect-handler.ts";
 
 export interface FileStat {
   isDirectory(): boolean;
@@ -62,11 +63,9 @@ export const liveEffectFileSystem: EffectFileSystemService = {
   unlink: (path) => fsEffect("unlink", path, async () => unlink(path)),
 };
 
+// A filesystem Promise cannot be cancelled: interruption waits for it, so no write outlives its fiber.
 function fsEffect<A>(operation: string, path: string, run: () => Promise<A>): Effect.Effect<A, FileSystemError> {
-  return Effect.tryPromise({
-    try: run,
-    catch: (cause) => toFileSystemError(operation, path, cause),
-  });
+  return ownedPromise(run, (cause) => toFileSystemError(operation, path, cause));
 }
 
 function toFileSystemError(operation: string, path: string, cause: unknown): FileSystemError {

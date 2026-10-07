@@ -33,6 +33,7 @@ export function ownedPromise<A, E>(run: (signal: AbortSignal) => Promise<A>, onE
       (cause: unknown) => resume(Effect.fail(onError(cause))),
     );
 
+    // oxlint-disable-next-line opds/no-direct-effect-promise -- the cancel effect of Effect.callback runs uninterruptibly
     return Effect.promise(() => settled);
   });
 }

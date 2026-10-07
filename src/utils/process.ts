@@ -46,11 +46,12 @@ function signalChild(proc: Bun.Subprocess, signal: "SIGTERM" | "SIGKILL"): void 
 const releaseChild = Effect.fnUntraced(function* (proc: Bun.Subprocess) {
   if (proc.exitCode !== null) return;
   signalChild(proc, "SIGTERM");
+  // oxlint-disable-next-line opds/no-direct-effect-promise -- the grace timeout must cut this wait; SIGKILL and an uninterruptible wait follow
   const exited = yield* Effect.promise(() => proc.exited).pipe(Effect.interruptible, Effect.timeoutOption(TERMINATION_GRACE));
 
   if (Option.isNone(exited)) {
     signalChild(proc, "SIGKILL");
-    yield* Effect.promise(() => proc.exited);
+    yield* Effect.promise(() => proc.exited).pipe(Effect.uninterruptible);
   }
 });
 
@@ -70,6 +71,7 @@ const executeCommand = Effect.fnUntraced(function* (options: SpawnWithTimeoutOpt
     releaseChild,
   );
 
+  // oxlint-disable-next-line opds/no-direct-effect-promise -- on interruption the acquireRelease finalizer kills the child and waits for its exit
   const exit = yield* Effect.tryPromise({ try: () => proc.exited, catch: (cause) => cause }).pipe(
     Effect.timeoutOption(options.timeout ?? DEFAULT_TIMEOUT),
   );
