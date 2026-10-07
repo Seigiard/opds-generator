@@ -1,5 +1,6 @@
 import { Context, Data, Effect } from "effect";
 import { access, mkdir, readdir, rename, rm, stat, symlink, unlink } from "node:fs/promises";
+import type { FileSystemService } from "./context.ts";
 
 export interface FileStat {
   isDirectory(): boolean;
@@ -61,6 +62,20 @@ export const liveEffectFileSystem: EffectFileSystemService = {
   symlink: (target, path) => fsEffect("symlink", path, async () => symlink(target, path)),
   unlink: (path) => fsEffect("unlink", path, async () => unlink(path)),
 };
+
+export function effectFileSystemFromPromiseService(fs: FileSystemService): EffectFileSystemService {
+  return {
+    mkdir: (path, options) => fsEffect("mkdir", path, () => fs.mkdir(path, options)),
+    rm: (path, options) => fsEffect("rm", path, () => fs.rm(path, options)),
+    readdir: (path) => fsEffect("readdir", path, () => fs.readdir(path)),
+    stat: (path) => fsEffect("stat", path, () => fs.stat(path)),
+    exists: (path) => fsEffect("exists", path, () => fs.exists(path)),
+    writeFile: (path, content) => fsEffect("writeFile", path, () => fs.writeFile(path, content)),
+    atomicWrite: (path, content) => fsEffect("atomicWrite", path, () => fs.atomicWrite(path, content)),
+    symlink: (target, path) => fsEffect("symlink", path, () => fs.symlink(target, path)),
+    unlink: (path) => fsEffect("unlink", path, () => fs.unlink(path)),
+  };
+}
 
 function fsEffect<A>(operation: string, path: string, run: () => Promise<A>): Effect.Effect<A, FileSystemError> {
   return Effect.tryPromise({

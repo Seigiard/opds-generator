@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit, Predicate, Queue } from "effect";
+import { EffectFileSystem, effectFileSystemFromPromiseService } from "../effect-file-system.ts";
 import { log } from "../logging/index.ts";
 import type { HandlerDeps } from "../context.ts";
 import { generateEventId, getEventPath, logMemorySnapshot, type CatalogueProcessor, type ProcessorStatus } from "./catalogue-processor.ts";
@@ -168,6 +169,7 @@ export function createEffectCatalogueProcessor({ deps, handlers }: EffectCatalog
     ),
     Effect.forever,
     Effect.provideService(CatalogueDeps, deps),
+    Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
   );
 
   const start = async (signal: AbortSignal): Promise<void> => {

@@ -20,7 +20,7 @@ src/
 │   ├── catalogue-processor.ts # Owns queue, fixed handler registry, consumer loop, busy/empty edges
 │   ├── catalogue-processor-effect.ts, effect-handler.ts # Effect 4 prototype (#25), not wired into server.ts
 │   ├── adapters/    # Raw → typed events: books-adapter, sync-plan-adapter
-│   └── handlers/    # book-sync, folder-sync, folder-meta-sync, cleanup, …
+│   └── handlers/    # book-sync, folder-sync, folder-meta-sync, Effect ports, cleanup, …
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
