@@ -300,7 +300,7 @@ describe("Lifecycle", () => {
     await lifecycle.stop();
   });
 
-  test("logs a rejecting processor start without raising an unhandled rejection", async () => {
+  test("a rejecting processor start before shutdown is observed and reported as fatal once", async () => {
     // #given a processor whose consumer task rejects after startup
     const failure = new Error("consumer crashed");
     const scanner: CatalogueScanner = { scan: async () => [] };
@@ -313,7 +313,16 @@ describe("Lifecycle", () => {
       status: () => ({ pending: 0, active: null }),
     };
 
-    const lifecycle = createLifecycle({ scanner, processor, clock: manualClock().clock, reconcileIntervalSeconds: 0 });
+    const fatal: unknown[] = [];
+
+    const lifecycle = createLifecycle({
+      scanner,
+      processor,
+      clock: manualClock().clock,
+      reconcileIntervalSeconds: 0,
+      onFatal: (error) => fatal.push(error),
+    });
+
     const errors: string[] = [];
     const originalError = console.error;
     const unhandled: unknown[] = [];
@@ -332,17 +341,53 @@ describe("Lifecycle", () => {
       // #when
       await lifecycle.start();
       await flush();
-      await lifecycle.stop();
       await flush();
     } finally {
+      await lifecycle.stop();
       console.error = originalError;
       process.off("unhandledRejection", onUnhandled);
     }
 
-    // #then the failure is observed by lifecycle only
+    // #then the failure is observed by lifecycle and escalated once
     expect(errors.map((entry) => JSON.parse(entry))).toEqual([
       expect.objectContaining({ level: "error", tag: "Lifecycle", msg: "Owned task failed", error: "consumer crashed" }),
     ]);
+    expect(fatal).toEqual([failure]);
     expect(unhandled).toEqual([]);
+  });
+
+  test("a processor rejection after stop is observed but not reported as fatal", async () => {
+    // #given a processor whose consumer task rejects only after its signal is aborted
+    const failure = new Error("consumer stopped");
+    const scanner: CatalogueScanner = { scan: async () => [] };
+
+    const processor: CatalogueProcessor = {
+      submit: () => {},
+      start: (signal) =>
+        new Promise((_, reject) => {
+          signal.addEventListener("abort", () => reject(failure), { once: true });
+        }),
+      onBusy: () => () => {},
+      onEmpty: () => () => {},
+      status: () => ({ pending: 0, active: null }),
+    };
+
+    const fatal: unknown[] = [];
+
+    const lifecycle = createLifecycle({
+      scanner,
+      processor,
+      clock: manualClock().clock,
+      reconcileIntervalSeconds: 0,
+      onFatal: (error) => fatal.push(error),
+    });
+
+    // #when
+    await lifecycle.start();
+    await lifecycle.stop();
+    await flush();
+
+    // #then
+    expect(fatal).toEqual([]);
   });
 });

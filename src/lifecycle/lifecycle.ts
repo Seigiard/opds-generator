@@ -45,6 +45,7 @@ interface LifecycleOptions {
   readonly clock: Clock;
   /** Seconds between reconciliations; 0 turns them off. */
   readonly reconcileIntervalSeconds: number;
+  readonly onFatal?: (cause: unknown) => void;
 }
 
 interface LifecycleStatus {
@@ -71,7 +72,7 @@ interface Lifecycle {
   stop(): Promise<void>;
 }
 
-export function createLifecycle({ scanner, processor, clock, reconcileIntervalSeconds }: LifecycleOptions): Lifecycle {
+export function createLifecycle({ scanner, processor, clock, reconcileIntervalSeconds, onFatal }: LifecycleOptions): Lifecycle {
   const controller = new AbortController();
   const { signal } = controller;
   const tasks = new Set<Promise<unknown>>();
@@ -79,9 +80,11 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
   let initialError: unknown;
   const initialScan = Promise.withResolvers<void>();
 
-  const own = (task: Promise<unknown>): void => {
+  const own = (task: Promise<unknown>, options: { readonly fatal?: boolean } = {}): void => {
     const observed = task.catch((cause) => {
       log.error("Lifecycle", "Owned task failed", cause);
+
+      if (options.fatal && !signal.aborted) onFatal?.(cause);
     });
 
     tasks.add(observed);
@@ -168,7 +171,7 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
 
   return {
     start() {
-      own(processor.start(signal));
+      own(processor.start(signal), { fatal: true });
       processor.onBusy(() => dispatch({ type: "processor-busy" }));
       processor.onEmpty(() => dispatch({ type: "processor-empty" }));
       dispatch({ type: "scan-requested", request: { kind: "initial", force: false } });

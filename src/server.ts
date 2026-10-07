@@ -34,10 +34,12 @@ async function main(): Promise<void> {
       processor,
       clock: systemClock,
       reconcileIntervalSeconds: config.reconcileInterval,
-    });
+      onFatal: (error) => {
+        log.error("Server", "Processor failed; exiting", error);
 
-    const initialScan = lifecycle.start();
-    log.info("Server", "Lifecycle started");
+        void exitAfterStop(1);
+      },
+    });
 
     const server = Bun.serve({
       port: config.port,
@@ -104,6 +106,9 @@ async function main(): Promise<void> {
 
       process.exit(code);
     };
+
+    const initialScan = lifecycle.start();
+    log.info("Server", "Lifecycle started");
 
     const shutdown = () => {
       log.info("Server", "Shutting down");
