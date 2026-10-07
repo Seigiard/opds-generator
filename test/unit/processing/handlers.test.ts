@@ -116,16 +116,10 @@ const asyncDeps: HandlerDeps = {
   },
 };
 
-const cleanupEffectFs = (handlerDeps: HandlerDeps) =>
-  createEffectFileSystemTestDouble({
-    exists: (path) => Effect.promise(() => handlerDeps.fs.exists(path)),
-    rm: (path, options) => Effect.promise(() => handlerDeps.fs.rm(path, options)),
-  });
-
 const asCleanupHandler =
   (handler: EffectHandler): Handler =>
   (event, handlerDeps) =>
-    runAsPromiseHandler(handler, event, handlerDeps, cleanupEffectFs(handlerDeps));
+    runAsPromiseHandler(handler, event, handlerDeps);
 
 // Issue #36: cleanup handler suites run against the plain and Effect ports.
 const cleanupVariants: { name: string; bookCleanup: Handler; folderCleanup: Handler }[] = [
