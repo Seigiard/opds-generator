@@ -2,7 +2,7 @@ import { Context, Data, Effect } from "effect";
 import type { FileSystemService } from "./context.ts";
 import { ownedPromise } from "./utils/owned-promise.ts";
 
-export interface FileStat {
+interface FileStat {
   isDirectory(): boolean;
   readonly size: number;
 }
@@ -20,7 +20,7 @@ export class FileSystemAlreadyExists extends Data.TaggedError("FileSystemAlready
 
 export class FileSystemPermissionDenied extends Data.TaggedError("FileSystemPermissionDenied")<FailureProps> {}
 
-export class FileSystemFailure extends Data.TaggedError("FileSystemFailure")<FailureProps> {}
+class FileSystemFailure extends Data.TaggedError("FileSystemFailure")<FailureProps> {}
 
 export type FileSystemError = FileSystemNotFound | FileSystemAlreadyExists | FileSystemPermissionDenied | FileSystemFailure;
 

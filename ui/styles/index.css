@@ -125,7 +125,7 @@ body {
 .book {
   grid-area: 1/1/2/2;
   width: 100%;
-  aspect-ratio: 225/350;
+  aspect-ratio: var(--cover-ratio, 225/350);
   border-radius: var(--card-radius);
   isolation: isolate;
   display: grid;

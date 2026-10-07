@@ -13,7 +13,7 @@ export const CatalogueEvent = Data.taggedEnum<EventType>();
  * Handlers run uninterruptibly: a handler marks the phases shutdown may cancel with `Effect.interruptible`.
  * Interruption discards a result, so a phase that must finish once started stays outside those marks.
  */
-export type HandlerError = Error & { readonly _tag: string };
+type HandlerError = Error & { readonly _tag: string };
 
 export type EffectHandler = (event: EventType) => Effect.Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>;
 

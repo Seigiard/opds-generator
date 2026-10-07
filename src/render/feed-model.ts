@@ -9,7 +9,7 @@ const THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail";
 
 const SUBSECTION_REL = "subsection";
 
-export interface AcquisitionLink {
+interface AcquisitionLink {
   href: string;
   type: string;
 }

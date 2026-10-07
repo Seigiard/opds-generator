@@ -8,14 +8,14 @@ function errnoCode(cause: unknown): string | undefined {
   return (cause as NodeJS.ErrnoException).code;
 }
 
-export interface ConfigService {
+interface ConfigService {
   readonly filesPath: string;
   readonly dataPath: string;
   readonly port: number;
   readonly reconcileInterval: number;
 }
 
-export interface LoggerService {
+interface LoggerService {
   info(tag: string, msg: string, ctx?: LogContext): void;
   warn(tag: string, msg: string, ctx?: LogContext): void;
   error(tag: string, msg: string, cause?: unknown, ctx?: LogContext): void;

@@ -1,7 +1,6 @@
 import { cp, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import postcss from "postcss";
-import postcssRandomFunction from "@csstools/postcss-random-function";
 import autoprefixer from "autoprefixer";
 import postcssNesting from "postcss-nesting";
 import cssnano from "cssnano";
@@ -19,7 +18,6 @@ const outPath = join(staticDir, "style.css");
 const mainEntry = join(uiDir, "gridnav", "main.ts");
 
 const pipeline = [
-  postcssRandomFunction(),
   autoprefixer(),
   postcssNesting({ edition: "2021", noIsPseudoSelector: true }),
   cssnano({ preset: ["default", { discardComments: false }] }),

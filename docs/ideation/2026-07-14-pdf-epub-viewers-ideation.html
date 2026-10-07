@@ -5,60 +5,257 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ideation: In-browser PDF &amp; EPUB viewers</title>
     <style>
-      :root{
-        --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --line:#e3dfd6;
-        --accent:#0f6f5c; --accent-soft:#e7f2ee; --accent-text:#0b5a4a;
-        --warn:#9a5b00; --warn-soft:#fbf1e2; --warn-text:#7c4a00;
-        --info-soft:#eaeff7; --info-text:#2f4a7a;
-        --card:#ffffff; --code-bg:#f1efe9;
+      :root {
+        --bg: #faf9f6;
+        --ink: #1c1b18;
+        --muted: #6b675e;
+        --line: #e3dfd6;
+        --accent: #0f6f5c;
+        --accent-soft: #e7f2ee;
+        --accent-text: #0b5a4a;
+        --warn: #9a5b00;
+        --warn-soft: #fbf1e2;
+        --warn-text: #7c4a00;
+        --info-soft: #eaeff7;
+        --info-text: #2f4a7a;
+        --card: #ffffff;
+        --code-bg: #f1efe9;
       }
-      *{box-sizing:border-box}
-      body{margin:0;background:var(--bg);color:var(--ink);
-        font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-      main{max-width:900px;margin-inline:auto;padding:2.5rem 1.5rem 4rem}
-      p,li,dd{max-width:70ch}
-      h1{font-size:1.7rem;line-height:1.25;margin:.2rem 0 .4rem}
-      h2{font-size:1.25rem;margin:2.6rem 0 .8rem;padding-top:1.2rem;border-top:1px solid var(--line)}
-      h3{font-size:1.05rem;margin:0 0 .5rem}
-      code{background:var(--code-bg);padding:.1em .35em;border-radius:4px;font-size:.88em;
-        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-      a{color:var(--accent-text)}
-      .eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
-      .meta{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin:.6rem 0 0;color:var(--muted);font-size:.86rem}
-      .meta strong{color:var(--ink);font-weight:600}
-      .statstrip{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.4rem 0 0}
-      .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.55rem .9rem;font-size:.85rem;color:var(--muted)}
-      .stat b{display:block;font-size:1.15rem;color:var(--ink)}
-      .jump{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.9rem 1.1rem;margin:1rem 0 1.6rem}
-      .jump ol{margin:.3rem 0 0;padding-left:1.3rem}
-      .jump li{margin:.2rem 0}
-      article.idea{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.2rem 1.4rem;margin:1.2rem 0}
-      .ideahead{display:flex;align-items:baseline;gap:.7rem;flex-wrap:wrap;margin-bottom:.3rem}
-      .idchip{background:var(--accent-soft);color:var(--accent-text);font-weight:700;border-radius:999px;
-        padding:.15rem .7rem;font-size:.82rem;white-space:nowrap}
-      .chips{display:flex;gap:.45rem;flex-wrap:wrap;margin:.35rem 0 .8rem}
-      .chip{border-radius:999px;padding:.12rem .65rem;font-size:.76rem;font-weight:600;border:1px solid var(--line);color:var(--muted);background:var(--bg)}
-      .chip.conf-high{background:var(--accent-soft);color:var(--accent-text);border-color:transparent}
-      .chip.conf-med{background:var(--info-soft);color:var(--info-text);border-color:transparent}
-      .chip.cx{background:var(--warn-soft);color:var(--warn-text);border-color:transparent}
-      dl.fields{margin:.6rem 0 0}
-      dl.fields dt{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:.75rem}
-      dl.fields dd{margin:.15rem 0 0}
-      .callout{border-radius:10px;padding:.7rem 1rem;margin:.8rem 0;font-size:.92rem}
-      .callout.warn{background:var(--warn-soft)}
-      .callout.warn .eyebrow{color:var(--warn-text)}
-      .callout.info{background:var(--info-soft)}
-      .callout.info .eyebrow{color:var(--info-text)}
-      table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.9rem}
-      th,td{border:1px solid var(--line);padding:.45rem .65rem;text-align:left;vertical-align:top}
-      th{background:var(--code-bg);font-size:.8rem;letter-spacing:.04em;text-transform:uppercase}
-      .wide{overflow-x:auto}
-      figure{margin:1rem 0;padding:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:10px}
-      figcaption{font-size:.8rem;color:var(--muted);margin-top:.5rem}
-      footer.composition-signal{margin-top:3.5rem;padding-top:1rem;border-top:1px solid var(--line);
-        font-size:.8rem;color:var(--muted)}
-      ul{padding-left:1.2rem}
-      strong{color:inherit}
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.6 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+      main {
+        max-width: 900px;
+        margin-inline: auto;
+        padding: 2.5rem 1.5rem 4rem;
+      }
+      p,
+      li,
+      dd {
+        max-width: 70ch;
+      }
+      h1 {
+        font-size: 1.7rem;
+        line-height: 1.25;
+        margin: 0.2rem 0 0.4rem;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 2.6rem 0 0.8rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid var(--line);
+      }
+      h3 {
+        font-size: 1.05rem;
+        margin: 0 0 0.5rem;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.88em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      a {
+        color: var(--accent-text);
+      }
+      .eyebrow {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.4rem;
+        margin: 0.6rem 0 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+      .meta strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .statstrip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin: 1.4rem 0 0;
+      }
+      .stat {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .stat b {
+        display: block;
+        font-size: 1.15rem;
+        color: var(--ink);
+      }
+      .jump {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.9rem 1.1rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .jump ol {
+        margin: 0.3rem 0 0;
+        padding-left: 1.3rem;
+      }
+      .jump li {
+        margin: 0.2rem 0;
+      }
+      article.idea {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.2rem 1.4rem;
+        margin: 1.2rem 0;
+      }
+      .ideahead {
+        display: flex;
+        align-items: baseline;
+        gap: 0.7rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.3rem;
+      }
+      .idchip {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 0.15rem 0.7rem;
+        font-size: 0.82rem;
+        white-space: nowrap;
+      }
+      .chips {
+        display: flex;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+        margin: 0.35rem 0 0.8rem;
+      }
+      .chip {
+        border-radius: 999px;
+        padding: 0.12rem 0.65rem;
+        font-size: 0.76rem;
+        font-weight: 600;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        background: var(--bg);
+      }
+      .chip.conf-high {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+        border-color: transparent;
+      }
+      .chip.conf-med {
+        background: var(--info-soft);
+        color: var(--info-text);
+        border-color: transparent;
+      }
+      .chip.cx {
+        background: var(--warn-soft);
+        color: var(--warn-text);
+        border-color: transparent;
+      }
+      dl.fields {
+        margin: 0.6rem 0 0;
+      }
+      dl.fields dt {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+        margin-top: 0.75rem;
+      }
+      dl.fields dd {
+        margin: 0.15rem 0 0;
+      }
+      .callout {
+        border-radius: 10px;
+        padding: 0.7rem 1rem;
+        margin: 0.8rem 0;
+        font-size: 0.92rem;
+      }
+      .callout.warn {
+        background: var(--warn-soft);
+      }
+      .callout.warn .eyebrow {
+        color: var(--warn-text);
+      }
+      .callout.info {
+        background: var(--info-soft);
+      }
+      .callout.info .eyebrow {
+        color: var(--info-text);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 0.8rem 0;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 0.45rem 0.65rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--code-bg);
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .wide {
+        overflow-x: auto;
+      }
+      figure {
+        margin: 1rem 0;
+        padding: 0.8rem;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      figcaption {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 0.5rem;
+      }
+      footer.composition-signal {
+        margin-top: 3.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      strong {
+        color: inherit;
+      }
     </style>
   </head>
   <body>
@@ -70,7 +267,7 @@
         <span><strong>Topic</strong> pdf-epub-viewers</span>
         <span><strong>Mode</strong> repo-grounded</span>
       </div>
-      <p class="meta" style="display:block;max-width:70ch">
+      <p class="meta" style="display: block; max-width: 70ch">
         <strong>Focus:</strong> add PDF and EPUB viewers for files; possibly a single HTML file with all data baked in (pdf.js or epub-js);
         show a <code>view</code> button near the "download" button.
       </p>
@@ -570,7 +767,7 @@
 
       <div class="callout info">
         <span class="eyebrow">Sequencing note</span>
-        <p style="margin:.3rem 0 0">
+        <p style="margin: 0.3rem 0 0">
           A natural ladder emerged across frames: <strong>4</strong> (verify 206, optional zero-JS inline-PDF rung) →
           <strong>2</strong> (CSP gate) → <strong>3</strong> (matrix) + <strong>1</strong> (reader shell) → <strong>7</strong> (progress) →
           <strong>6/5</strong> (previews, then the zero-JS tier if demand proves out). Ideas 6 and 5 can also lead if "preview first, reader

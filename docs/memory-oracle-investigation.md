@@ -137,9 +137,8 @@ This preserves the experiment used for the long-run observations. It generates
 only a container-local script and runs the actual application handlers.
 
 ```ts
-const source = await Bun.file('/app/test/helpers/leak-probe.ts').text();
-const prefix = source.slice(0, source.indexOf('const scenario = process.argv[2];'))
-  .replaceAll('"../../src/', '"/app/src/');
+const source = await Bun.file("/app/test/helpers/leak-probe.ts").text();
+const prefix = source.slice(0, source.indexOf("const scenario = process.argv[2];")).replaceAll('"../../src/', '"/app/src/');
 const originalFs = `{
   mkdir: async (path, options) => { await mkdir(path, options); },
   rm: (path, options) => rm(path, options),
@@ -151,8 +150,8 @@ const originalFs = `{
   symlink: async (target, path) => { const { unlink, symlink } = await import('node:fs/promises'); try { await unlink(path); } catch {} await symlink(target, path); },
   unlink: async (path) => { const { unlink } = await import('node:fs/promises'); await unlink(path); },
 }`;
-const mode = process.env.DIAG_FS ?? 'production';
-const selected = mode === 'original' ? prefix.replace('fs: context.fs,', `fs: ${originalFs},`) : prefix;
+const mode = process.env.DIAG_FS ?? "production";
+const selected = mode === "original" ? prefix.replace("fs: context.fs,", `fs: ${originalFs},`) : prefix;
 const suffix = `
 import { heapStats } from 'bun:jsc';
 import sharp from '/app/node_modules/sharp/lib/index.js';
@@ -213,9 +212,9 @@ try {
   }
 } finally { await rm(tmpDir, { recursive: true, force: true }); }
 `;
-const path = '/tmp/opds-memory-diagnostic-generated.ts';
+const path = "/tmp/opds-memory-diagnostic-generated.ts";
 await Bun.write(path, selected + suffix);
-const child = Bun.spawn([process.execPath, path], { stdout: 'inherit', stderr: 'inherit', env: process.env });
+const child = Bun.spawn([process.execPath, path], { stdout: "inherit", stderr: "inherit", env: process.env });
 process.exit(await child.exited);
 ```
 

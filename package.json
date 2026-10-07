@@ -32,29 +32,28 @@
   },
   "dependencies": {
     "effect": "4.0.1",
-    "fast-xml-parser": "^5.10.0",
-    "hono": "^4.12.30",
-    "knip": "^5.88.1",
+    "fast-xml-parser": "^5.11.2",
+    "hono": "^4.13.13",
+    "knip": "^6.40.0",
     "node-unrar-js": "^2.0.2",
     "opds-ts": "^2.1.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "valibot": "^1.5.0"
   },
   "devDependencies": {
-    "@csstools/postcss-random-function": "^2.0.1",
     "@oxlint/plugins": "1.87.0",
     "@types/bun": "latest",
-    "autoprefixer": "^10.5.3",
-    "cssnano": "^7.1.9",
+    "autoprefixer": "^10.6.1",
+    "cssnano": "^9.3.2",
     "nano-staged": "^1.0.2",
     "neverthrow": "^8.2.0",
-    "oxfmt": "^0.21.0",
+    "oxfmt": "^0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "postcss": "^8.5.19",
-    "postcss-nesting": "^13.0.2",
+    "postcss": "^8.5.29",
+    "postcss-nesting": "^14.0.3",
     "simple-git-hooks": "^2.14.0",
-    "vite": "^6.4.3"
+    "vite": "^8.3.3"
   },
   "peerDependencies": {
     "typescript": "^5"

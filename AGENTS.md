@@ -30,7 +30,7 @@ src/
 └── utils/           # archive, image, process, processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
-├── styles/          # CSS sources → static/style.css
+├── styles/          # CSS sources + four fixed cover variants → static/style.css
 ├── gridnav/         # main.ts (prod entry) + viewer.ts + gridnav.ts → static/main.js
 ├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
 ├── vendor/          # foliate-js pinned git submodule + VENDOR.md
@@ -195,6 +195,6 @@ Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/lea
 - Rebuild the test image after any runtime dependency change: `bun run rebuild:test`.
 - `hono` is a runtime dependency (the renderer runs in production) and stays browser-importable.
 - `sharp` ships its own types and `detect-libc` comes transitively through sharp; rely on those.
-- Update Oxlint and `@oxlint/plugins` together at matching exact versions. The vendored anti-slop plugin is excluded from app typechecking and formatting, and is listed as a Knip entry.
+- Update Oxlint and `@oxlint/plugins` together at matching exact versions. The vendored anti-slop plugin is excluded from app typechecking and formatting. Knip discovers both Oxlint plugins through the lint config.
 
 </important>

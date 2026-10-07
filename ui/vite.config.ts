@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
-import postcssRandomFunction from "@csstools/postcss-random-function";
 import autoprefixer from "autoprefixer";
 import postcssNesting from "postcss-nesting";
 
@@ -23,7 +22,7 @@ export default defineConfig({
   },
   css: {
     postcss: {
-      plugins: [postcssRandomFunction(), autoprefixer(), postcssNesting({ edition: "2021", noIsPseudoSelector: true })],
+      plugins: [autoprefixer(), postcssNesting({ edition: "2021", noIsPseudoSelector: true })],
     },
   },
 });

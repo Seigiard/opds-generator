@@ -67,10 +67,10 @@ describe("Processor shutdown", () => {
           BookCreated: (_event, handlerDeps) =>
             track(async () => {
               if (scenario === "pending-cascades") {
-                return Array.from(
-                  { length: CASCADES },
-                  (_, i): EventType => ({ _tag: "FolderMetaSyncRequested", path: `/test/data/${i}` }),
-                );
+                return Array.from({ length: CASCADES }, (_, i): EventType => ({
+                  _tag: "FolderMetaSyncRequested",
+                  path: `/test/data/${i}`,
+                }));
               }
 
               await afterAbort(handlerDeps.signal);

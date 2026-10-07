@@ -1,5 +1,5 @@
 /** What a scan is for. `initial` runs once at startup, `reconcile` comes from the timer, `resync` from an operator or the books watcher. */
-export type ScanKind = "initial" | "resync" | "reconcile";
+type ScanKind = "initial" | "resync" | "reconcile";
 
 export interface ScanRequest {
   readonly kind: ScanKind;
@@ -14,7 +14,7 @@ export interface ScanRequest {
  * - `stopping`: a stop signal arrived; nothing new is taken in.
  * Every phase except `stopping` accepts watcher events and resync requests.
  */
-export type LifecyclePhase = "scanning" | "accepting" | "settled" | "stopping";
+type LifecyclePhase = "scanning" | "accepting" | "settled" | "stopping";
 
 export interface LifecycleState {
   readonly phase: LifecyclePhase;
@@ -34,7 +34,7 @@ export type LifecycleInput =
   | { readonly type: "reconcile-tick" }
   | { readonly type: "shutdown-requested" };
 
-export type SkipReason = "scanning" | "accepting" | "stopping";
+type SkipReason = "scanning" | "accepting" | "stopping";
 
 export type LifecycleEffect =
   | { readonly type: "start-scan"; readonly request: ScanRequest }

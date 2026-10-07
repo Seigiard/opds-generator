@@ -1,49 +1,20 @@
-.books-grid > div:nth-child(3n + 1) .book:nth-child(3n + 1) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(3n + 2) .book:nth-child(3n + 1) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(3n + 3) .book:nth-child(3n + 1) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+/* Four fixed cover shapes and colors, shared by each card and its popup. */
+.books-grid > div:nth-child(4n + 1) {
+  --cover-ratio: 225/350;
+  --card-bg: #dde0f0;
 }
 
-/* Book heights: 5n cycle */
-.books-grid > div:nth-child(5n + 1) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(5n + 2) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(5n + 3) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(5n + 4) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(5n + 5) .book:nth-child(3n + 2) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+.books-grid > div:nth-child(4n + 2) {
+  --cover-ratio: 250/350;
+  --card-bg: #efd8cb;
 }
 
-/* White section: 7n cycle */
-.books-grid > div:nth-child(7n + 1) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+.books-grid > div:nth-child(4n + 3) {
+  --cover-ratio: 210/350;
+  --card-bg: #d6e2d7;
 }
-.books-grid > div:nth-child(7n + 2) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(7n + 3) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(7n + 4) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(7n + 5) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(7n + 6) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
-}
-.books-grid > div:nth-child(7n + 7) .book:nth-child(3n + 3) {
-  --card-bg: color-mix(in oklch, var(--card-bg--basic) 65%, oklch(0.7 0.08 random(0deg, 360deg, 15deg)));
+
+.books-grid > div:nth-child(4n + 4) {
+  --cover-ratio: 235/320;
+  --card-bg: #d1e3ee;
 }
