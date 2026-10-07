@@ -68,7 +68,8 @@ describe("Catalogue processor integration", () => {
               setInterval(() => {}, 100);
             `,
             ],
-            timeout: 3000,
+            // Above the test timeout: a child that is not cancelled outlives the test and turns it red.
+            timeout: 60_000,
             signal: handlerDeps.signal,
           });
         } catch (error) {

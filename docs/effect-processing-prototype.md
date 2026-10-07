@@ -8,7 +8,7 @@ The Effect processor meets the `CatalogueProcessor` interface: `submit`, `start(
 
 - **Effect 4.0.1**:
   - `src/processing/catalogue-processor-effect.ts`: a `Queue.unbounded`, a consumer fiber with `Effect.forever`, and the coalescing keys kept beside the queue.
-  - `src/processing/effect-handler.ts`: the handler type `(event) => Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`, the `CatalogueDeps` service, `runAsPromiseHandler` for tests, and event constructors.
+  - `src/processing/effect-handler.ts`: the handler type `(event) => Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`, the `CatalogueDeps` service and event constructors. `runAsPromiseHandler`, the adapter tests use, lives in `test/helpers/effect-test-handlers.ts`.
   - `src/processing/handlers/*-effect.ts`: all catalogue handlers as Effects with tagged errors.
 - Shared helpers: `getEventPath`, `generateEventId`, `logMemorySnapshot`, and `bookEntryXml` (the OPDS entry of one book).
 

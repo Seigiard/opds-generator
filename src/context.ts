@@ -79,7 +79,10 @@ export async function buildContext(): Promise<AppContext> {
 
         return true;
       } catch (error) {
-        if (errnoCode(error) === "ENOENT") return false;
+        // ENOTDIR: a path component is a regular file, so nothing exists at the path either.
+        const code = errnoCode(error);
+
+        if (code === "ENOENT" || code === "ENOTDIR") return false;
 
         throw error;
       }

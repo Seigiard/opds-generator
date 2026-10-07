@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import {
   effectFileSystemFromPromiseService,
   FileSystemNotFound,
@@ -26,6 +26,37 @@ describe("Effect FileSystemService", () => {
 
     // #then
     expect(found).toBe(false);
+  });
+
+  test("answers exists with false for a path under a regular file", async () => {
+    // #given — ENOTDIR: a component of the path is a file, so nothing can exist below it
+    await rm(TEST_DIR, { recursive: true, force: true });
+    await mkdir(TEST_DIR, { recursive: true });
+    await writeFile(join(TEST_DIR, "index.html"), "<html />");
+    const { fs } = await buildContext();
+    const effectFs = effectFileSystemFromPromiseService(fs);
+
+    // #when
+    const found = await Effect.runPromise(effectFs.exists(join(TEST_DIR, "index.html", "entry.xml")));
+
+    // #then
+    expect(found).toBe(false);
+  });
+
+  test("fails exists for a path that cannot be resolved, instead of reading it as absent", async () => {
+    // #given — ELOOP: a symlink loop cannot be probed
+    await rm(TEST_DIR, { recursive: true, force: true });
+    await mkdir(TEST_DIR, { recursive: true });
+    await symlink(join(TEST_DIR, "loop-b"), join(TEST_DIR, "loop-a"));
+    await symlink(join(TEST_DIR, "loop-a"), join(TEST_DIR, "loop-b"));
+    const { fs } = await buildContext();
+    const effectFs = effectFileSystemFromPromiseService(fs);
+
+    // #when
+    const failure = await Effect.runPromise(Effect.flip(effectFs.exists(join(TEST_DIR, "loop-a"))));
+
+    // #then
+    expect({ tag: failure._tag, operation: failure.operation }).toEqual({ tag: "FileSystemFailure", operation: "exists" });
   });
 
   test("writes through the context-backed adapter atomicWrite", async () => {

@@ -75,12 +75,14 @@ const discoverContents = Effect.fnUntraced(function* (folderPath: string, folder
 
     const ext = name.split(".").pop()?.toLowerCase() ?? "";
 
+    if (!BOOK_EXTENSIONS.includes(ext)) continue;
+
     const entryExists = yield* fs
       .exists(join(folderDataDir, name, ENTRY_FILE))
       .pipe(Effect.mapError((cause) => new FolderSyncFailed(failure(join(folderDataDir, name), cause))));
 
     // A book that got its own event is already processed or queued; skip it instead of extracting twice.
-    if (BOOK_EXTENSIONS.includes(ext) && !entryExists) found.push(CatalogueEvent.BookCreated({ parent: folderPath, name }));
+    if (!entryExists) found.push(CatalogueEvent.BookCreated({ parent: folderPath, name }));
   }
 
   return found;
