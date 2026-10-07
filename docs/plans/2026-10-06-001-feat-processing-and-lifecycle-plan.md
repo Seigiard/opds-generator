@@ -39,7 +39,7 @@ Review base: b204f0b57ef62e1b96fbad59c7613c458653970c
       an `AbortSignal`; `BookDeleted`/`FolderDeleted` no-op when the source exists; shutdown drops
       follow-up scan and awaits owned scans within 8 s; #15 checks 1–4 and 6 pass; `CLAUDE.md`
       and nginx/route docs updated.
-- [ ] P7 · #16 plain async vs Effect prototype
+- [x] P7 · #16 plain async vs Effect prototype
       Done: an Effect 4.0.1 variant of the lifecycle module on the same `transition`; leak-probe,
       ownership, shutdown timing and code-size comparison written to
       `docs/lifecycle-execution-prototype.md` with a recommendation. If Effect wins: ADR + adopt it

@@ -19,11 +19,12 @@ import { bookSync } from "../../src/processing/handlers/book-sync.ts";
 import { folderSync } from "../../src/processing/handlers/folder-sync.ts";
 import { folderMetaSync } from "../../src/processing/handlers/folder-meta-sync.ts";
 import { createCatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
+import { createLifecycle, type CatalogueScanner } from "../../src/lifecycle/lifecycle.ts";
 import { SimpleQueue } from "../../src/queue.ts";
 import type { AppContext, HandlerDeps } from "../../src/context.ts";
 import type { EventType } from "../../src/processing/types.ts";
 import { ok } from "neverthrow";
-import { QUEUE_EVENTS_PER_OP } from "./run-leak-probe.ts";
+import { LIFECYCLE_CYCLES_PER_OP, QUEUE_EVENTS_PER_OP } from "./run-leak-probe.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { heapStats } from "bun:jsc";
@@ -174,6 +175,11 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     case "consumer-enqueue":
       return buildConsumerCycle();
 
+    case "lifecycle-scan":
+      return buildLifecycleScans();
+    case "lifecycle-restart":
+      return buildLifecycleRestarts();
+
     default:
       throw new Error(`Unknown scenario: ${name}`);
   }
@@ -278,6 +284,54 @@ function buildConsumerCycle(): Op {
       markProcessed = resolve;
       processor.submit({ _tag: "FolderMetaSyncRequested", path: "/test" });
     });
+}
+
+function buildLifecycle() {
+  const { config, logger, fs } = buildContext();
+
+  const processor = createCatalogueProcessor({
+    deps: { config, logger, fs },
+    handlers: { FolderMetaSyncRequested: async () => ok<readonly EventType[]>([]) },
+  });
+
+  const scanner: CatalogueScanner = { scan: async () => [{ _tag: "FolderMetaSyncRequested", path: "/test" }] };
+
+  return createLifecycle({
+    scanner,
+    processor,
+    clock: { sleep: () => new Promise<void>(() => {}) },
+    reconcileIntervalSeconds: 0,
+  });
+}
+
+async function untilSettled(lifecycle: ReturnType<typeof buildLifecycle>): Promise<void> {
+  while (lifecycle.status().state !== "settled") await new Promise((resolve) => setImmediate(resolve));
+}
+
+// One lifecycle for the whole run; each cycle is a resync scan whose one folder refresh runs through the consumer.
+function buildLifecycleScans(): Op {
+  const lifecycle = buildLifecycle();
+  lifecycle.start();
+
+  return async () => {
+    for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
+      await untilSettled(lifecycle);
+      lifecycle.requestScan({ kind: "resync", force: false });
+      await untilSettled(lifecycle);
+    }
+  };
+}
+
+// A fresh lifecycle per cycle: start, one scan, stop. Catches anything that survives its owner.
+function buildLifecycleRestarts(): Op {
+  return async () => {
+    for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
+      const lifecycle = buildLifecycle();
+      lifecycle.start();
+      await untilSettled(lifecycle);
+      await lifecycle.stop();
+    }
+  };
 }
 
 function buildContext(): AppContext {

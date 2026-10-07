@@ -208,6 +208,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 <important if="you are adopting Effect in a module or editing Effect code">
 
 - `effect` is pinned to `4.0.1` and limited to command/resource ownership. Event processing stays neverthrow + async/await with plain discriminated unions.
+- The lifecycle (`src/lifecycle/`) stays plain async. An Effect-scope variant was measured and dropped; see `docs/lifecycle-execution-prototype.md` before reopening it.
 - The vendored `anti-slop-effect` rules run at `error` on Effect-owned modules via the `.oxlintrc.json` override. When another module adopts Effect, add its path to that override.
 - Keep acquisition/release scoped, let native work outlive interruption, and preserve original errors at the Promise boundary.
 - Historical findings in `docs/memory-leak-investigation.md` describe the old runtime; the Docker memory suites check current behavior.

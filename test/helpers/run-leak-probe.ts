@@ -17,6 +17,9 @@ export const MAX_RUNTIME_LEAK_KB = 1;
 // reads ±2-3 KB per event. Batching events per probe operation divides that noise.
 export const QUEUE_EVENTS_PER_OP = 100;
 
+// Lifecycle scans and restarts are batched per probe operation for the same reason as queue cycles.
+export const LIFECYCLE_CYCLES_PER_OP = 10;
+
 // Retained JS objects per operation. Clean scenarios stay within ±0.1; a leak keeps at
 // least one object (the leaked value) per operation.
 export const MAX_OBJECTS_PER_ITER = 0.5;
@@ -40,7 +43,12 @@ export async function runProbe(scenario: string, options: { retainKb?: number } 
   const proc = Bun.spawn(["bun", PROBE_PATH, scenario], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, LEAK_PROBE_RETAIN_KB: String(options.retainKb ?? 0) },
+    // Lifecycle scenarios drive thousands of transitions; at info level their log lines would flood the probe's stdout.
+    env: {
+      ...process.env,
+      LEAK_PROBE_RETAIN_KB: String(options.retainKb ?? 0),
+      ...(scenario.startsWith("lifecycle-") && { LOG_LEVEL: "error" }),
+    },
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
