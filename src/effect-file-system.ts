@@ -13,7 +13,7 @@ interface FailureProps {
   readonly message: string;
 }
 
-export class FileSystemNotFound extends Data.TaggedError("FileSystemNotFound")<FailureProps> {}
+class FileSystemNotFound extends Data.TaggedError("FileSystemNotFound")<FailureProps> {}
 
 export class FileSystemAlreadyExists extends Data.TaggedError("FileSystemAlreadyExists")<FailureProps> {}
 
