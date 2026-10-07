@@ -420,8 +420,68 @@ describe("bookSync handler", () => {
     expect(entry.includes("<title>Broken Kindle Book</title>")).toBe(true);
   });
 
+  test.each(["Test Book - Test Author.fb2", "Test Book - Test Author.fbz"])(
+    "publishes %s with metadata, cover, thumbnail, download link and a folder refresh",
+    async (name) => {
+      // #given a known plain or archived FB2 source book
+      const bookPath = join(FILES_DIR, name);
+      await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, name)));
+
+      // #when
+      const result = await bookSync(bookCreatedEvent(name), deps);
+
+      // #then
+      const bookDir = join(DATA_DIR, name);
+      const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+      const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
+      expect({
+        cascade: result._unsafeUnwrap(),
+        title: entry.includes("<title>Test Book</title>"),
+        author: entry.includes("<name>Test Author</name>"),
+        language: entry.includes("<dc:language>en</dc:language>"),
+        cover: entry.includes('rel="http://opds-spec.org/image"'),
+        thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+        link: await readlink(join(bookDir, name)),
+        thumbFormat: thumb.format,
+      }).toEqual({
+        cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+        title: true,
+        author: true,
+        language: true,
+        cover: true,
+        thumbnail: true,
+        link: bookPath,
+        thumbFormat: "jpeg",
+      });
+      await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+    },
+  );
+
+  test("uses the filename title when an FBZ is not a readable archive", async () => {
+    // #given an .fbz file that is no archive
+    await Bun.write(join(FILES_DIR, "My_Broken_Tale.fbz"), "not an archive");
+
+    // #when
+    const result = await bookSync(bookCreatedEvent("My_Broken_Tale.fbz"), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, "My_Broken_Tale.fbz");
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>My Broken Tale</title>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      link: await readlink(join(bookDir, "My_Broken_Tale.fbz")),
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      cover: false,
+      link: join(FILES_DIR, "My_Broken_Tale.fbz"),
+    });
+  });
+
   /** Holds `Bun.file(path)[method]()` until `release()`, so a stop can arrive while the read is running. */
-  function holdBookRead(path: string, method: "arrayBuffer" | "exists") {
+  function holdBookRead(path: string, method: "arrayBuffer" | "exists" | "text") {
     const originalFile = Bun.file.bind(Bun);
     const { promise: gate, resolve: release } = Promise.withResolvers<void>();
     const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
@@ -438,6 +498,13 @@ describe("bookSync handler", () => {
           markStarted();
 
           return gate.then(exists);
+        };
+      } else if (method === "text") {
+        const text = file.text.bind(file);
+        file.text = () => {
+          markStarted();
+
+          return gate.then(text);
         };
       } else {
         const arrayBuffer = file.arrayBuffer.bind(file);
@@ -457,6 +524,7 @@ describe("bookSync handler", () => {
   test.each([
     { name: "Held.mobi", source: "Test Book - Test Author.mobi", method: "arrayBuffer" as const },
     { name: "Held.txt", source: "sample_text.txt", method: "exists" as const },
+    { name: "Held.fb2", source: "Test Book - Test Author.fb2", method: "text" as const },
   ])("a stop during the $name read waits for the read and publishes nothing", async ({ name, source, method }) => {
     // #given a book with a previous entry whose source read is running
     const bookPath = join(FILES_DIR, name);
