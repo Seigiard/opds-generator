@@ -1,6 +1,7 @@
 import { Context, Data, Effect } from "effect";
 import { access, mkdir, readdir, rename, rm, stat, symlink, unlink } from "node:fs/promises";
 import type { FileSystemService } from "./context.ts";
+import { ownedPromise } from "./utils/owned-promise.ts";
 
 export interface FileStat {
   isDirectory(): boolean;
@@ -13,7 +14,7 @@ interface FailureProps {
   readonly message: string;
 }
 
-export class FileSystemNotFound extends Data.TaggedError("FileSystemNotFound")<FailureProps> {}
+class FileSystemNotFound extends Data.TaggedError("FileSystemNotFound")<FailureProps> {}
 
 export class FileSystemAlreadyExists extends Data.TaggedError("FileSystemAlreadyExists")<FailureProps> {}
 
@@ -77,11 +78,9 @@ export function effectFileSystemFromPromiseService(fs: FileSystemService): Effec
   };
 }
 
+// A filesystem Promise cannot be cancelled: interruption waits for it, so no write outlives its fiber.
 function fsEffect<A>(operation: string, path: string, run: () => Promise<A>): Effect.Effect<A, FileSystemError> {
-  return Effect.tryPromise({
-    try: run,
-    catch: (cause) => toFileSystemError(operation, path, cause),
-  });
+  return ownedPromise(run, (cause) => toFileSystemError(operation, path, cause));
 }
 
 function toFileSystemError(operation: string, path: string, cause: unknown): FileSystemError {

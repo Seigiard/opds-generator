@@ -4,9 +4,11 @@
   "categories": {},
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
-    { "name": "anti-slop-effect", "specifier": "./tools/oxlint/anti-slop/effect/index.ts" }
+    { "name": "anti-slop-effect", "specifier": "./tools/oxlint/anti-slop/effect/index.ts" },
+    { "name": "opds", "specifier": "./tools/oxlint/opds/index.ts" }
   ],
   "rules": {
+    "opds/no-direct-effect-promise": "error",
     "oxc/no-accumulating-spread": "error",
     "anti-slop/no-array-filter-map": "error",
     "anti-slop/no-reduce-accumulator-copy": "error",
@@ -186,6 +188,8 @@
     {
       "files": [
         "src/utils/process.ts",
+        "src/utils/owned-promise.ts",
+        "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",
         "src/processing/catalogue-processor-effect.ts",
         "src/processing/handlers/**/*-effect.ts"
@@ -196,12 +200,6 @@
         "anti-slop-effect/no-manual-tagged-construction": "error",
         "anti-slop-effect/no-service-constructor-imports": "error",
         "anti-slop-effect/prefer-effect-match": "error"
-      }
-    },
-    {
-      "files": ["src/processing/handlers/**/*-effect.ts"],
-      "rules": {
-        "anti-slop-effect/no-direct-effect-promise-in-handlers": "error"
       }
     },
     {

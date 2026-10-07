@@ -4,6 +4,7 @@ import { EffectFileSystem, effectFileSystemFromPromiseService } from "../effect-
 import type { HandlerDeps } from "../context.ts";
 import type { Handler } from "./catalogue-processor.ts";
 import type { EventType } from "./types.ts";
+import { ownedPromise } from "../utils/owned-promise.ts";
 
 export class CatalogueDeps extends Context.Service<CatalogueDeps, Omit<HandlerDeps, "signal">>()("CatalogueDeps") {}
 
@@ -22,21 +23,6 @@ export type HandlerError = Error & { readonly _tag: string };
 export type EffectHandler = (event: EventType) => Effect.Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>;
 
 export type EffectHandlers = Readonly<Partial<Record<EventType["_tag"], EffectHandler>>>;
-
-/**
- * Runs a Promise that observes `signal`. On interruption it aborts the signal and waits for the
- * Promise to settle, so no handler or native work outlives its fiber. A rejection becomes `onError`.
- */
-export function ownedPromise<A, E>(run: (signal: AbortSignal) => Promise<A>, onError: (cause: unknown) => E): Effect.Effect<A, E> {
-  return Effect.callback<A, E>((resume, signal) => {
-    const settled = run(signal).then(
-      (value) => resume(Effect.succeed(value)),
-      (cause: unknown) => resume(Effect.fail(onError(cause))),
-    );
-
-    return Effect.promise(() => settled);
-  });
-}
 
 /** Lifts a Promise handler into the Effect registry. A thrown handler becomes a defect, an `err` a `HandlerFailed`. */
 export function fromPromiseHandler(handler: Handler): EffectHandler {

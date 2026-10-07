@@ -8,7 +8,8 @@ import { renderHtml } from "../../render/feed-html.ts";
 import { renderXml } from "../../render/feed-xml.ts";
 import { extractAuthor, extractTitle, naturalSort, stripXmlDeclaration } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
-import { CatalogueDeps, CatalogueEvent, ownedPromise } from "../effect-handler.ts";
+import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
+import { ownedPromise } from "../../utils/owned-promise.ts";
 import type { EventType } from "../types.ts";
 
 interface EntryWithTitle {
