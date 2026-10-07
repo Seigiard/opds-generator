@@ -298,7 +298,7 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 4: Folder operations", () => {
     test(
-      "copy folder triggers FolderCreated and creates the copy's feed",
+      "copy folder triggers FolderCreated and lists every copied book in the copy's feed",
       async () => {
         const before = getDockerTimestamp();
 
@@ -308,9 +308,23 @@ describe("Event Logging E2E", () => {
 
         expect(findEvents(logs, "FolderCreated", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
 
-        // Files copied into a brand-new folder can land before inotifywait adds its watch,
-        // so their BookCreated events are not guaranteed; the folder's feed is.
+        // inotifywait watches the new folder only after its create event, so the books copied
+        // into it may raise no event of their own; folderSync must still list them in the feed.
         expect(await waitForUrl(`${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
+        expect(await waitForUrl(`${TEST_FOLDER}-copy/test-events-book2.pdf/entry.xml`, true)).toBe(true);
+
+        const deadline = Date.now() + 20000;
+        let xml = "";
+
+        while (Date.now() < deadline && !xml.includes("test-events-book2.pdf")) {
+          const response = await fetch(`${BASE_URL}/${TEST_FOLDER}-copy/feed.xml`);
+
+          if (response.ok) xml = await response.text();
+
+          if (!xml.includes("test-events-book2.pdf")) await sleep(500);
+        }
+
+        expect(xml).toContain("test-events-book2.pdf");
       },
       { timeout: 40000 },
     );

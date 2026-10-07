@@ -1,3 +1,4 @@
+import { basename, join } from "node:path";
 import { describe, test, expect, beforeEach } from "bun:test";
 import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
 import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
@@ -198,6 +199,52 @@ describe("Processing Handlers", () => {
         { _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" },
         { _tag: "FolderMetaSyncRequested", path: "/test/data" },
       ]);
+    });
+  });
+
+  describe("folderSync of a folder that already has contents", () => {
+    // inotifywait adds its watch to a new folder after the folder's create event, so files copied in meanwhile never raise events.
+    const tree = new Map([
+      [
+        "/test/books/Copy",
+        [
+          { name: "a.epub", dir: false },
+          { name: "notes.txt.bak", dir: false },
+          { name: ".hidden.epub", dir: false },
+          { name: "Nested", dir: true },
+        ],
+      ],
+      ["/test/books/Copy/Nested", [{ name: "b.fb2", dir: false }]],
+    ]);
+
+    const entriesOf = (path: string) => tree.get(path) ?? [];
+
+    const depsWithTree = (existing: string[] = []): HandlerDeps => ({
+      ...asyncDeps,
+      fs: {
+        ...asyncDeps.fs,
+        readdir: async (path) => entriesOf(path).map((e) => e.name),
+        stat: async (path) => ({
+          isDirectory: () => entriesOf(join(path, "..")).some((e) => e.name === basename(path) && e.dir),
+          size: 1,
+        }),
+        exists: async (path) => existing.includes(path),
+      },
+    });
+
+    test("submits BookCreated and FolderCreated for what is already inside", async () => {
+      const result = await folderSync(folderCreatedEvent("/test/books", "Copy"), depsWithTree());
+
+      const cascades = result._unsafeUnwrap();
+      expect(cascades).toContainEqual({ _tag: "BookCreated", parent: "/test/books/Copy", name: "a.epub" });
+      expect(cascades).toContainEqual({ _tag: "FolderCreated", parent: "/test/books/Copy", name: "Nested" });
+      expect(cascades.filter((e) => e._tag === "BookCreated")).toHaveLength(1);
+    });
+
+    test("skips a book that already has its entry", async () => {
+      const result = await folderSync(folderCreatedEvent("/test/books", "Copy"), depsWithTree(["/test/data/Copy/a.epub/entry.xml"]));
+
+      expect(result._unsafeUnwrap().some((e) => e._tag === "BookCreated")).toBe(false);
     });
   });
 
