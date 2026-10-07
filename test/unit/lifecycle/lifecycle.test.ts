@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
 import { createLifecycle, type CatalogueScanner, type Clock } from "../../../src/lifecycle/lifecycle.ts";
-import { createCatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { ScanRequest } from "../../../src/lifecycle/transition.ts";
@@ -292,5 +292,51 @@ describe("Lifecycle", () => {
     // #then
     expect(time.requested).toEqual([]);
     await lifecycle.stop();
+  });
+
+  test("logs a rejecting processor start without raising an unhandled rejection", async () => {
+    // #given a processor whose consumer task rejects after startup
+    const failure = new Error("consumer crashed");
+    const scanner: CatalogueScanner = { scan: async () => [] };
+
+    const processor: CatalogueProcessor = {
+      submit: () => {},
+      start: () => Promise.reject(failure),
+      onBusy: () => () => {},
+      onEmpty: () => () => {},
+      status: () => ({ pending: 0, active: null }),
+    };
+
+    const lifecycle = createLifecycle({ scanner, processor, clock: manualClock().clock, reconcileIntervalSeconds: 0 });
+    const errors: string[] = [];
+    const originalError = console.error;
+    const unhandled: unknown[] = [];
+
+    const onUnhandled = (cause: Error) => {
+      unhandled.push(cause);
+    };
+
+    process.on("unhandledRejection", onUnhandled);
+    console.error = (entry?: string, ...optionalParams: string[]) => {
+      errors.push(String(entry));
+      originalError(entry, ...optionalParams);
+    };
+
+    try {
+      // #when
+      await lifecycle.start();
+      await flush();
+      await lifecycle.stop();
+      await flush();
+    } finally {
+      console.error = originalError;
+      process.off("unhandledRejection", onUnhandled);
+    }
+
+    // #then the failure is observed by lifecycle only
+    expect(errors.map((entry) => JSON.parse(entry))).toEqual([
+      expect.objectContaining({ level: "error", tag: "Lifecycle", msg: "Owned task failed", error: "consumer crashed" }),
+    ]);
+    expect(unhandled).toEqual([]);
   });
 });
