@@ -1,5 +1,6 @@
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
-import { readEntry, readEntryText, listEntries } from "../utils/archive.ts";
+import { Effect } from "effect";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
+import { listZipEntries, readZipEntry, readZipEntryText } from "../utils/zip.ts";
 import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 import { logHandlerError } from "../logging/index.ts";
 import * as v from "valibot";
@@ -98,19 +99,61 @@ function findCoverPath(opfPackage: XmlFields, opfDir: string): string | undefine
   return undefined;
 }
 
-async function findCoverWithFallback(
-  opfPackage: XmlFields,
-  opfDir: string,
-  filePath: string,
-  signal?: AbortSignal,
-): Promise<string | undefined> {
-  // 1. Try metadata (EPUB 2.0 + 3.0)
-  const metaCover = findCoverPath(opfPackage, opfDir);
+interface OpfReading {
+  readonly meta: BookMetadata;
+  readonly metadataCover: string | undefined;
+}
 
-  if (metaCover) return metaCover;
+const extractEpub = Effect.fn("extractEpub")(function* (filePath: string) {
+  const container = yield* readZipEntryText(filePath, "META-INF/container.xml");
 
-  // 2. Search by filename
-  const entries = await listEntries(filePath, signal);
+  if (!container) return yield* ExtractionFailed.of(filePath, "no META-INF/container.xml");
+
+  const opfPath = yield* parseXml(filePath, container, findOpfPath);
+
+  if (!opfPath) return yield* ExtractionFailed.of(filePath, "container names no OPF");
+
+  const opf = yield* readZipEntryText(filePath, opfPath);
+
+  if (!opf) return yield* ExtractionFailed.of(filePath, `no OPF at ${opfPath}`);
+
+  const reading = yield* parseXml(filePath, opf, (opfData) => readOpf(opfData, opfPath.replace(/[^/]+$/, "")));
+
+  if (!reading) return yield* ExtractionFailed.of(filePath, "OPF has no package metadata");
+
+  const coverPath = reading.metadataCover ?? (yield* listZipEntries(filePath).pipe(Effect.map(findCoverByName)));
+
+  const book: ExtractedBook = { meta: reading.meta, cover: coverPath ? yield* readZipEntry(filePath, coverPath) : null };
+
+  return book;
+});
+
+export const epubExtractorRegistration: FormatExtractorRegistration = {
+  extensions: ["epub"],
+  extract: extractEpub,
+};
+
+/** Unparseable required XML is logged and fails extraction, so the catalogue falls back to the filename. */
+function parseXml<A>(filePath: string, xml: string, read: (data: XmlFields) => A): Effect.Effect<A, ExtractionFailed> {
+  return Effect.try({
+    try: () => read(v.parse(xmlFieldsSchema, xmlParser.parse(xml))),
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.tapError((cause) => Effect.sync(() => logHandlerError("EPUB", filePath, cause))),
+    Effect.mapError((cause) => ExtractionFailed.of(filePath, cause)),
+  );
+}
+
+function readOpf(opfData: XmlFields, opfDir: string): OpfReading | null {
+  const opfPackage = xmlFields(opfData.package);
+
+  if (!opfPackage || opfPackage.metadata === undefined || opfPackage.metadata === null) return null;
+
+  return { meta: extractMetadata(opfPackage), metadataCover: findCoverPath(opfPackage, opfDir) };
+}
+
+/** Filename fallbacks when the OPF names no cover (EPUB 2 meta or EPUB 3 cover-image). */
+function findCoverByName(entries: string[]): string | undefined {
   const images = entries.filter((e) => /\.(jpe?g|png|gif|webp)$/i.test(e));
 
   // 2a. File named "cover.*"
@@ -124,54 +167,5 @@ async function findCoverWithFallback(
   if (containsCover) return containsCover;
 
   // 3. First image as last fallback
-  const sorted = images.sort();
-
-  return sorted[0];
+  return images.sort()[0];
 }
-
-async function createEpubHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
-  try {
-    const container = await readEntryText(filePath, "META-INF/container.xml", signal);
-
-    if (!container) return null;
-
-    const containerData = v.parse(xmlFieldsSchema, xmlParser.parse(container));
-    const opfPath = findOpfPath(containerData);
-
-    if (!opfPath) return null;
-
-    const opf = await readEntryText(filePath, opfPath, signal);
-
-    if (!opf) return null;
-
-    const opfData = v.parse(xmlFieldsSchema, xmlParser.parse(opf));
-    const opfPackage = xmlFields(opfData.package);
-
-    if (!opfPackage || opfPackage.metadata === undefined || opfPackage.metadata === null) return null;
-    const opfDir = opfPath.replace(/[^/]+$/, "");
-
-    const metadata = extractMetadata(opfPackage);
-    const coverPath = await findCoverWithFallback(opfPackage, opfDir, filePath, signal);
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-      async getCover() {
-        if (!coverPath) return null;
-
-        return readEntry(filePath, coverPath, signal);
-      },
-    };
-  } catch (error) {
-    signal?.throwIfAborted();
-    logHandlerError("EPUB", filePath, error);
-
-    return null;
-  }
-}
-
-export const epubHandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["epub"],
-  create: createEpubHandler,
-};

@@ -5,7 +5,13 @@ Code: `src/utils/process.ts`.
 ## Command execution
 
 - `src/utils/process.ts` owns command execution through Effect 4 scopes. Native extractors yield the Effect operations directly: `runCommand`, `runCommandText` (fail with `CommandFailed`), and `useTemporaryDirectory` (fails with `TemporaryDirectoryFailed`).
-- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy DJVU and archive callers (#40). They take a `signal` and reject with the original cause. Remove them with their last caller.
+- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy DJVU and archive callers (#40). They take a `signal` and reject with the original cause. `runOwned(effect, signal)` runs an Effect for a legacy Promise caller and rejects with the abort reason after release. Remove them with their last caller.
+
+## Archives
+
+- `src/utils/archive-type.ts`: `detectArchiveType(path)` reads magic bytes as an Effect. Unreadable or unknown input is `null`; the handle closes on every path.
+- `src/utils/zip.ts`: `listZipEntries`, `readZipEntry`, `readZipEntryText` run `zipinfo` / `unzip` through `runCommand`. Non-ZIP input, a missing entry, empty output, a nonzero exit, a timeout, or `CommandFailed` yield `[]` / `null`. Recovery uses `Effect.catchTag`, so interruption stays interruption.
+- `src/utils/archive.ts` keeps the Promise `listEntries` / `readEntry` / `readEntryText` for legacy comic and FB2 callers. Detection and the ZIP branch run the Effect operations above through `runOwned`; RAR, 7z and TAR keep their Promise paths until they move (#46).
 - Commands time out after 15 s by default (`timeout` overrides).
 - Timeout or cancellation sends SIGTERM, waits up to 1 s, then SIGKILL and waits for exit.
 - Timeout returns empty stdout, `exitCode: -1`, `timedOut: true`. Cancellation rejects with the caller's abort reason after release.

@@ -265,6 +265,66 @@ describe("bookSync handler", () => {
     await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
   });
 
+  test("publishes an EPUB with metadata, cover, thumbnail, download link and a folder refresh", async () => {
+    // #given a known EPUB 2 source book
+    const name = "Test Book - Test Author.epub";
+    const bookPath = join(FILES_DIR, name);
+    await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, name)));
+
+    // #when
+    const result = await bookSync(bookCreatedEvent(name), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>Test Book</title>"),
+      author: entry.includes("<name>Test Author</name>"),
+      issued: entry.includes("<dc:issued>2021-09</dc:issued>"),
+      language: entry.includes("<dc:language>en</dc:language>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+      link: await readlink(join(bookDir, name)),
+      thumbFormat: thumb.format,
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      author: true,
+      issued: true,
+      language: true,
+      cover: true,
+      thumbnail: true,
+      link: bookPath,
+      thumbFormat: "jpeg",
+    });
+    await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+  });
+
+  test("uses the filename title when an EPUB has no readable container", async () => {
+    // #given a .epub file that is not a ZIP archive
+    await Bun.write(join(FILES_DIR, "My_Broken_Novel.epub"), "not an epub");
+
+    // #when
+    const result = await bookSync(bookCreatedEvent("My_Broken_Novel.epub"), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, "My_Broken_Novel.epub");
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>My Broken Novel</title>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      link: await readlink(join(bookDir, "My_Broken_Novel.epub")),
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      cover: false,
+      link: join(FILES_DIR, "My_Broken_Novel.epub"),
+    });
+  });
+
   const PDF_INFO = `Title:          Cover Failure Metadata
 Author:         PDF Author
 Pages:          7
