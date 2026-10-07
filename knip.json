@@ -1,23 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "src/server.ts",
-    "src/context.ts",
-    "ui/scripts/*.ts",
-    "ui/gridnav/main.ts",
-    "ui/playground/reader-preview.ts",
-    "ui/reader/**/*.ts",
-    "test/**/*.ts",
-    "tools/oxlint/anti-slop/index.ts"
-  ],
-  "project": [
-    "src/**/*.ts",
-    "ui/gridnav/**/*.{ts,js}",
-    "ui/playground/**/*.{ts,js}",
-    "ui/reader/**/*.{ts,js}",
-    "ui/scripts/**/*.{ts,js}",
-    "test/**/*.ts",
-    "tools/oxlint/anti-slop/**/*.ts"
-  ],
+  "entry": ["test/**/*.ts", "tools/oxlint/anti-slop/index.ts"],
+  "project": ["src/**/*.ts", "test/**/*.ts", "tools/oxlint/anti-slop/**/*.ts"],
   "ignore": ["tools/oxlint/anti-slop/**"]
 }
