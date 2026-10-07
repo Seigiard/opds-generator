@@ -9,7 +9,7 @@ import { isRawBooksEvent, isRawDataEvent } from "./processing/types.ts";
 import { adaptBooksEvent } from "./processing/adapters/books-adapter.ts";
 import { adaptDataEvent } from "./processing/adapters/data-adapter.ts";
 import { adaptSyncPlan } from "./processing/adapters/sync-plan-adapter.ts";
-import { startConsumer } from "./processing/consumer.ts";
+import { createCatalogueProcessor, type CatalogueProcessor } from "./processing/catalogue-processor.ts";
 import { bookSync } from "./processing/handlers/book-sync.ts";
 import { bookCleanup } from "./processing/handlers/book-cleanup.ts";
 import { folderSync } from "./processing/handlers/folder-sync.ts";
@@ -17,7 +17,7 @@ import { folderCleanup } from "./processing/handlers/folder-cleanup.ts";
 import { parentMetaSync } from "./processing/handlers/parent-meta-sync.ts";
 import { folderEntryXmlChanged } from "./processing/handlers/folder-entry-xml-changed.ts";
 import { folderMetaSync } from "./processing/handlers/folder-meta-sync.ts";
-import { buildContext, type AppContext } from "./context.ts";
+import { buildContext } from "./context.ts";
 import { scanFiles, createSyncPlan, removeLegacyHeapSnapshots } from "./scanner.ts";
 
 const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8_000;
@@ -26,17 +26,7 @@ let isReady = false;
 
 let isSyncing = false;
 
-function registerHandlers(ctx: AppContext): void {
-  ctx.handlers.register("BookCreated", bookSync);
-  ctx.handlers.register("BookDeleted", bookCleanup);
-  ctx.handlers.register("FolderCreated", folderSync);
-  ctx.handlers.register("FolderDeleted", folderCleanup);
-  ctx.handlers.register("EntryXmlChanged", parentMetaSync);
-  ctx.handlers.register("FolderEntryXmlChanged", folderEntryXmlChanged);
-  ctx.handlers.register("FolderMetaSyncRequested", folderMetaSync);
-}
-
-async function doSync(ctx: AppContext): Promise<void> {
+async function doSync(processor: CatalogueProcessor): Promise<void> {
   log.info("InitialSync", "Starting");
   const startTime = Date.now();
 
@@ -70,7 +60,7 @@ async function doSync(ctx: AppContext): Promise<void> {
   });
 
   const events = adaptSyncPlan(plan, config.filesPath);
-  ctx.queue.enqueueMany(events);
+  processor.submit(events);
 
   const duration = Date.now() - startTime;
   log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: duration });
@@ -86,18 +76,18 @@ async function removeHeapSnapshotLeftovers(): Promise<void> {
   }
 }
 
-async function initialSync(ctx: AppContext): Promise<void> {
+async function initialSync(processor: CatalogueProcessor): Promise<void> {
   isSyncing = true;
 
   try {
     await removeHeapSnapshotLeftovers();
-    await doSync(ctx);
+    await doSync(processor);
   } finally {
     isSyncing = false;
   }
 }
 
-async function resync(ctx: AppContext): Promise<void> {
+async function resync(processor: CatalogueProcessor): Promise<void> {
   isSyncing = true;
 
   try {
@@ -105,7 +95,7 @@ async function resync(ctx: AppContext): Promise<void> {
     const entries = await readdir(config.dataPath);
     await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
     log.info("Resync", "Cleared data directory");
-    await doSync(ctx);
+    await doSync(processor);
   } finally {
     isSyncing = false;
   }
@@ -125,7 +115,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promise<void> {
+async function startReconciliation(processor: CatalogueProcessor, signal: AbortSignal): Promise<void> {
   const intervalMs = config.reconcileInterval * 1000;
 
   while (!signal.aborted) {
@@ -138,8 +128,10 @@ async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promis
       continue;
     }
 
-    if (ctx.queue.size > 0) {
-      log.debug("Reconciliation", `Skipped: queue has ${ctx.queue.size} pending events`);
+    const { pending } = processor.status();
+
+    if (pending > 0) {
+      log.debug("Reconciliation", `Skipped: queue has ${pending} pending events`);
       continue;
     }
 
@@ -148,7 +140,7 @@ async function startReconciliation(ctx: AppContext, signal: AbortSignal): Promis
       isSyncing = true;
 
       try {
-        await doSync(ctx);
+        await doSync(processor);
       } finally {
         isSyncing = false;
       }
@@ -166,10 +158,20 @@ async function main(): Promise<void> {
   try {
     const ctx = await buildContext();
 
-    registerHandlers(ctx);
-    log.info("Server", "Handlers registered");
+    const processor = createCatalogueProcessor({
+      deps: { config: ctx.config, logger: ctx.logger, fs: ctx.fs },
+      handlers: {
+        BookCreated: bookSync,
+        BookDeleted: bookCleanup,
+        FolderCreated: folderSync,
+        FolderDeleted: folderCleanup,
+        EntryXmlChanged: parentMetaSync,
+        FolderEntryXmlChanged: folderEntryXmlChanged,
+        FolderMetaSyncRequested: folderMetaSync,
+      },
+    });
 
-    const consumerTask = startConsumer(ctx, controller.signal);
+    const consumerTask = processor.start(controller.signal);
     log.info("Server", "Consumer started");
     isReady = true;
 
@@ -194,7 +196,7 @@ async function main(): Promise<void> {
             const event = adaptBooksEvent(body, ctx.dedup);
 
             if (event === null) return new Response("Deduplicated", { status: 202 });
-            ctx.queue.enqueue(event);
+            processor.submit(event);
 
             return new Response("OK", { status: 202 });
           } catch (error) {
@@ -219,7 +221,7 @@ async function main(): Promise<void> {
             const event = adaptDataEvent(body, ctx.dedup);
 
             if (event === null) return new Response("Deduplicated", { status: 202 });
-            ctx.queue.enqueue(event);
+            processor.submit(event);
 
             return new Response("OK", { status: 202 });
           } catch (error) {
@@ -233,7 +235,7 @@ async function main(): Promise<void> {
           if (!isReady) return new Response("Queue not ready", { status: 503 });
 
           if (isSyncing) return new Response("Sync already in progress", { status: 409 });
-          resync(ctx).catch((error) => log.error("Server", "Resync failed", error));
+          resync(processor).catch((error) => log.error("Server", "Resync failed", error));
 
           return new Response("Resync started", { status: 202 });
         }
@@ -269,10 +271,10 @@ async function main(): Promise<void> {
     process.on("SIGTERM", shutdown);
     process.on("SIGINT", shutdown);
 
-    await initialSync(ctx);
+    await initialSync(processor);
 
     if (!controller.signal.aborted && config.reconcileInterval > 0) {
-      reconcileTask = startReconciliation(ctx, controller.signal);
+      reconcileTask = startReconciliation(processor, controller.signal);
       log.info("Server", `Periodic reconciliation enabled (every ${config.reconcileInterval}s)`);
     }
   } catch (error) {

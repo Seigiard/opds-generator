@@ -18,7 +18,7 @@ import { listEntries, readEntry } from "../../src/utils/archive.ts";
 import { bookSync } from "../../src/processing/handlers/book-sync.ts";
 import { folderSync } from "../../src/processing/handlers/folder-sync.ts";
 import { folderMetaSync } from "../../src/processing/handlers/folder-meta-sync.ts";
-import { startConsumer } from "../../src/processing/consumer.ts";
+import { createCatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { SimpleQueue } from "../../src/queue.ts";
 import type { AppContext, HandlerDeps } from "../../src/context.ts";
 import type { EventType } from "../../src/processing/types.ts";
@@ -255,16 +255,20 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
 function buildConsumerCycle(): Op {
   let markProcessed = () => {};
 
-  const ctx = buildContext();
-  ctx.handlers.get = (tag) =>
-    tag === "FolderMetaSyncRequested"
-      ? async () => {
-          markProcessed();
+  const { config, logger, fs } = buildContext();
 
-          return ok<readonly EventType[]>([]);
-        }
-      : undefined;
-  startConsumer(ctx, new AbortController().signal).catch(() => {
+  const processor = createCatalogueProcessor({
+    deps: { config, logger, fs },
+    handlers: {
+      FolderMetaSyncRequested: async () => {
+        markProcessed();
+
+        return ok<readonly EventType[]>([]);
+      },
+    },
+  });
+
+  processor.start(new AbortController().signal).catch(() => {
     console.error("leak-probe: consumer loop failed");
     process.exit(1);
   });
@@ -272,7 +276,7 @@ function buildConsumerCycle(): Op {
   return () =>
     new Promise<void>((resolve) => {
       markProcessed = resolve;
-      ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
+      processor.submit({ _tag: "FolderMetaSyncRequested", path: "/test" });
     });
 }
 
@@ -292,8 +296,6 @@ function buildContext(): AppContext {
       unlink: async () => {},
     },
     dedup: { shouldProcess: () => true },
-    queue: new SimpleQueue<EventType>(),
-    handlers: { get: () => undefined, register: () => {} },
   };
 }
 

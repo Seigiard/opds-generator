@@ -1,9 +1,7 @@
 import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
 import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
-import { SimpleQueue } from "./queue.ts";
 import type { LogContext } from "./logging/types.ts";
-import type { EventType } from "./processing/types.ts";
 
 export interface ConfigService {
   readonly filesPath: string;
@@ -35,20 +33,11 @@ export interface DeduplicationService {
   shouldProcess(key: string): boolean;
 }
 
-type AsyncHandler = (event: EventType, deps: HandlerDeps) => Promise<import("neverthrow").Result<readonly EventType[], Error>>;
-
-export interface HandlerRegistryService {
-  get(tag: string): AsyncHandler | undefined;
-  register(tag: string, handler: AsyncHandler): void;
-}
-
 export interface AppContext {
   readonly config: ConfigService;
   readonly logger: LoggerService;
   readonly fs: FileSystemService;
   readonly dedup: DeduplicationService;
-  readonly queue: SimpleQueue<EventType>;
-  readonly handlers: HandlerRegistryService;
 }
 
 export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs"> & { readonly signal?: AbortSignal };
@@ -126,23 +115,10 @@ export async function buildContext(): Promise<AppContext> {
     },
   };
 
-  const queue = new SimpleQueue<EventType>((event) =>
-    event._tag === "FolderMetaSyncRequested" ? `${event._tag}:${event.path}` : undefined,
-  );
-
-  const handlerMap = new Map<string, AsyncHandler>();
-
-  const handlers: HandlerRegistryService = {
-    get: (tag) => handlerMap.get(tag),
-    register: (tag, handler) => handlerMap.set(tag, handler),
-  };
-
   return {
     config: configService,
     logger,
     fs: fsService,
     dedup,
-    queue,
-    handlers,
   };
 }

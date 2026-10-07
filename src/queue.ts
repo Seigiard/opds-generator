@@ -110,7 +110,8 @@ export class SimpleQueue<T> {
 
   constructor(private readonly getKey?: (item: T) => string | null | undefined) {}
 
-  enqueue(item: T): void {
+  /** Returns false when the item was coalesced into an already pending one. */
+  enqueue(item: T): boolean {
     const waiter = this.waiters.shift();
 
     if (waiter) {
@@ -122,7 +123,7 @@ export class SimpleQueue<T> {
         if (this.pendingKeys.has(key)) {
           this.dirtyKeys.add(key);
 
-          return;
+          return false;
         }
 
         this.pendingKeys.add(key);
@@ -130,6 +131,8 @@ export class SimpleQueue<T> {
 
       this.buffer.push(item);
     }
+
+    return true;
   }
 
   enqueueMany(items: readonly T[]): void {

@@ -18,7 +18,7 @@ src/
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
 ├── processing/      # Event handling (neverthrow + async/await)
 │   ├── types.ts     # RawBooksEvent, RawDataEvent, EventType
-│   ├── consumer.ts  # Event loop (AbortController-based)
+│   ├── catalogue-processor.ts # Owns queue, fixed handler registry, consumer loop, pending/active, busy/empty edges
 │   ├── adapters/    # Raw → typed events: books-adapter, data-adapter, sync-plan-adapter
 │   └── handlers/    # book-sync, folder-sync, folder-meta-sync, cleanup, …
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
@@ -169,7 +169,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 <important if="you are working on event adapters, the queue, the consumer, or handlers in src/processing/">
 
-- Flow: adapters (raw inotify → typed `EventType`) → `SimpleQueue` → consumer loop (`queue.take(signal)`) → handlers.
+- Flow: adapters (raw inotify → typed `EventType`) → `CatalogueProcessor.submit` → its `SimpleQueue` and consumer loop → handlers. `createCatalogueProcessor({ deps, handlers })` fixes the handler registry at construction; `AppContext` exposes no queue or handlers. `status()` returns `{ pending, active }`; `onBusy`/`onEmpty` report edges (silent after shutdown). Cascades join pending before the active slot clears.
 - The queue coalesces pending `FolderMetaSyncRequested` events by path and moves them behind later queued work.
 - Handlers return `Result<EventType[], Error>`; returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
 - Handlers receive `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal; `bookSync` forwards it to format factories and archive commands. `src/context.ts` defines `AppContext`.

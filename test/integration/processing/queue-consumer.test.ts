@@ -1,24 +1,21 @@
 /**
- * Queue and Consumer integration tests.
+ * Catalogue processor integration tests.
  *
  * Verifies that:
- * - Consumer processes events from the shared SimpleQueue
- * - Queue is shared (single instance) across the AppContext
- * - AbortController-based shutdown works correctly
+ * - The processor runs submitted work through its fixed handler registry
+ * - Shutdown cancels active command work and drops cascades
+ * - Pending folder refreshes coalesce behind later work
  */
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
-import { SimpleQueue } from "../../../src/queue.ts";
-import { buildContext } from "../../../src/context.ts";
-import { getEventPath, startConsumer } from "../../../src/processing/consumer.ts";
-import type { AppContext } from "../../../src/context.ts";
-import type { EventType } from "../../../src/processing/types.ts";
+import { createCatalogueProcessor, getEventPath, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import type { HandlerDeps } from "../../../src/context.ts";
 import { spawnWithTimeout } from "../../../src/utils/process.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-function createTestContext(): AppContext {
+function createTestDeps(): Omit<HandlerDeps, "signal"> {
   return {
     config: {
       filesPath: "/test/files",
@@ -38,59 +35,54 @@ function createTestContext(): AppContext {
       symlink: async () => {},
       unlink: async () => {},
     },
-    dedup: { shouldProcess: () => true },
-    queue: new SimpleQueue<EventType>(),
-    handlers: (() => {
-      const map = new Map<string, any>();
-
-      return {
-        get: (tag: string) => map.get(tag),
-        register: (tag: string, handler: any) => map.set(tag, handler),
-      };
-    })(),
   };
 }
 
-describe("Queue and Consumer Integration", () => {
+describe("Catalogue processor integration", () => {
   test("shutdown cancels active command work without reporting a handler failure", async () => {
     // #given
     const directory = await mkdtemp(join(tmpdir(), "consumer-command-"));
     const ready = join(directory, "pid");
-    const ctx = createTestContext();
+    const deps = createTestDeps();
     const controller = new AbortController();
     const reason = new Error("shutdown");
     const errors: string[] = [];
-    ctx.logger.error = (_tag, message) => {
+    deps.logger.error = (_tag, message) => {
       errors.push(message);
     };
 
     let failure = "";
     let pid: number | undefined;
-    ctx.handlers.register("BookCreated", async (_event, deps) => {
-      try {
-        await spawnWithTimeout({
-          command: [
-            process.execPath,
-            "-e",
-            `
+
+    const handlers: Handlers = {
+      BookCreated: async (_event, handlerDeps) => {
+        try {
+          await spawnWithTimeout({
+            command: [
+              process.execPath,
+              "-e",
+              `
             require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
             setInterval(() => {}, 100);
           `,
-          ],
-          timeout: 3000,
-          signal: deps.signal,
-        });
-      } catch (error) {
-        failure = String(error);
-        throw error;
-      }
+            ],
+            timeout: 3000,
+            signal: handlerDeps.signal,
+          });
+        } catch (error) {
+          failure = String(error);
+          throw error;
+        }
 
-      return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
-    });
-    const consumerTask = startConsumer(ctx, controller.signal);
+        return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+      },
+    };
+
+    const processor = createCatalogueProcessor({ deps, handlers });
+    const consumerTask = processor.start(controller.signal);
 
     try {
-      ctx.queue.enqueue({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
+      processor.submit({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
       const deadline = Date.now() + 3000;
 
       while (!(await Bun.file(ready).exists())) {
@@ -130,18 +122,24 @@ describe("Queue and Consumer Integration", () => {
 
   test("shutdown discards cascades returned by an active handler", async () => {
     // #given
-    const ctx = createTestContext();
     const controller = new AbortController();
-    ctx.handlers.register("BookCreated", async () => {
-      controller.abort();
 
-      return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+    const processor = createCatalogueProcessor({
+      deps: createTestDeps(),
+      handlers: {
+        BookCreated: async () => {
+          controller.abort();
+
+          return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+        },
+      },
     });
-    ctx.queue.enqueue({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
+
+    processor.submit({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
     // #when
-    await startConsumer(ctx, controller.signal);
+    await processor.start(controller.signal);
     // #then
-    expect(ctx.queue.size).toBe(0);
+    expect(processor.status()).toEqual({ pending: 0, active: null });
   });
 
   test("formats parent/name event paths without duplicate slashes", () => {
@@ -150,56 +148,77 @@ describe("Queue and Consumer Integration", () => {
     expect(path).toBe("/books/comics/Marvel");
   });
 
-  test("consumer processes events from shared queue", async () => {
+  test("processor runs submitted work through the registry", async () => {
+    // #given
     const processedEvents: string[] = [];
     const controller = new AbortController();
-    const ctx = createTestContext();
 
-    ctx.handlers.register("FolderMetaSyncRequested", async (event) => {
-      if (event._tag !== "FolderMetaSyncRequested") throw new Error("Unexpected test event");
-      processedEvents.push(event.path);
+    const processor = createCatalogueProcessor({
+      deps: createTestDeps(),
+      handlers: {
+        FolderMetaSyncRequested: async (event) => {
+          if (event._tag !== "FolderMetaSyncRequested") throw new Error("Unexpected test event");
+          processedEvents.push(event.path);
 
-      return ok([]);
+          return ok([]);
+        },
+      },
     });
 
-    const consumerTask = startConsumer(ctx, controller.signal);
+    const consumerTask = processor.start(controller.signal);
     await new Promise((resolve) => setTimeout(resolve, 50));
-
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test/book.epub" });
-
+    // #when
+    processor.submit({ _tag: "FolderMetaSyncRequested", path: "/test/book.epub" });
     await new Promise((resolve) => setTimeout(resolve, 100));
-
-    expect(processedEvents).toContain("/test/book.epub");
-
     controller.abort();
     await consumerTask;
+    // #then
+    expect(processedEvents).toEqual(["/test/book.epub"]);
   });
 
-  test("SimpleQueue is shared — single instance across context", () => {
-    const ctx = createTestContext();
+  test("pending folder refreshes coalesce behind later work", async () => {
+    // #given
+    const order: string[] = [];
+    const controller = new AbortController();
+    let release = () => {};
 
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test1.epub" });
-    expect(ctx.queue.size).toBe(1);
-
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/test2.epub" });
-    expect(ctx.queue.size).toBe(2);
-  });
-
-  test("buildContext queue coalesces pending folder meta-sync requests behind later work", async () => {
-    const ctx = await buildContext();
-
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
-    ctx.queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
-
-    expect(ctx.queue.size).toBe(2);
-    expect(await ctx.queue.take()).toEqual({
-      _tag: "FolderMetaSyncRequested",
-      path: "/shared/other",
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    expect(await ctx.queue.take()).toEqual({
-      _tag: "FolderMetaSyncRequested",
-      path: "/shared/parent",
+
+    const processor = createCatalogueProcessor({
+      deps: createTestDeps(),
+      handlers: {
+        BookCreated: async () => {
+          await blocked;
+
+          return ok([]);
+        },
+        FolderMetaSyncRequested: async (event) => {
+          if (event._tag !== "FolderMetaSyncRequested") throw new Error("Unexpected test event");
+          order.push(event.path);
+
+          return ok([]);
+        },
+      },
+    });
+
+    const consumerTask = processor.start(controller.signal);
+    processor.submit({ _tag: "BookCreated", parent: "/test/files", name: "block.epub" });
+    await Bun.sleep(20);
+    // #when
+    processor.submit({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    processor.submit({ _tag: "FolderMetaSyncRequested", path: "/shared/parent" });
+    processor.submit({ _tag: "FolderMetaSyncRequested", path: "/shared/other" });
+    const pendingBeforeRelease = processor.status().pending;
+    release();
+    await Bun.sleep(50);
+    controller.abort();
+    await consumerTask;
+    // #then
+    expect({ pendingBeforeRelease, order }).toEqual({
+      pendingBeforeRelease: 2,
+      order: ["/shared/other", "/shared/parent"],
     });
   });
 });
