@@ -124,7 +124,7 @@ Effect.runPromise(tempDir);
 - **Errors that become `unknown` or plain `Error`.** `process.ts` (`catch: (cause) => cause`), the initial scan error in `lifecycle.ts`, `new Error("Queue take failed unexpectedly")` in the processor (drops the original), and the `instanceof Error ? … : new Error(String(…))` wrap in every handler.
 - **No signal at all.** `FileSystemService`, `folderMetaSync`, `bookCleanup`, `folderCleanup`, the sharp pipelines, `mobi` (reads the whole file), `txt`, plain `fb2`, `detectArchiveType`.
 - **Stays Promise-based.** The `Bun.serve` `fetch` handler (`POST /events/books`, `POST /resync`, `GET /status`), the SIGTERM/SIGINT handlers and the shutdown deadline in `server.ts`. `runOwned` in `process.ts` is the existing Effect-to-Promise bridge and becomes unnecessary once its callers are Effects.
-- Two likely bugs found on the way, not fixed here: `pdf.ts` `extractCover` has no `try`, so a `pdftoppm` spawn failure reaches `bookSync` and drops the PDF's metadata; `lifecycle.ts` `void task.finally(…)` leaves the derived Promise without a handler, so a rejecting `processor.start` is an unhandled rejection.
+- Two likely bugs found on the way: `pdf.ts` `extractCover` has no `try`, so a `pdftoppm` spawn failure reaches `bookSync` and drops the PDF's metadata; `lifecycle.ts` formerly left the derived `task.finally(…)` Promise without a handler, so a rejecting `processor.start` became an unhandled rejection. The lifecycle bug was fixed in #31.
 
 ## Recommendation
 
@@ -143,7 +143,7 @@ The decision record is `docs/adr/0003-effect-owns-event-processing.md` (status: 
 Each step is one PR. The plain variant keeps working until step 5.
 
 1. **Settle the consumer gate.** Done in this prototype: both consumer gates run 100 events per operation, and the calibration test covers `consumer-enqueue-effect`.
-2. **Handler bridge as the only Promise crossing.** Add an oxlint rule (or extend `anti-slop-effect`) that forbids `Effect.tryPromise` / `Effect.promise` in handler modules, so every crossing goes through `ownedPromise`. Add the handler modules to the `anti-slop-effect` override.
+2. **Handler bridge as the only Promise crossing.** Done in #32: `anti-slop-effect/no-direct-effect-promise-in-handlers` forbids `Effect.tryPromise` / `Effect.promise` in Effect handler modules, so every crossing goes through `ownedPromise`. The bridge module is exempt.
 3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. Keep `describe.each` over both variants for their suites. Decide per swallow listed in the inventory whether it stays a recovered tagged error or becomes a failure.
 4. **`FileSystemService` as an Effect service** with typed errno failures, so the handlers stop wrapping `fs` Promises one by one. `process.ts` drops `runOwned` for callers that are Effects.
 5. **Switch `server.ts` to the Effect processor**, behind the gates from step 1, `handler-chain-effect`, and the per-drain gate for the Effect processor (`lifecycle-scan-effect`). Remove `fromPromiseHandler`, the plain processor, `SimpleQueue` and the plain handlers in the same PR, and the `describe.each` parameters with them.

@@ -37,6 +37,7 @@ Code: `src/lifecycle/`, `src/server.ts`.
 ## Shutdown
 
 - `stop()` enters `stopping`, aborts the active handler and scans, drops pending work and the follow-up scan, and awaits owned tasks.
+- If an owned task such as `processor.start()` rejects, lifecycle logs the failure once and still observes the task, so shutdown does not leave an unhandled rejection.
 - `server.ts` races `stop()` against the 8 s deadline and exits 0.
 
 ## Status endpoint

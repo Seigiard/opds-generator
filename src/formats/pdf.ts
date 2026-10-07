@@ -89,14 +89,21 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
 }
 
 async function extractCover(filePath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  const { stdout: data, exitCode } = await spawnWithTimeout({
-    command: ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
-    signal,
-  });
+  try {
+    const { stdout: data, exitCode } = await spawnWithTimeout({
+      command: ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
+      signal,
+    });
 
-  if (exitCode !== 0 || data.byteLength === 0) return null;
+    if (exitCode !== 0 || data.byteLength === 0) return null;
 
-  return Buffer.from(data);
+    return Buffer.from(data);
+  } catch (error) {
+    signal?.throwIfAborted();
+    logHandlerError("PDF", filePath, error);
+
+    return null;
+  }
 }
 
 async function createPdfHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
