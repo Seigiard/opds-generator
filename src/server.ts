@@ -71,8 +71,6 @@ async function main(): Promise<void> {
         }
 
         if (req.method === "POST" && url.pathname === "/resync") {
-          if (!lifecycle.accepting()) return new Response("Queue not ready", { status: 503 });
-
           const force = url.searchParams.get("force") === "1";
           const admission = lifecycle.requestScan({ kind: "resync", force });
 

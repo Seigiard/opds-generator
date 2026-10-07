@@ -4,9 +4,9 @@ status: accepted
 
 # Cascades replace the data watcher
 
-A change to a book or folder must refresh every folder above it, up to the root. This used to go through the data watcher. A handler wrote `entry.xml` or `_entry.xml`, inotify saw the write, `watcher.sh` posted it to `/events/data`, and only then did the parent refresh become catalogue work. Between the handler finishing and that post arriving, no catalogue work was pending or active, so the service could report Settled while the catalogue was still changing.
+A change to a book or folder must refresh every folder above it whose summary it changes, up to the root. This used to go through the data watcher. A handler wrote `entry.xml` or `_entry.xml`, inotify saw the write, `watcher.sh` posted it to `/events/data`, and only then did the parent refresh become catalogue work. Between the handler finishing and that post arriving, no catalogue work was pending or active, so the service could report Settled while the catalogue was still changing.
 
-We decided that handlers return the parent refresh as a cascade, right after they publish. Book processing returns a refresh of its folder; a folder refresh returns a refresh of its parent, until the root. The data watcher, its `/events/data` endpoint and the work kinds it produced are removed. Nothing but the service writes to `/data`.
+We decided that handlers return the parent refresh as a cascade, right after they publish. Book processing returns a refresh of its folder; a folder refresh returns a refresh of its parent, until the root. Since #21, a folder refresh returns its parent's refresh only when its `_entry.xml` summary changed, so the climb stops at the first unchanged folder. The data watcher, its `/events/data` endpoint and the work kinds it produced are removed. Nothing but the service writes to `/data`.
 
 ## Considered Options
 

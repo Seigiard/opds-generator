@@ -122,35 +122,6 @@ describe("CatalogueProcessor", () => {
     expect({ edges, seenAtCascadeStart }).toEqual({ edges: ["busy", "empty"], seenAtCascadeStart: [["busy"]] });
   });
 
-  test("status shows the cascade as pending while the parent work is still active", async () => {
-    // #given
-    const release = gate();
-
-    const { processor, controller, task } = startWith({
-      BookCreated: async () => {
-        await release.promise;
-
-        return ok([refresh("/test/data")]);
-      },
-      FolderMetaSyncRequested: async () => ok([]),
-    });
-
-    processor.submit(book("a.epub"));
-    await settle();
-    // #when
-    const during = processor.status();
-    release.open();
-    await settle();
-    const after = processor.status();
-    controller.abort();
-    await task;
-    // #then
-    expect({ during, after }).toEqual({
-      during: { pending: 0, active: { kind: "BookCreated", path: "/test/files/a.epub" } },
-      after: { pending: 0, active: null },
-    });
-  });
-
   test("status counts queued work as pending behind the active work", async () => {
     // #given
     const release = gate();

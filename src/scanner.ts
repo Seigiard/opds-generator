@@ -4,7 +4,7 @@ import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "./constants.ts";
 
-/** Throws the signal's reason when it aborts; checked between directories so a long walk stops promptly. */
+/** Throws the signal's reason when it aborts; checked per directory, per book and before returning, so a long walk stops promptly. */
 export async function scanFiles(rootPath: string, signal?: AbortSignal): Promise<FileInfo[]> {
   const files: FileInfo[] = [];
 
@@ -22,6 +22,7 @@ export async function scanFiles(rootPath: string, signal?: AbortSignal): Promise
         const ext = extname(entry.name).slice(1).toLowerCase();
 
         if (BOOK_EXTENSIONS.includes(ext)) {
+          signal?.throwIfAborted();
           const fileStat = await stat(fullPath);
           files.push({
             path: fullPath,
@@ -36,6 +37,7 @@ export async function scanFiles(rootPath: string, signal?: AbortSignal): Promise
   }
 
   await scan(rootPath);
+  signal?.throwIfAborted();
 
   return files;
 }

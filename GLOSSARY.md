@@ -33,7 +33,7 @@ _Avoid_: Full resync, wipe
 ## Catalogue processing
 
 **Watcher event**:
-A raw notice from a directory watcher that something changed in the books directory or the catalogue. It becomes catalogue work, or nothing.
+A raw notice from the books-directory watcher that something changed there. It becomes catalogue work, or nothing.
 _Avoid_: Event (alone)
 
 **Catalogue work**:
