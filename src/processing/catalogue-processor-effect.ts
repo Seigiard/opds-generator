@@ -11,7 +11,7 @@ interface EffectCatalogueProcessorOptions {
   readonly handlers: EffectHandlers;
 }
 
-/** The Effect 4 variant of `createCatalogueProcessor` (issue #25): same contract, handlers are Effects. */
+/** The Effect 4 catalogue processor: same public contract, Effect handlers. */
 export function createEffectCatalogueProcessor({ deps, handlers }: EffectCatalogueProcessorOptions): CatalogueProcessor {
   const queue = Effect.runSync(Queue.unbounded<EventType>());
   // Coalescing keys of pending folder refreshes; a dirty key was submitted again while pending.
@@ -63,7 +63,7 @@ export function createEffectCatalogueProcessor({ deps, handlers }: EffectCatalog
     }
   };
 
-  // A dirty folder refresh moves behind the work queued after it, as `SimpleQueue` does.
+  // A dirty folder refresh moves behind the work queued after it.
   const takeNext: Effect.Effect<EventType> = Effect.gen(function* () {
     while (true) {
       const event = yield* Queue.take(queue);

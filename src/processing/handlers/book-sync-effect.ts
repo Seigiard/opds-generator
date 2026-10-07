@@ -7,7 +7,7 @@ import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
 import { ownedPromise } from "../../utils/owned-promise.ts";
 import type { EventType } from "../types.ts";
 import { ENTRY_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
-import { bookEntryXml } from "./book-sync.ts";
+import { bookEntryXml } from "./book-entry.ts";
 
 // `message` carries the cause's text: the logger writes an error's message and stack, never its `cause`.
 interface FailureProps {

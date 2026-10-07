@@ -3,16 +3,14 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { Effect } from "effect";
 import { FileSystemNotFound } from "../../../src/effect-file-system.ts";
 import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
-import { folderCleanup as plainFolderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
 import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
-import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { bookCleanup as plainBookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
+import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
 import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
 import { createEffectFileSystemTestDouble } from "../../helpers/effect-file-system.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
-import type { Handler } from "../../../src/processing/catalogue-processor.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
+import type { Result } from "neverthrow";
 
 // Mock tracking
 interface MockFs {
@@ -117,15 +115,15 @@ const asyncDeps: HandlerDeps = {
 };
 
 const asCleanupHandler =
-  (handler: EffectHandler): Handler =>
+  (handler: EffectHandler): ((event: EventType, handlerDeps: HandlerDeps) => Promise<Result<readonly EventType[], Error>>) =>
   (event, handlerDeps) =>
     runAsPromiseHandler(handler, event, handlerDeps);
 
-// Issue #36: cleanup handler suites run against the plain and Effect ports.
-const cleanupVariants: { name: string; bookCleanup: Handler; folderCleanup: Handler }[] = [
-  { name: "plain", bookCleanup: plainBookCleanup, folderCleanup: plainFolderCleanup },
-  { name: "effect", bookCleanup: asCleanupHandler(bookCleanupEffect), folderCleanup: asCleanupHandler(folderCleanupEffect) },
-];
+const bookCleanup = asCleanupHandler(bookCleanupEffect);
+
+const folderCleanup = asCleanupHandler(folderCleanupEffect);
+
+const folderSync = asCleanupHandler(folderSyncEffect);
 
 describe("Processing Handlers", () => {
   beforeEach(() => {
@@ -133,7 +131,7 @@ describe("Processing Handlers", () => {
     mockLogger.reset();
   });
 
-  describe.each(cleanupVariants)("folderCleanup ($name)", ({ folderCleanup }) => {
+  describe("folderCleanup", () => {
     test("removes data directory for deleted folder", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
 
@@ -151,7 +149,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe.each(cleanupVariants)("stale deletes ($name)", ({ bookCleanup, folderCleanup }) => {
+  describe("stale deletes", () => {
     const existing = (path: string): HandlerDeps => ({ ...asyncDeps, fs: { ...asyncDeps.fs, exists: async (p) => p === path } });
 
     test("bookCleanup keeps the entry when the book exists in the books directory", async () => {
@@ -266,7 +264,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe.each(cleanupVariants)("bookCleanup ($name)", ({ bookCleanup }) => {
+  describe("bookCleanup", () => {
     test("removes data directory for deleted book", async () => {
       const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
 
@@ -286,7 +284,7 @@ describe("Processing Handlers", () => {
     });
   });
 
-  describe.each(cleanupVariants)("folderCleanup cascade ($name)", ({ folderCleanup }) => {
+  describe("folderCleanup cascade", () => {
     test("returns cascade event to regenerate parent feed for nested folders", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
 

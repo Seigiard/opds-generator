@@ -15,18 +15,17 @@
 import { spawnWithTimeoutText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
 import { listEntries, readEntry } from "../../src/utils/archive.ts";
-import { bookSync } from "../../src/processing/handlers/book-sync.ts";
-import { folderSync } from "../../src/processing/handlers/folder-sync.ts";
-import { folderMetaSync } from "../../src/processing/handlers/folder-meta-sync.ts";
-import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../src/processing/catalogue-processor.ts";
+import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
-import { fromPromiseHandler, runAsPromiseHandler } from "../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "../../src/processing/effect-handler.ts";
 import { bookSyncEffect } from "../../src/processing/handlers/book-sync-effect.ts";
+import { folderSyncEffect } from "../../src/processing/handlers/folder-sync-effect.ts";
+import { folderMetaSyncEffect } from "../../src/processing/handlers/folder-meta-sync-effect.ts";
 import { createLifecycle, type CatalogueScanner } from "../../src/lifecycle/lifecycle.ts";
-import { SimpleQueue } from "../../src/queue.ts";
 import type { AppContext, HandlerDeps } from "../../src/context.ts";
 import type { EventType } from "../../src/processing/types.ts";
 import { ok } from "neverthrow";
+import { testEffectHandler } from "./effect-test-handlers.ts";
 import { LIFECYCLE_CYCLES_PER_OP, QUEUE_EVENTS_PER_OP } from "./run-leak-probe.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -161,31 +160,12 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       };
     }
 
-    case "handler-chain":
-      return buildHandlerChain(tmpDir, "plain");
     case "handler-chain-effect":
-      return buildHandlerChain(tmpDir, "effect");
-
-    case "queue-cycle": {
-      const queue = new SimpleQueue<EventType>();
-
-      return async () => {
-        for (let e = 0; e < QUEUE_EVENTS_PER_OP; e++) {
-          queue.enqueue({ _tag: "FolderMetaSyncRequested", path: "/test" });
-          await queue.take();
-        }
-      };
-    }
-
-    case "consumer-enqueue":
-      return buildConsumerCycle("plain");
+      return buildHandlerChain(tmpDir);
     case "consumer-enqueue-effect":
-      return buildConsumerCycle("effect");
-
-    case "lifecycle-scan":
-      return buildLifecycleScans("plain");
+      return buildConsumerCycle();
     case "lifecycle-scan-effect":
-      return buildLifecycleScans("effect");
+      return buildLifecycleScans();
     case "lifecycle-restart":
       return buildLifecycleRestarts();
 
@@ -194,10 +174,8 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
   }
 }
 
-// One book per operation through the event handlers (PDF, CBZ, EPUB in turn), with the
-// filesystem adapter the original in-process handler test used. The effect variant runs the
-// Effect 4 `bookSync` (issue #25); the folder handlers stay plain in both.
-async function buildHandlerChain(tmpDir: string, variant: "plain" | "effect"): Promise<Op> {
+// One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).
+async function buildHandlerChain(tmpDir: string): Promise<Op> {
   const filesDir = join(tmpDir, "files");
   const dataDir = join(tmpDir, "data");
   await mkdir(filesDir, { recursive: true });
@@ -252,11 +230,11 @@ async function buildHandlerChain(tmpDir: string, variant: "plain" | "effect"): P
 
     try {
       await Bun.write(join(folderPath, bookFile), await Bun.file(join(FIXTURES_DIR, bookFile)).arrayBuffer());
-      (await folderSync({ _tag: "FolderCreated", parent: filesDir, name: folderName }, deps))._unsafeUnwrap();
+      (await runAsPromiseHandler(folderSyncEffect, { _tag: "FolderCreated", parent: filesDir, name: folderName }, deps))._unsafeUnwrap();
       const book: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
-      (variant === "plain" ? await bookSync(book, deps) : await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
-      (await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
-      (await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
+      (await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
+      (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
+      (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
       // A handler that silently skips the book must not pass the gate by avoiding the workload.
       await stat(join(folderDataPath, bookFile, "entry.xml"));
     } finally {
@@ -272,27 +250,22 @@ async function buildHandlerChain(tmpDir: string, variant: "plain" | "effect"): P
 // retained per event as low as 0.3. Batching also runs the Effect consumer past its JIT
 // warmup, which read 1.6 to 2.7 KB per event in the first 600 single events (issue #25).
 // Distinct paths, so the processor does not coalesce the batch into one refresh.
-function buildConsumerCycle(variant: "plain" | "effect"): Op {
+function buildConsumerCycle(): Op {
   let remaining = 0;
   let markProcessed = () => {};
 
   const { config, logger, fs } = buildContext();
 
-  const handlers: Handlers = {
-    FolderMetaSyncRequested: async () => {
-      if (--remaining === 0) markProcessed();
+  const handler = testEffectHandler(async () => {
+    if (--remaining === 0) markProcessed();
 
-      return ok<readonly EventType[]>([]);
-    },
-  };
+    return ok<readonly EventType[]>([]);
+  });
 
-  const processor: CatalogueProcessor =
-    variant === "plain"
-      ? createCatalogueProcessor({ deps: { config, logger, fs }, handlers })
-      : createEffectCatalogueProcessor({
-          deps: { config, logger, fs },
-          handlers: { FolderMetaSyncRequested: fromPromiseHandler(handlers.FolderMetaSyncRequested!) },
-        });
+  const processor: CatalogueProcessor = createEffectCatalogueProcessor({
+    deps: { config, logger, fs },
+    handlers: { FolderMetaSyncRequested: handler },
+  });
 
   processor.start(new AbortController().signal).catch(() => {
     console.error("leak-probe: consumer loop failed");
@@ -308,21 +281,15 @@ function buildConsumerCycle(variant: "plain" | "effect"): Op {
     });
 }
 
-function buildLifecycle(variant: "plain" | "effect") {
+function buildLifecycle() {
   const { config, logger, fs } = buildContext();
 
-  const handler = async () => ok<readonly EventType[]>([]);
+  const handler = testEffectHandler(async () => ok<readonly EventType[]>([]));
 
-  const processor =
-    variant === "plain"
-      ? createCatalogueProcessor({
-          deps: { config, logger, fs },
-          handlers: { FolderMetaSyncRequested: handler },
-        })
-      : createEffectCatalogueProcessor({
-          deps: { config, logger, fs },
-          handlers: { FolderMetaSyncRequested: fromPromiseHandler(handler) },
-        });
+  const processor = createEffectCatalogueProcessor({
+    deps: { config, logger, fs },
+    handlers: { FolderMetaSyncRequested: handler },
+  });
 
   const scanner: CatalogueScanner = { scan: async () => [{ _tag: "FolderMetaSyncRequested", path: "/test" }] };
 
@@ -339,8 +306,8 @@ async function untilSettled(lifecycle: ReturnType<typeof buildLifecycle>): Promi
 }
 
 // One lifecycle for the whole run; each cycle is a resync scan whose one folder refresh runs through the consumer.
-function buildLifecycleScans(variant: "plain" | "effect"): Op {
-  const lifecycle = buildLifecycle(variant);
+function buildLifecycleScans(): Op {
+  const lifecycle = buildLifecycle();
   lifecycle.start();
 
   return async () => {
@@ -356,7 +323,7 @@ function buildLifecycleScans(variant: "plain" | "effect"): Op {
 function buildLifecycleRestarts(): Op {
   return async () => {
     for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
-      const lifecycle = buildLifecycle("plain");
+      const lifecycle = buildLifecycle();
       lifecycle.start();
       await untilSettled(lifecycle);
       await lifecycle.stop();

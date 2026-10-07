@@ -1,9 +1,9 @@
 import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { err, ok } from "neverthrow";
-import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import type { CatalogueProcessor } from "../../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { toEffectHandlers } from "../../helpers/effect-variants.ts";
+import { toEffectTestHandlers, type TestHandlers } from "../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 
@@ -46,15 +46,9 @@ function recordEdges(processor: CatalogueProcessor, log: string[]): void {
   processor.onEmpty(() => log.push("empty"));
 }
 
-// Issue #25: the same contract runs against the plain and the Effect 4 processor.
-const variants = [
-  { name: "plain", create: (handlers: Handlers) => createCatalogueProcessor({ deps, handlers }) },
-  { name: "effect", create: (handlers: Handlers) => createEffectCatalogueProcessor({ deps, handlers: toEffectHandlers(handlers) }) },
-];
-
-describe.each(variants)("CatalogueProcessor ($name)", ({ create }) => {
-  function startWith(handlers: Handlers) {
-    const processor = create(handlers);
+describe("CatalogueProcessor", () => {
+  function startWith(handlers: TestHandlers) {
+    const processor = createEffectCatalogueProcessor({ deps, handlers: toEffectTestHandlers(handlers) });
     const controller = new AbortController();
     const task = processor.start(controller.signal);
 
@@ -394,9 +388,7 @@ describe.each(variants)("CatalogueProcessor ($name)", ({ create }) => {
     // #then
     expect(edges).toEqual([]);
   });
-});
 
-describe("Effect CatalogueProcessor", () => {
   test("shutdown drops the cascade of a handler that finishes after abort in its uninterruptible part", async () => {
     // #given an Effect handler that sees shutdown arrive mid-run and still returns its cascade
     const controller = new AbortController();

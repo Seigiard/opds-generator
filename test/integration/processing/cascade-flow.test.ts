@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { bookSync } from "../../../src/processing/handlers/book-sync.ts";
-import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { folderMetaSync } from "../../../src/processing/handlers/folder-meta-sync.ts";
+import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
+import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import { join } from "node:path";
@@ -72,6 +73,14 @@ const asyncDeps: HandlerDeps = {
     unlink: (path) => unlink(path),
   },
 };
+
+const runHandler = (handler: EffectHandler, event: EventType, deps: HandlerDeps = asyncDeps) => runAsPromiseHandler(handler, event, deps);
+
+const bookSync = (event: EventType, deps?: HandlerDeps) => runHandler(bookSyncEffect, event, deps);
+
+const folderSync = (event: EventType, deps?: HandlerDeps) => runHandler(folderSyncEffect, event, deps);
+
+const folderMetaSync = (event: EventType, deps?: HandlerDeps) => runHandler(folderMetaSyncEffect, event, deps);
 
 describe("Cascade Flow Integration", () => {
   beforeEach(async () => {

@@ -4,8 +4,8 @@ import { MAX_HANDLER_LEAK_KB, MAX_OBJECTS_PER_ITER, retainedKbPerIter, runProbe 
 // The handler chain (folder sync → book sync → folder and root feeds, PDF/CBZ/EPUB in
 // turn) runs in the probe subprocess with the same filesystem adapter this test used
 // in-process; sharing the test runner's process faked +10 KB/iter (issue #13).
-// Issue #25: the effect variant runs the Effect 4 `bookSync` in the same chain.
-describe.each(["handler-chain", "handler-chain-effect"])("Full handler memory leak (target: 0 KB/iter): %s", (scenario) => {
+describe("Full handler memory leak (target: 0 KB/iter): handler-chain-effect", () => {
+  const scenario = "handler-chain-effect";
   let result: Awaited<ReturnType<typeof runProbe>>;
 
   beforeAll(async () => {

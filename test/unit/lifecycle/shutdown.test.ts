@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { ok } from "neverthrow";
 import { createLifecycle, type CatalogueScanner, type Clock } from "../../../src/lifecycle/lifecycle.ts";
-import { createCatalogueProcessor } from "../../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { ScanRequest } from "../../../src/lifecycle/transition.ts";
+import { toEffectTestHandlers } from "../../helpers/effect-test-handlers.ts";
 
 const deps: HandlerDeps = {
   config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
@@ -71,9 +72,9 @@ function build(work: { hangingScan: ScanRequest["kind"] | null; hangingHandler: 
       }),
   };
 
-  const processor = createCatalogueProcessor({
+  const processor = createEffectCatalogueProcessor({
     deps,
-    handlers: {
+    handlers: toEffectTestHandlers({
       BookCreated: async (_event, handlerDeps) => {
         tally.handlersStarted++;
 
@@ -85,7 +86,7 @@ function build(work: { hangingScan: ScanRequest["kind"] | null; hangingHandler: 
           tally.handlersEnded++;
         }
       },
-    },
+    }),
   });
 
   return { lifecycle: createLifecycle({ scanner, processor, clock, reconcileIntervalSeconds: 60 }), tally };
@@ -152,7 +153,7 @@ describe("Shutdown", () => {
       },
     };
 
-    const processor = createCatalogueProcessor({ deps, handlers: {} });
+    const processor = createEffectCatalogueProcessor({ deps, handlers: {} });
 
     const lifecycle = createLifecycle({
       scanner,

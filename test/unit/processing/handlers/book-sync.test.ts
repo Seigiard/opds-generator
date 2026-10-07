@@ -1,8 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { bookSync as plainBookSync } from "../../../../src/processing/handlers/book-sync.ts";
 import { bookSyncEffect } from "../../../../src/processing/handlers/book-sync-effect.ts";
 import { runAsPromiseHandler } from "../../../../src/processing/effect-handler.ts";
-import type { Handler } from "../../../../src/processing/catalogue-processor.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
 import { mockPdfInfo, mockPdfToPpmSpawnFailure, resetMocks } from "../../../helpers/mock-tools.ts";
@@ -66,13 +64,9 @@ const bookCreatedEvent = (relativePath: string): EventType => {
   return { _tag: "BookCreated", parent, name };
 };
 
-// Issue #25: the same suite runs against the plain and the Effect 4 handler.
-const variants: { name: string; bookSync: Handler }[] = [
-  { name: "plain", bookSync: plainBookSync },
-  { name: "effect", bookSync: (event, handlerDeps) => runAsPromiseHandler(bookSyncEffect, event, handlerDeps) },
-];
+const bookSync = (event: EventType, handlerDeps: HandlerDeps) => runAsPromiseHandler(bookSyncEffect, event, handlerDeps);
 
-describe.each(variants)("bookSync handler ($name)", ({ bookSync }) => {
+describe("bookSync handler", () => {
   beforeEach(async () => {
     resetMocks();
     await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});

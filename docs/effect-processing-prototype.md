@@ -1,19 +1,18 @@
 # Event processing: plain async vs Effect 4
 
-Issue #25. Recommendation: **go** (see [Recommendation](#recommendation)). The prototype stays in the tree beside the plain code. `server.ts` still runs the plain processor.
+Issue #25. Recommendation: **go** (see [Recommendation](#recommendation)). Issue #37 completed the switch: `server.ts` now runs the Effect processor, and the plain processor, `SimpleQueue`, lifted handler bridge, and plain handlers are gone.
 
 ## Setup
 
-Both variants meet the same `CatalogueProcessor` interface: `submit`, `start(signal)`, `status`, `onBusy`, `onEmpty`. The same rules apply to both: pending folder refreshes are coalesced, cascades are submitted before the active slot clears, and abort drops pending work and its cascades.
+The Effect processor meets the `CatalogueProcessor` interface: `submit`, `start(signal)`, `status`, `onBusy`, `onEmpty`. Pending folder refreshes are coalesced, cascades are submitted before the active slot clears, and abort drops pending work and its cascades.
 
-- **Plain async**: `src/processing/catalogue-processor.ts` with `SimpleQueue`, and `src/processing/handlers/book-sync.ts`. Handlers return `Promise<Result<readonly EventType[], Error>>` and receive an `AbortSignal`.
 - **Effect 4.0.1**:
   - `src/processing/catalogue-processor-effect.ts`: a `Queue.unbounded`, a consumer fiber with `Effect.forever`, and the coalescing keys kept beside the queue.
-  - `src/processing/effect-handler.ts`: the handler type `(event) => Effect<readonly EventType[], HandlerError, CatalogueDeps>`, the `CatalogueDeps` service, the `ownedPromise` bridge, and adapters in both directions (`fromPromiseHandler`, `runAsPromiseHandler`).
-  - `src/processing/handlers/book-sync-effect.ts`: `bookSync` as an Effect with tagged errors.
-- Shared by both: `getEventPath`, `generateEventId`, `logMemorySnapshot`, and `bookEntryXml` (the OPDS entry of one book, extracted from the plain `bookSync`).
+  - `src/processing/effect-handler.ts`: the handler type `(event) => Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`, the `CatalogueDeps` service, `runAsPromiseHandler` for tests, and event constructors.
+  - `src/processing/handlers/*-effect.ts`: all catalogue handlers as Effects with tagged errors.
+- Shared helpers: `getEventPath`, `generateEventId`, `logMemorySnapshot`, and `bookEntryXml` (the OPDS entry of one book).
 
-Tests that run against both variants (`describe.each`). The suite bodies are unchanged; only the factory is a parameter:
+The prototype used `describe.each` to run both variants. After #37 the kept suites run the Effect implementation only:
 
 | Suite                                                           | Tests per variant | Result     |
 | --------------------------------------------------------------- | ----------------- | ---------- |
@@ -23,7 +22,7 @@ Tests that run against both variants (`describe.each`). The suite bodies are unc
 | `test/unit/processing/processor-shutdown.test.ts` (new)         | 2                 | 0 failures |
 | `test/integration/memory-leak-handler.test.ts`                  | 2                 | 0 failures |
 
-In the cascade suite the Effect variant runs the Effect `bookSync` through the Effect processor. The other handlers are plain handlers lifted with `fromPromiseHandler`.
+The cascade suite runs the real Effect handlers through the Effect processor. Test-only Promise handlers are lifted in `test/helpers/effect-test-handlers.ts` when a suite needs a small fake handler.
 
 ## Numbers
 
@@ -112,7 +111,7 @@ Effect.runPromise(tempDir);
 
 - Cancellation moves out of the error channel. The plain `bookSync` returns the abort reason as a `Result` err, and every fallback `catch` in the extraction path must rethrow it. In the Effect `bookSync` cancellation is interruption, and the extraction fallback is a plain `catchTag("ExtractionFailed")`.
 - `ExtractionFailed` is recovered inside `bookSync`, so the handler's error type is exactly `BookStatFailed | BookDataDirFailed | EntryPublishFailed`.
-- A thrown Promise handler becomes a defect (`Cause.hasDies`) and logs "Unexpected handler throw", as the plain processor does. An `err` result becomes `HandlerFailed` and logs "Handler failed".
+- A thrown test Promise handler becomes a defect (`Cause.hasDies`) and logs "Unexpected handler throw". An `err` result from the test adapter becomes `TestHandlerFailed` and logs "Handler failed".
 - `runAsPromiseHandler` returns the abort reason as the error when the run was interrupted by the caller's signal. The cancellation test of `bookSync` expects exactly this.
 
 ## Promise boundary inventory
@@ -130,7 +129,7 @@ Effect.runPromise(tempDir);
 
 Go, against the decision rule "not worse than plain on memory, shutdown and code size, and gives type safety and a better development experience":
 
-- **Memory: not worse.** No retention: JS objects per event and per book stay at the plain level. At one event per operation the Effect consumer read 0.03 to 0.07 objects per event, at least 33× under the Effect 3 figure of about 2.4; the batched gate reads 0.0001 for both variants. RSS reaches its plateau later and a few MB higher, which is the accepted tradeoff. The consumer gate now measures per event over batches of 100 and is green for both variants, with a calibrated red side (see [The consumer gate](#the-consumer-gate)). It does not cover retention per drain (one event arriving at an idle processor): the plain processor has that through `lifecycle-scan`, the Effect processor has no such gate yet.
+- **Memory: not worse.** No retention: JS objects per event and per book stay at the plain level. At one event per operation the Effect consumer read 0.03 to 0.07 objects per event, at least 33× under the Effect 3 figure of about 2.4. RSS reaches its plateau later and a few MB higher, which is the accepted tradeoff. The consumer gate measures per event over batches of 100 and is green with a calibrated red side (see [The consumer gate](#the-consumer-gate)). The `lifecycle-scan-effect` gate covers retention per drain.
 - **Shutdown: equal for the processor.** 2 to 5 ms slower median, 0 leftover work in both; the floor is the cleanup time of the work. The shutdown test drives lifted Promise handlers. Stop during the Effect `bookSync` cover extraction was not measured: it relies on the single owned extraction Promise from trap 3, which no test exercises.
 - **Code size: about equal, slightly worse.** The processor needs no unrolled queue, and the shared bridge and adapters cost about the same. `bookSync` grows from 92 to 118 lines, mostly error classes and their message props.
 - **Type safety: better on failures and resources.** Exhaustive failure handling (where a caller narrows the error), checked failure tags, and scoped resources are compile-time checks only in Effect. Dependencies and forgotten awaits are equal. Cancellation leaves the error channel, so the documented "rethrow the abort through every fallback" convention goes away.
@@ -144,15 +143,15 @@ Each step is one PR. The plain variant keeps working until step 5.
 
 1. **Settle the consumer gate.** Done in this prototype: both consumer gates run 100 events per operation, and the calibration test covers `consumer-enqueue-effect`.
 2. **Handler bridge as the only Promise crossing.** Done in #32: `opds/no-direct-effect-promise` forbids an interruptible `Effect.tryPromise` / `Effect.promise` anywhere in the tree, so every crossing goes through `ownedPromise`. Uninterruptible crossings pass; the intended ones (the bridge cancel effect, the child-process waits in `process.ts`) carry a disable comment with the reason.
-3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. `folderSyncEffect` and `folderMetaSyncEffect` are done in #35. `bookCleanupEffect` and `folderCleanupEffect` are done in #36: a missing cleanup target is recovered; other source-probe and removal errors fail the handler. Keep `describe.each` over both variants for their suites. Decide per swallow listed in the inventory whether it stays a recovered tagged error or becomes a failure.
+3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. Done in #35 and #36.
 4. **`FileSystemService` as an Effect service** with typed errno failures. Done in #34: the service lives beside the Promise service; ported handlers can use it instead of wrapping `fs` Promises one by one. `process.ts` drops `runOwned` for callers that are Effects.
-5. **Switch `server.ts` to the Effect processor**, behind the gates from step 1, `handler-chain-effect`, and the per-drain gate for the Effect processor (`lifecycle-scan-effect`). Remove `fromPromiseHandler`, the plain processor, `SimpleQueue` and the plain handlers in the same PR, and the `describe.each` parameters with them.
+5. **Switch `server.ts` to the Effect processor**. Done in #37: the server builds the Effect processor, and `fromPromiseHandler`, the plain processor, `SimpleQueue`, plain handlers, and `describe.each` variant parameters are gone.
 6. **Format extraction** (optional, separate decision): factories and `archive.ts` as Effects, which removes the `throwIfAborted` convention there too. Lifecycle stays plain async (#16) unless its scanner, clock and processor are all Effects by then.
 
 ## What is in the tree
 
-- Prototype code: `src/processing/catalogue-processor-effect.ts`, `src/processing/effect-handler.ts`, `src/processing/handlers/book-sync-effect.ts`, `src/processing/handlers/folder-sync-effect.ts`, `src/processing/handlers/folder-meta-sync-effect.ts`, `src/processing/handlers/book-cleanup-effect.ts`, `src/processing/handlers/folder-cleanup-effect.ts`, and `bookEntryXml` / the exported helpers in the plain modules.
-- Tests: `describe.each` over both variants in the suites listed in [Setup](#setup), `test/helpers/effect-variants.ts`, and the new `test/unit/processing/processor-shutdown.test.ts`.
+- Processor code: `src/processing/catalogue-processor-effect.ts`, `src/processing/effect-handler.ts`, `src/processing/handlers/book-sync-effect.ts`, `src/processing/handlers/folder-sync-effect.ts`, `src/processing/handlers/folder-meta-sync-effect.ts`, `src/processing/handlers/book-cleanup-effect.ts`, `src/processing/handlers/folder-cleanup-effect.ts`, and shared helpers such as `bookEntryXml`.
+- Tests: Effect-only processor and handler suites, `test/helpers/effect-test-handlers.ts` for test adapters, and `test/unit/processing/processor-shutdown.test.ts`.
 - Probe scenarios `handler-chain-effect` (gated in `memory-leak-handler.test.ts`), `consumer-enqueue-effect` (gated in `memory-leak-runtime.test.ts`, calibrated in `memory-oracle-calibration.test.ts`), and `lifecycle-scan-effect` (the per-drain Effect processor gate, gated in `memory-leak-lifecycle.test.ts` and calibrated in `memory-oracle-calibration.test.ts`).
 
 ## Folder handler port decisions (#35)

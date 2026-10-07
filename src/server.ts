@@ -2,12 +2,12 @@ import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
 import { isRawBooksEvent } from "./processing/types.ts";
 import { adaptBooksEvent } from "./processing/adapters/books-adapter.ts";
-import { createCatalogueProcessor } from "./processing/catalogue-processor.ts";
-import { bookSync } from "./processing/handlers/book-sync.ts";
-import { bookCleanup } from "./processing/handlers/book-cleanup.ts";
-import { folderSync } from "./processing/handlers/folder-sync.ts";
-import { folderCleanup } from "./processing/handlers/folder-cleanup.ts";
-import { folderMetaSync } from "./processing/handlers/folder-meta-sync.ts";
+import { createEffectCatalogueProcessor } from "./processing/catalogue-processor-effect.ts";
+import { bookSyncEffect } from "./processing/handlers/book-sync-effect.ts";
+import { bookCleanupEffect } from "./processing/handlers/book-cleanup-effect.ts";
+import { folderSyncEffect } from "./processing/handlers/folder-sync-effect.ts";
+import { folderCleanupEffect } from "./processing/handlers/folder-cleanup-effect.ts";
+import { folderMetaSyncEffect } from "./processing/handlers/folder-meta-sync-effect.ts";
 import { buildContext } from "./context.ts";
 import { createLifecycle, systemClock } from "./lifecycle/lifecycle.ts";
 import { diskScanner } from "./lifecycle/disk-scanner.ts";
@@ -18,14 +18,14 @@ async function main(): Promise<void> {
   try {
     const ctx = await buildContext();
 
-    const processor = createCatalogueProcessor({
+    const processor = createEffectCatalogueProcessor({
       deps: { config: ctx.config, logger: ctx.logger, fs: ctx.fs },
       handlers: {
-        BookCreated: bookSync,
-        BookDeleted: bookCleanup,
-        FolderCreated: folderSync,
-        FolderDeleted: folderCleanup,
-        FolderMetaSyncRequested: folderMetaSync,
+        BookCreated: bookSyncEffect,
+        BookDeleted: bookCleanupEffect,
+        FolderCreated: folderSyncEffect,
+        FolderDeleted: folderCleanupEffect,
+        FolderMetaSyncRequested: folderMetaSyncEffect,
       },
     });
 

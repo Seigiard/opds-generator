@@ -8,12 +8,12 @@ import { join } from "node:path";
 import type { HandlerDeps } from "../../../src/context.ts";
 import { createLifecycle, systemClock } from "../../../src/lifecycle/lifecycle.ts";
 import { createDiskScanner } from "../../../src/lifecycle/disk-scanner.ts";
-import { createCatalogueProcessor } from "../../../src/processing/catalogue-processor.ts";
-import { bookSync } from "../../../src/processing/handlers/book-sync.ts";
-import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
-import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
-import { folderMetaSync } from "../../../src/processing/handlers/folder-meta-sync.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
+import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
+import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
+import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
+import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";
 
 const TEST_DIR = join(tmpdir(), `opds-resync-in-place-${Date.now()}`);
 
@@ -55,14 +55,14 @@ const deps: HandlerDeps = {
 };
 
 function start() {
-  const processor = createCatalogueProcessor({
+  const processor = createEffectCatalogueProcessor({
     deps,
     handlers: {
-      BookCreated: bookSync,
-      BookDeleted: bookCleanup,
-      FolderCreated: folderSync,
-      FolderDeleted: folderCleanup,
-      FolderMetaSyncRequested: folderMetaSync,
+      BookCreated: bookSyncEffect,
+      BookDeleted: bookCleanupEffect,
+      FolderCreated: folderSyncEffect,
+      FolderDeleted: folderCleanupEffect,
+      FolderMetaSyncRequested: folderMetaSyncEffect,
     },
   });
 

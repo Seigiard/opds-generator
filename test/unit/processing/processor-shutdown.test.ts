@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { ok } from "neverthrow";
-import { createCatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
-import { toEffectHandlers } from "../../helpers/effect-variants.ts";
+import { toEffectTestHandlers } from "../../helpers/effect-test-handlers.ts";
 
 const deps: HandlerDeps = {
   config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
@@ -28,12 +27,6 @@ const ROUNDS = 15;
 
 const CASCADES = 50;
 
-// Issue #25: shutdown time and leftover work for the plain and the Effect 4 processor.
-const variants = [
-  { name: "plain", create: (handlers: Handlers) => createCatalogueProcessor({ deps, handlers }) },
-  { name: "effect", create: (handlers: Handlers) => createEffectCatalogueProcessor({ deps, handlers: toEffectHandlers(handlers) }) },
-];
-
 /** Resolves `CLEANUP_MS` after the signal aborts, as a handler that tidies up before it returns. */
 function afterAbort(signal: AbortSignal | undefined): Promise<void> {
   return new Promise((resolve) => {
@@ -44,7 +37,7 @@ function afterAbort(signal: AbortSignal | undefined): Promise<void> {
   });
 }
 
-describe.each(variants)("Processor shutdown ($name)", ({ create }) => {
+describe("Processor shutdown", () => {
   async function measure(scenario: "active-handler" | "pending-cascades") {
     const durations: number[] = [];
     let leftover = 0;
@@ -68,23 +61,29 @@ describe.each(variants)("Processor shutdown ($name)", ({ create }) => {
         }
       };
 
-      const processor = create({
-        BookCreated: (_event, handlerDeps) =>
-          track(async () => {
-            if (scenario === "pending-cascades") {
-              return Array.from({ length: CASCADES }, (_, i): EventType => ({ _tag: "FolderMetaSyncRequested", path: `/test/data/${i}` }));
-            }
+      const processor = createEffectCatalogueProcessor({
+        deps,
+        handlers: toEffectTestHandlers({
+          BookCreated: (_event, handlerDeps) =>
+            track(async () => {
+              if (scenario === "pending-cascades") {
+                return Array.from(
+                  { length: CASCADES },
+                  (_, i): EventType => ({ _tag: "FolderMetaSyncRequested", path: `/test/data/${i}` }),
+                );
+              }
 
-            await afterAbort(handlerDeps.signal);
+              await afterAbort(handlerDeps.signal);
 
-            return [];
-          }),
-        FolderMetaSyncRequested: (_event, handlerDeps) =>
-          track(async () => {
-            await afterAbort(handlerDeps.signal);
+              return [];
+            }),
+          FolderMetaSyncRequested: (_event, handlerDeps) =>
+            track(async () => {
+              await afterAbort(handlerDeps.signal);
 
-            return [];
-          }),
+              return [];
+            }),
+        }),
       });
 
       const controller = new AbortController();

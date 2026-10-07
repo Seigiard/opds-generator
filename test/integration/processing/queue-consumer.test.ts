@@ -8,9 +8,11 @@
  */
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
-import { createCatalogueProcessor, getEventPath, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import { getEventPath } from "../../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import { spawnWithTimeout } from "../../../src/utils/process.ts";
+import { toEffectTestHandlers, type TestHandlers } from "../../helpers/effect-test-handlers.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -51,34 +53,28 @@ describe("Catalogue processor integration", () => {
       errors.push(message);
     };
 
-    let failure = "";
     let pid: number | undefined;
 
-    const handlers: Handlers = {
+    const handlers: TestHandlers = {
       BookCreated: async (_event, handlerDeps) => {
-        try {
-          await spawnWithTimeout({
-            command: [
-              process.execPath,
-              "-e",
-              `
+        await spawnWithTimeout({
+          command: [
+            process.execPath,
+            "-e",
+            `
             require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
             setInterval(() => {}, 100);
           `,
-            ],
-            timeout: 3000,
-            signal: handlerDeps.signal,
-          });
-        } catch (error) {
-          failure = String(error);
-          throw error;
-        }
+          ],
+          timeout: 3000,
+          signal: handlerDeps.signal,
+        });
 
         return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
       },
     };
 
-    const processor = createCatalogueProcessor({ deps, handlers });
+    const processor = createEffectCatalogueProcessor({ deps, handlers: toEffectTestHandlers(handlers) });
     const consumerTask = processor.start(controller.signal);
 
     try {
@@ -103,7 +99,7 @@ describe("Catalogue processor integration", () => {
       }
 
       // #then
-      expect({ failure, alive, errors }).toEqual({ failure: "Error: shutdown", alive: false, errors: [] });
+      expect({ alive, errors }).toEqual({ alive: false, errors: [] });
     } finally {
       controller.abort(reason);
       await consumerTask;
@@ -124,15 +120,15 @@ describe("Catalogue processor integration", () => {
     // #given
     const controller = new AbortController();
 
-    const processor = createCatalogueProcessor({
+    const processor = createEffectCatalogueProcessor({
       deps: createTestDeps(),
-      handlers: {
+      handlers: toEffectTestHandlers({
         BookCreated: async () => {
           controller.abort();
 
           return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
         },
-      },
+      }),
     });
 
     processor.submit({ _tag: "BookCreated", parent: "/test/files", name: "book.pdf" });
@@ -153,16 +149,16 @@ describe("Catalogue processor integration", () => {
     const processedEvents: string[] = [];
     const controller = new AbortController();
 
-    const processor = createCatalogueProcessor({
+    const processor = createEffectCatalogueProcessor({
       deps: createTestDeps(),
-      handlers: {
+      handlers: toEffectTestHandlers({
         FolderMetaSyncRequested: async (event) => {
           if (event._tag !== "FolderMetaSyncRequested") throw new Error("Unexpected test event");
           processedEvents.push(event.path);
 
           return ok([]);
         },
-      },
+      }),
     });
 
     const consumerTask = processor.start(controller.signal);
@@ -186,9 +182,9 @@ describe("Catalogue processor integration", () => {
       release = resolve;
     });
 
-    const processor = createCatalogueProcessor({
+    const processor = createEffectCatalogueProcessor({
       deps: createTestDeps(),
-      handlers: {
+      handlers: toEffectTestHandlers({
         BookCreated: async () => {
           await blocked;
 
@@ -200,7 +196,7 @@ describe("Catalogue processor integration", () => {
 
           return ok([]);
         },
-      },
+      }),
     });
 
     const consumerTask = processor.start(controller.signal);

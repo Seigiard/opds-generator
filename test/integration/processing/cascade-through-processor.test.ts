@@ -4,14 +4,14 @@
  */
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { ok } from "neverthrow";
-import { createCatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { toEffectHandlers } from "../../helpers/effect-variants.ts";
-import { bookSync } from "../../../src/processing/handlers/book-sync.ts";
-import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
-import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
-import { folderMetaSync } from "../../../src/processing/handlers/folder-meta-sync.ts";
+import { runAsPromiseHandler, type EffectHandler, type EffectHandlers } from "../../../src/processing/effect-handler.ts";
+import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
+import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
+import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
+import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";
+import { testEffectHandler, type TestHandlers } from "../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import { join } from "node:path";
@@ -57,12 +57,12 @@ const deps: Omit<HandlerDeps, "signal"> = {
   },
 };
 
-const realHandlers: Handlers = {
-  BookCreated: bookSync,
-  BookDeleted: bookCleanup,
-  FolderCreated: folderSync,
-  FolderDeleted: folderCleanup,
-  FolderMetaSyncRequested: folderMetaSync,
+const realHandlers: EffectHandlers = {
+  BookCreated: bookSyncEffect,
+  BookDeleted: bookCleanupEffect,
+  FolderCreated: folderSyncEffect,
+  FolderDeleted: folderCleanupEffect,
+  FolderMetaSyncRequested: folderMetaSyncEffect,
 };
 
 const refresh = (path: string): EventType => ({ _tag: "FolderMetaSyncRequested", path });
@@ -78,13 +78,13 @@ function gate() {
 }
 
 /** Real folder refresh, recording each path it runs for. */
-function recordingRefresh(paths: string[], hold?: () => Promise<void>): Handlers["FolderMetaSyncRequested"] {
-  return async (event, handlerDeps) => {
+function recordingRefresh(paths: string[], hold?: () => Promise<void>): EffectHandler {
+  return testEffectHandler(async (event, handlerDeps) => {
     if (event._tag === "FolderMetaSyncRequested") paths.push(event.path);
     await hold?.();
 
-    return folderMetaSync(event, handlerDeps);
-  };
+    return runAsPromiseHandler(folderMetaSyncEffect, event, handlerDeps);
+  });
 }
 
 async function makeSourceFolders(...folders: string[]): Promise<void> {
@@ -99,15 +99,9 @@ async function addBook(folder: string): Promise<void> {
   await Bun.write(join(FILES_DIR, folder, EPUB), await Bun.file(FIXTURE).arrayBuffer());
 }
 
-// Issue #25: the effect variant runs the Effect processor with the Effect `bookSync`.
-const variants = [
-  { name: "plain", create: (handlers: Handlers) => createCatalogueProcessor({ deps, handlers }) },
-  { name: "effect", create: (handlers: Handlers) => createEffectCatalogueProcessor({ deps, handlers: toEffectHandlers(handlers) }) },
-];
-
-describe.each(variants)("Cascades through the catalogue processor ($name)", ({ create }) => {
-  function run(handlers: Handlers = realHandlers) {
-    const processor = create(handlers);
+describe("Cascades through the catalogue processor", () => {
+  function run(handlers: EffectHandlers = realHandlers) {
+    const processor = createEffectCatalogueProcessor({ deps, handlers });
     const controller = new AbortController();
     const task = processor.start(controller.signal);
 
@@ -171,13 +165,17 @@ describe.each(variants)("Cascades through the catalogue processor ($name)", ({ c
     const paths: string[] = [];
     const release = gate();
 
-    const { processor, idle, stop } = run({
-      ...realHandlers,
+    const testHandlers: TestHandlers = {
       BookCreated: async () => {
         await release.promise;
 
         return ok([]);
       },
+    };
+
+    const { processor, idle, stop } = run({
+      ...realHandlers,
+      BookCreated: testEffectHandler(testHandlers.BookCreated!),
       FolderMetaSyncRequested: recordingRefresh(paths),
     });
 

@@ -1,8 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { folderMetaSync as plainFolderMetaSync } from "../../../../src/processing/handlers/folder-meta-sync.ts";
 import { folderMetaSyncEffect } from "../../../../src/processing/handlers/folder-meta-sync-effect.ts";
 import { runAsPromiseHandler } from "../../../../src/processing/effect-handler.ts";
-import type { Handler } from "../../../../src/processing/catalogue-processor.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
 import { join } from "node:path";
@@ -60,12 +58,9 @@ const folderMetaSyncEvent = (path: string): EventType => ({
   path,
 });
 
-const variants: { name: string; folderMetaSync: Handler }[] = [
-  { name: "plain", folderMetaSync: plainFolderMetaSync },
-  { name: "effect", folderMetaSync: (event, handlerDeps) => runAsPromiseHandler(folderMetaSyncEffect, event, handlerDeps) },
-];
+const folderMetaSync = (event: EventType, handlerDeps: HandlerDeps) => runAsPromiseHandler(folderMetaSyncEffect, event, handlerDeps);
 
-describe.each(variants)("folderMetaSync handler ($name)", ({ folderMetaSync }) => {
+describe("folderMetaSync handler", () => {
   beforeEach(async () => {
     await rm(TEST_DIR, { recursive: true, force: true }).catch(() => {});
     await mkdir(DATA_DIR, { recursive: true });

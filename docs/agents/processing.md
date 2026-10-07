@@ -4,18 +4,18 @@ Code: `src/processing/`, `src/context.ts`.
 
 ## Flow
 
-Adapters (raw inotify → typed `EventType`) → `CatalogueProcessor.submit` → its `SimpleQueue` and consumer loop → handlers.
+Adapters (raw inotify → typed `EventType`) → `CatalogueProcessor.submit` → Effect queue and consumer fiber → Effect handlers.
 
-- `createCatalogueProcessor({ deps, handlers })` fixes the handler registry at construction. `AppContext` exposes no queue or handlers.
+- `createEffectCatalogueProcessor({ deps, handlers })` fixes the handler registry at construction. `AppContext` exposes no queue or handlers.
 - `status()` returns `{ pending, active }` and feeds only `GET /status`.
 - Cascades join pending before the active slot clears.
-- The queue coalesces pending `FolderMetaSyncRequested` events by path and moves them behind later queued work.
+- The processor coalesces pending `FolderMetaSyncRequested` events by path and moves dirty refreshes behind later queued work.
 
 ## Handlers
 
-- A handler returns `Result<EventType[], Error>`. The returned events are the cascade. See `src/processing/handlers/book-sync.ts`.
-- A handler receives `HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">` plus an optional `signal`. The consumer passes its shutdown signal. `bookSync` forwards it to format factories and archive commands.
-- Reset state flags in `finally`. Shut down through `AbortController` and `Promise.allSettled` (see `src/lifecycle/lifecycle.ts`).
+- A handler returns `Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`. The returned events are the cascade. See `src/processing/handlers/book-sync-effect.ts`.
+- Handlers read `CatalogueDeps = Pick<AppContext, "config" | "logger" | "fs">` and, where ported to typed filesystem calls, `EffectFileSystem`.
+- Cancellation is fiber interruption. Handlers run uninterruptibly and mark the phases shutdown may cancel with `Effect.interruptible`.
 - An `index.html` render failure is logged and does not block `feed.xml`.
 
 ## Cascades
@@ -33,11 +33,11 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - These edges drive the lifecycle phase. Periodic reconciliation starts only in `settled`, so a lost `empty` edge blocks reconciliation.
 - The processor never forces GC per event. The periodic memory snapshot logs at `debug` level.
 
-## Effect prototype (#25)
+## Effect processing
 
-- `createEffectCatalogueProcessor`, `bookSyncEffect`, `folderSyncEffect`, `folderMetaSyncEffect`, `bookCleanupEffect`, and `folderCleanupEffect` meet the same contract as the plain code. `server.ts` does not use them. Findings and go/no-go: `docs/effect-processing-prototype.md`.
-- Suites run against both variants through `describe.each`; `test/helpers/effect-variants.ts` builds the Effect registry. `test/helpers/leak-probe.ts` also has `lifecycle-scan-effect`, the per-drain memory gate for the Effect processor.
+- `server.ts` runs `createEffectCatalogueProcessor` with `bookSyncEffect`, `folderSyncEffect`, `folderMetaSyncEffect`, `bookCleanupEffect`, and `folderCleanupEffect`. Findings and go/no-go: `docs/effect-processing-prototype.md`.
+- Tests use the Effect processor only. `test/helpers/leak-probe.ts` has `consumer-enqueue-effect`, `handler-chain-effect`, and `lifecycle-scan-effect` memory gates.
 - In Effect handlers, cross a Promise boundary only through `ownedPromise`. `Effect.tryPromise` abandons the Promise on interruption, and the handler outlives `stop()`.
-- `src/effect-file-system.ts` is the Effect `FileSystemService` for the migration. It exposes tagged errno failures and can wrap the current Promise filesystem for the processor/test boundary. Unlike the Promise service, `symlink` does not unlink the old path first; the caller decides how to recover.
+- `src/effect-file-system.ts` is the Effect `FileSystemService`. It exposes tagged errno failures and can wrap the current Promise filesystem for the processor/test boundary. Unlike the Promise service, `symlink` does not unlink the old path first; the caller decides how to recover.
 - An object that keeps a signal (a format handler keeps the factory's for `getCover()`) lives inside one `ownedPromise`. Each bridge has its own signal, so a second bridge leaves the kept one dead.
 - Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.

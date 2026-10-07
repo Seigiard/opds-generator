@@ -268,7 +268,7 @@ misses frees that Bun performs internally.
   A single preallocated pool is not a valid control: it takes resident pages up front.
 - `test/integration/memory-oracle-calibration.test.ts`: `full-chain` with 64 KiB retained
   per operation must read at or above the chain RSS limit and the object limit.
-- The runtime suite (`SimpleQueue`, consumer) also moved into the probe. In the shared
+- The runtime consumer suite also moved into the probe. In the shared
   test process it had read −6…−8 KB/iter only because it ran after the heavy in-process
   handler test; alone it read +0.6…+1.2 against its limit of 1. A queue operation now
   runs 100 enqueue/take cycles (noise ±0.006 KB per event). The consumer stays at one
@@ -301,7 +301,7 @@ had a handler-chain RSS red whose value was not captured.
 - `consumer-enqueue` and `consumer-enqueue-effect` run 100 events per measured operation and divide by 100, as `queue-cycle` does. The limit (1 KB RSS, 0.5 objects per event) is unchanged.
 - At one event per operation the gate could not resolve its limit: clean plain runs read up to 1.09 KB per event, and 1 KiB retained per event read as low as 0.58 (plain) and 0.3 (Effect). The Effect consumer also read 2.4 to 2.7 on clean code during its JIT warmup.
 - Batched, clean runs read at most 0.055 KB per event and 1 KiB retained per event reads 0.97 to 1.13. `memory-oracle-calibration.test.ts` checks the red side on `consumer-enqueue-effect` with 4 KiB retained per event.
-- The batched gates measure retention per event. Retention once per drain (busy/empty edge, idle take) is spread over 100 events; `lifecycle-scan` covers it for the plain processor.
+- The batched gates measure retention per event. Retention once per drain (busy/empty edge, idle take) is spread over 100 events; `lifecycle-scan-effect` covers it for the Effect processor.
 - Probe children inherit `LOG_LEVEL=warn` from `docker-compose.test.yml`, so the consumer's info logs are off in every gate run.
 - Details: `docs/effect-processing-prototype.md`, "The consumer gate".
 

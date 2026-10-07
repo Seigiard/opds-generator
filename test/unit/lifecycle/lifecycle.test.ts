@@ -1,10 +1,12 @@
 import { describe, test, expect } from "bun:test";
 import { ok } from "neverthrow";
 import { createLifecycle, type CatalogueScanner, type Clock } from "../../../src/lifecycle/lifecycle.ts";
-import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import type { CatalogueProcessor } from "../../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { ScanRequest } from "../../../src/lifecycle/transition.ts";
+import { toEffectTestHandlers, type TestHandlers } from "../../helpers/effect-test-handlers.ts";
 
 const deps: HandlerDeps = {
   config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
@@ -56,7 +58,7 @@ function manualClock() {
 function fixture(
   options: {
     scan?: (request: ScanRequest, signal: AbortSignal) => Promise<readonly EventType[]>;
-    handlers?: Handlers;
+    handlers?: TestHandlers;
     interval?: number;
   } = {},
 ) {
@@ -70,7 +72,11 @@ function fixture(
     },
   };
 
-  const processor = createCatalogueProcessor({ deps, handlers: options.handlers ?? { BookCreated: async () => ok([]) } });
+  const processor = createEffectCatalogueProcessor({
+    deps,
+    handlers: toEffectTestHandlers(options.handlers ?? { BookCreated: async () => ok([]) }),
+  });
+
   const time = manualClock();
   const lifecycle = createLifecycle({ scanner, processor, clock: time.clock, reconcileIntervalSeconds: options.interval ?? 60 });
 

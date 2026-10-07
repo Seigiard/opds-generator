@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
-import { folderCleanup } from "../../../src/processing/handlers/folder-cleanup.ts";
-import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
+import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
+import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
+import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 
@@ -86,6 +87,14 @@ const bookDeletedEvent = (parent: string, name: string): EventType => ({
   name,
 });
 
+const runHandler = (handler: EffectHandler, event: EventType) => runAsPromiseHandler(handler, event, asyncDeps);
+
+const folderSync = (event: EventType) => runHandler(folderSyncEffect, event);
+
+const folderCleanup = (event: EventType) => runHandler(folderCleanupEffect, event);
+
+const bookCleanup = (event: EventType) => runHandler(bookCleanupEffect, event);
+
 describe("Initial Sync - Folder and Cleanup Handlers", () => {
   beforeEach(() => {
     mockFs.reset();
@@ -94,26 +103,26 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
   describe("folderSync during initial sync", () => {
     test("creates folder data directory", async () => {
-      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"));
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction")).toBe(true);
     });
 
     test("generates _entry.xml for folder", async () => {
-      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"));
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeDefined();
       expect(entryWrite?.content).toContain("<entry");
     });
 
     test("processes nested folder paths correctly", async () => {
-      await folderSync(folderCreatedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
+      await folderSync(folderCreatedEvent("/test/books/Fiction/", "SciFi"));
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction/SciFi")).toBe(true);
     });
   });
 
   describe("folderCleanup during initial sync", () => {
     test("removes orphan folder directory", async () => {
-      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"), asyncDeps);
+      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"));
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/OldFolder");
     });
@@ -121,7 +130,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
 
   describe("bookCleanup during initial sync", () => {
     test("removes orphan book directory", async () => {
-      await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "deleted.epub"), asyncDeps);
+      await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "deleted.epub"));
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/deleted.epub");
     });
@@ -132,7 +141,7 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
       const folders = ["Fiction", "NonFiction", "Comics"];
 
       for (const folder of folders) {
-        await folderSync(folderCreatedEvent("/test/books/", folder), asyncDeps);
+        await folderSync(folderCreatedEvent("/test/books/", folder));
       }
 
       const entryWrites = mockFs.writeCalls.filter((c) => c.path.endsWith("_entry.xml"));
@@ -140,8 +149,8 @@ describe("Initial Sync - Folder and Cleanup Handlers", () => {
     });
 
     test("cleanup then create for folder replacement", async () => {
-      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"), asyncDeps);
-      await folderSync(folderCreatedEvent("/test/books/", "NewFolder"), asyncDeps);
+      await folderCleanup(folderDeletedEvent("/test/books/", "OldFolder"));
+      await folderSync(folderCreatedEvent("/test/books/", "NewFolder"));
 
       expect(mockFs.rmCalls.some((c) => c.path.includes("OldFolder"))).toBe(true);
       expect(mockFs.mkdirCalls.some((c) => c.path.includes("NewFolder"))).toBe(true);
