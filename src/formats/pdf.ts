@@ -1,7 +1,8 @@
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
+import { Effect } from "effect";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
-import { spawnWithTimeout, spawnWithTimeoutText } from "../utils/process.ts";
+import { runCommand, runCommandText } from "../utils/process.ts";
 
 const SOURCE_FILE_EXTENSIONS = /\.(indd|qxd|docx?|odt|rtf|pages|tex|pub|wpd|fm)$/i;
 
@@ -14,12 +15,58 @@ interface PdfInfo {
   pages?: number;
 }
 
-async function parsePdfInfo(filePath: string, signal?: AbortSignal): Promise<PdfInfo | null> {
-  const { stdout: output, exitCode } = await spawnWithTimeoutText({ command: ["pdfinfo", filePath], signal });
+const extractPdf = Effect.fn("extractPdf")(function* (filePath: string) {
+  const exists = yield* Effect.promise(() => Bun.file(filePath).exists()).pipe(Effect.uninterruptible);
 
-  if (exitCode !== 0) return null;
+  if (!exists) return yield* ExtractionFailed.of(filePath, "file does not exist");
 
-  return parsePdfInfoOutput(output);
+  const info = yield* readPdfInfo(filePath);
+
+  const meta: BookMetadata = {
+    title: stripSourceFileExtension(info.title || ""),
+    author: info.author,
+    description: info.subject,
+    issued: parseCreationDate(info.creationDate),
+    subjects: parseKeywords(info.keywords),
+    pageCount: info.pages && !isNaN(info.pages) ? info.pages : undefined,
+  };
+
+  const book: ExtractedBook = { meta, cover: yield* readCover(filePath) };
+
+  return book;
+});
+
+export const pdfExtractorRegistration: FormatExtractorRegistration = {
+  extensions: ["pdf"],
+  extract: extractPdf,
+};
+
+function readPdfInfo(filePath: string): Effect.Effect<PdfInfo, ExtractionFailed> {
+  return runCommandText({ command: ["pdfinfo", filePath] }).pipe(
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("PDF", filePath, error.cause))),
+    Effect.mapError((error) => ExtractionFailed.of(filePath, error)),
+    Effect.flatMap(({ stdout, exitCode }) =>
+      exitCode === 0
+        ? Effect.succeed(parsePdfInfoOutput(stdout))
+        : Effect.fail(ExtractionFailed.of(filePath, `pdfinfo exited with ${exitCode}`)),
+    ),
+  );
+}
+
+/** The first page as JPEG. A cover that cannot be rendered is `null`, so the metadata already read survives. */
+function readCover(filePath: string): Effect.Effect<Buffer | null> {
+  return runCommand({
+    command: ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
+  }).pipe(
+    Effect.map(({ stdout, exitCode }) => (exitCode !== 0 || stdout.byteLength === 0 ? null : Buffer.from(stdout))),
+    Effect.catchTag("CommandFailed", (error) =>
+      Effect.sync(() => {
+        logHandlerError("PDF", filePath, error.cause);
+
+        return null;
+      }),
+    ),
+  );
 }
 
 export function parsePdfInfoOutput(output: string): PdfInfo {
@@ -87,63 +134,3 @@ function parseKeywords(keywords: string | undefined): string[] | undefined {
 
   return items.length > 0 ? items : undefined;
 }
-
-async function extractCover(filePath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  try {
-    const { stdout: data, exitCode } = await spawnWithTimeout({
-      command: ["pdftoppm", "-jpeg", "-f", "1", "-l", "1", "-scale-to", String(COVER_MAX_SIZE), filePath],
-      signal,
-    });
-
-    if (exitCode !== 0 || data.byteLength === 0) return null;
-
-    return Buffer.from(data);
-  } catch (error) {
-    signal?.throwIfAborted();
-    logHandlerError("PDF", filePath, error);
-
-    return null;
-  }
-}
-
-async function createPdfHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
-  try {
-    signal?.throwIfAborted();
-    const file = Bun.file(filePath);
-
-    if (!(await file.exists())) return null;
-
-    const info = await parsePdfInfo(filePath, signal);
-
-    if (!info) return null;
-
-    const metadata: BookMetadata = {
-      title: stripSourceFileExtension(info.title || ""),
-      author: info.author,
-      description: info.subject,
-      issued: parseCreationDate(info.creationDate),
-      subjects: parseKeywords(info.keywords),
-      pageCount: info.pages && !isNaN(info.pages) ? info.pages : undefined,
-    };
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-
-      async getCover() {
-        return extractCover(filePath, signal);
-      },
-    };
-  } catch (error) {
-    signal?.throwIfAborted();
-    logHandlerError("PDF", filePath, error);
-
-    return null;
-  }
-}
-
-export const pdfHandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["pdf"],
-  create: createPdfHandler,
-};

@@ -189,6 +189,10 @@
       "files": [
         "src/utils/process.ts",
         "src/utils/owned-promise.ts",
+        "src/formats/types.ts",
+        "src/formats/index.ts",
+        "src/formats/pdf.ts",
+        "src/formats/legacy-adapter.ts",
         "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",
         "src/processing/catalogue-processor-effect.ts",

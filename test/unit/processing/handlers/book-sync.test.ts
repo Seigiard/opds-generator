@@ -3,7 +3,15 @@ import { bookSyncEffect } from "../../../../src/processing/handlers/book-sync-ef
 import { runAsPromiseHandler, type TestHandlerDeps } from "../../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
-import { mockPdfInfo, mockPdfToPpmSpawnFailure, resetMocks } from "../../../helpers/mock-tools.ts";
+import {
+  mockPdfInfo,
+  mockPdfToPpmExit,
+  mockPdfToPpmHangUntilKilled,
+  mockPdfToPpmSpawnFailure,
+  resetMocks,
+} from "../../../helpers/mock-tools.ts";
+import { assertCoverMatchesReference } from "../../../helpers/image-compare.ts";
+import sharp from "sharp";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir, rm, readdir, stat, readFile, readlink, lstat, symlink, unlink } from "node:fs/promises";
@@ -220,27 +228,124 @@ describe("bookSync handler", () => {
     expect(thumbExists).toBe(true);
   });
 
-  test("keeps PDF metadata when the cover command fails to spawn", async () => {
-    // #given
-    mockPdfInfo(`Title:          Spawn Failure Metadata
-Author:         PDF Author
-Pages:          7
-`);
-    mockPdfToPpmSpawnFailure(new Error("pdftoppm missing"));
-    await Bun.write(join(FILES_DIR, "metadata.pdf"), "fake pdf");
+  test("publishes a PDF with metadata, cover, thumbnail, download link and a folder refresh", async () => {
+    // #given a known source book
+    const name = "Test Book - Test Author.pdf";
+    const bookPath = join(FILES_DIR, name);
+    await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, name)));
 
     // #when
-    await bookSync(bookCreatedEvent("metadata.pdf"), deps);
+    const result = await bookSync(bookCreatedEvent(name), deps);
 
     // #then
-    const entry = await readFile(join(DATA_DIR, "metadata.pdf", "entry.xml"), "utf-8");
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
     expect({
-      title: entry.includes("<title>Spawn Failure Metadata</title>"),
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>Test Book</title>"),
+      author: entry.includes("<name>Test Author</name>"),
+      issued: entry.includes("<dc:issued>2025</dc:issued>"),
+      extent: entry.includes("<dc:extent>3 pages</dc:extent>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+      link: await readlink(join(bookDir, name)),
+      thumbFormat: thumb.format,
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      author: true,
+      issued: true,
+      extent: true,
+      cover: true,
+      thumbnail: true,
+      link: bookPath,
+      thumbFormat: "jpeg",
+    });
+    await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+  });
+
+  const PDF_INFO = `Title:          Cover Failure Metadata
+Author:         PDF Author
+Pages:          7
+`;
+
+  async function syncPdfWithFailingCover(): Promise<string> {
+    await Bun.write(join(FILES_DIR, "metadata.pdf"), "fake pdf");
+    await bookSync(bookCreatedEvent("metadata.pdf"), deps);
+
+    return readFile(join(DATA_DIR, "metadata.pdf", "entry.xml"), "utf-8");
+  }
+
+  function coverFailureView(entry: string) {
+    return {
+      title: entry.includes("<title>Cover Failure Metadata</title>"),
       author: entry.includes("<name>PDF Author</name>"),
       extent: entry.includes("<dc:extent>7 pages</dc:extent>"),
       cover: entry.includes('rel="http://opds-spec.org/image"'),
       thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
-    }).toEqual({ title: true, author: true, extent: true, cover: false, thumbnail: false });
+    };
+  }
+
+  const KEPT_METADATA_WITHOUT_COVER = { title: true, author: true, extent: true, cover: false, thumbnail: false };
+
+  test("keeps PDF metadata when the cover command fails to spawn", async () => {
+    // #given
+    mockPdfInfo(PDF_INFO);
+    mockPdfToPpmSpawnFailure(new Error("pdftoppm missing"));
+
+    // #when
+    const entry = await syncPdfWithFailingCover();
+
+    // #then
+    expect(coverFailureView(entry)).toEqual(KEPT_METADATA_WITHOUT_COVER);
+  });
+
+  test("keeps PDF metadata when the cover command exits nonzero", async () => {
+    // #given
+    mockPdfInfo(PDF_INFO);
+    mockPdfToPpmExit(99);
+
+    // #when
+    const entry = await syncPdfWithFailingCover();
+
+    // #then
+    expect(coverFailureView(entry)).toEqual(KEPT_METADATA_WITHOUT_COVER);
+  });
+
+  test("keeps PDF metadata when the cover command times out", async () => {
+    // #given a cover command that runs until the 15 s command timeout kills it
+    mockPdfInfo(PDF_INFO);
+    mockPdfToPpmHangUntilKilled();
+
+    // #when
+    const entry = await syncPdfWithFailingCover();
+
+    // #then
+    expect(coverFailureView(entry)).toEqual(KEPT_METADATA_WITHOUT_COVER);
+  }, 25_000);
+
+  test("uses the filename title when a PDF has no readable metadata", async () => {
+    // #given a file pdfinfo rejects
+    await Bun.write(join(FILES_DIR, "My_Broken_Report.pdf"), "not a pdf");
+
+    // #when
+    const result = await bookSync(bookCreatedEvent("My_Broken_Report.pdf"), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, "My_Broken_Report.pdf");
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>My Broken Report</title>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      link: await readlink(join(bookDir, "My_Broken_Report.pdf")),
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      cover: false,
+      link: join(FILES_DIR, "My_Broken_Report.pdf"),
+    });
   });
 
   test("handles nested folder structure", async () => {

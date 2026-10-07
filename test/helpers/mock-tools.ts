@@ -12,7 +12,7 @@ type SpawnResult = {
 
 interface MockConfig {
   pdfinfo?: string;
-  pdftoppm?: Buffer | Error | "hang";
+  pdftoppm?: Buffer | Error | "hang" | { readonly exitCode: number };
   magick?: boolean;
 }
 
@@ -88,6 +88,11 @@ export function mockPdfToPpmSpawnFailure(error: Error): void {
   setupSpawnSpy();
 }
 
+export function mockPdfToPpmExit(exitCode: number): void {
+  mockConfig.pdftoppm = { exitCode };
+  setupSpawnSpy();
+}
+
 export function mockPdfToPpmHangUntilKilled(): void {
   mockConfig.pdftoppm = "hang";
   setupSpawnSpy();
@@ -120,6 +125,11 @@ function setupSpawnSpy(): void {
       if (mockConfig.pdftoppm === "hang") {
         // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
         return createHangingSpawnResult() as any;
+      }
+
+      if (!Buffer.isBuffer(mockConfig.pdftoppm)) {
+        // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
+        return createMockSpawnResult("", mockConfig.pdftoppm.exitCode) as any;
       }
 
       writeStdoutOption(options, mockConfig.pdftoppm);

@@ -235,8 +235,9 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
       (await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
       (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
       (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
-      // A handler that silently skips the book must not pass the gate by avoiding the workload.
+      // A handler that silently skips the book or its cover must not pass the gate by avoiding the workload.
       await stat(join(folderDataPath, bookFile, "entry.xml"));
+      await stat(join(folderDataPath, bookFile, "cover.jpg"));
     } finally {
       await rm(folderDataPath, { recursive: true, force: true });
       await rm(folderPath, { recursive: true, force: true });

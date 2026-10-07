@@ -39,5 +39,7 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - Tests use the Effect processor only. `test/helpers/leak-probe.ts` has `consumer-enqueue-effect`, `handler-chain-effect`, and `lifecycle-scan-effect` memory gates.
 - In Effect handlers, cross a Promise boundary only through `ownedPromise`. `Effect.tryPromise` abandons the Promise on interruption, and the handler outlives `stop()`.
 - `src/effect-file-system.ts` is the Effect `FileSystemService`. It exposes tagged errno failures and wraps the current Promise filesystem for the processor/test boundary. The adapter keeps the Promise service's unlink-first `symlink` behavior.
-- An object that keeps a signal (a format handler keeps the factory's for `getCover()`) lives inside one `ownedPromise`. Each bridge has its own signal, so a second bridge leaves the kept one dead.
+- `bookSync` yields the registry's `extract(filePath)` inside its interruptible preparation and recovers `ExtractionFailed` with the filename fallback. Interruption leaves the previous entry and link untouched.
+- Extraction memory and stopping values, and how to compare them: `docs/effect-extraction-baseline.md`.
+- `src/formats/legacy-adapter.ts` runs a legacy handler's factory, metadata, and cover read inside one `ownedPromise`: the handler keeps the factory's signal for `getCover()`, and each bridge has its own signal, so a second bridge leaves the kept one dead.
 - Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.
