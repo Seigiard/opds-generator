@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
-import { listZipEntries, readZipEntry, readZipEntryText } from "../utils/zip.ts";
+import { listArchiveEntries, readArchiveEntry, readArchiveEntryText } from "../utils/archive.ts";
 import { createXmlParser, getString, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
 import { logHandlerError } from "../logging/index.ts";
 import * as v from "valibot";
@@ -105,7 +105,7 @@ interface OpfReading {
 }
 
 const extractEpub = Effect.fn("extractEpub")(function* (filePath: string) {
-  const container = yield* readZipEntryText(filePath, "META-INF/container.xml");
+  const container = yield* readArchiveEntryText(filePath, "META-INF/container.xml");
 
   if (!container) return yield* ExtractionFailed.of(filePath, "no META-INF/container.xml");
 
@@ -113,7 +113,7 @@ const extractEpub = Effect.fn("extractEpub")(function* (filePath: string) {
 
   if (!opfPath) return yield* ExtractionFailed.of(filePath, "container names no OPF");
 
-  const opf = yield* readZipEntryText(filePath, opfPath);
+  const opf = yield* readArchiveEntryText(filePath, opfPath);
 
   if (!opf) return yield* ExtractionFailed.of(filePath, `no OPF at ${opfPath}`);
 
@@ -121,9 +121,9 @@ const extractEpub = Effect.fn("extractEpub")(function* (filePath: string) {
 
   if (!reading) return yield* ExtractionFailed.of(filePath, "OPF has no package metadata");
 
-  const coverPath = reading.metadataCover ?? (yield* listZipEntries(filePath).pipe(Effect.map(findCoverByName)));
+  const coverPath = reading.metadataCover ?? (yield* listArchiveEntries(filePath).pipe(Effect.map(findCoverByName)));
 
-  const book: ExtractedBook = { meta: reading.meta, cover: coverPath ? yield* readZipEntry(filePath, coverPath) : null };
+  const book: ExtractedBook = { meta: reading.meta, cover: coverPath ? yield* readArchiveEntry(filePath, coverPath) : null };
 
   return book;
 });

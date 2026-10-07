@@ -302,6 +302,29 @@ describe("bookSync handler", () => {
     await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
   });
 
+  test("publishes an EPUB packed as a TAR archive with its metadata and cover", async () => {
+    // #given the known EPUB's files repacked into a TAR container under an .epub name
+    const name = "Tar Packed.epub";
+    const contents = join(TEST_DIR, "tar-contents");
+    await mkdir(contents, { recursive: true });
+    await Bun.$`unzip -q ${join(FIXTURES_DIR, "Test Book - Test Author.epub")} -d ${contents}`.quiet();
+    await Bun.$`tar -cf ${join(FILES_DIR, name)} mimetype META-INF content.opf cover.jpeg`.cwd(contents).quiet();
+
+    // #when
+    await bookSync(bookCreatedEvent(name), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    expect({
+      title: entry.includes("<title>Test Book</title>"),
+      author: entry.includes("<name>Test Author</name>"),
+      issued: entry.includes("<dc:issued>2021-09</dc:issued>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+    }).toEqual({ title: true, author: true, issued: true, cover: true });
+    await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+  });
+
   test("uses the filename title when an EPUB has no readable container", async () => {
     // #given a .epub file that is not a ZIP archive
     await Bun.write(join(FILES_DIR, "My_Broken_Novel.epub"), "not an epub");

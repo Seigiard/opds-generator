@@ -1,12 +1,70 @@
+import { Effect } from "effect";
 import { createExtractorFromFile } from "node-unrar-js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { detectArchiveType } from "./archive-type.ts";
+import { ownedPromise } from "./owned-promise.ts";
 import { runOwned, spawnWithTimeout, spawnWithTimeoutText, withTemporaryDirectory } from "./process.ts";
 import { listZipEntries, readZipEntry } from "./zip.ts";
 
-// Temporary Promise wrappers for legacy comic and FB2 callers (#40). ZIP runs the shared Effect operations in
-// `zip.ts`; RAR, 7z and TAR keep their Promise paths until #46.
+/**
+ * File entries of any supported archive, dispatched by magic bytes. Unknown input yields `[]`.
+ * ZIP runs natively in `zip.ts`; RAR, 7z and TAR cross the temporary legacy bridge until they move (#46).
+ */
+export function listArchiveEntries(filePath: string): Effect.Effect<string[]> {
+  return detectArchiveType(filePath).pipe(
+    Effect.flatMap((type) => {
+      if (type === null) return Effect.succeed([]);
+
+      if (type === "zip") return listZipEntries(filePath);
+
+      return legacyVariant([], (signal) => (type === "rar" ? listEntriesRar(filePath, signal) : listEntriesShell(filePath, type, signal)));
+    }),
+  );
+}
+
+/** One entry's bytes from any supported archive, or `null`; dispatched like `listArchiveEntries`. */
+export function readArchiveEntry(filePath: string, entryPath: string): Effect.Effect<Buffer | null> {
+  return detectArchiveType(filePath).pipe(
+    Effect.flatMap((type) => {
+      if (type === null) return Effect.succeed(null);
+
+      if (type === "zip") return readZipEntry(filePath, entryPath);
+
+      return legacyVariant(null, (signal) => {
+        if (type === "rar") return readEntryRar(filePath, entryPath, signal);
+
+        return type === "tar" ? readEntryTar(filePath, entryPath, signal) : readEntry7z(filePath, entryPath, signal);
+      });
+    }),
+  );
+}
+
+export function readArchiveEntryText(filePath: string, entryPath: string): Effect.Effect<string | null> {
+  return readArchiveEntry(filePath, entryPath).pipe(Effect.map((buffer) => (buffer ? buffer.toString("utf-8") : null)));
+}
+
+/**
+ * Temporary bridge to the Promise RAR/7z/TAR helpers (#46). They recover ordinary failures themselves and reject only
+ * when `signal` aborts; `ownedPromise` aborts it on interruption and waits for the helper to settle.
+ */
+function legacyVariant<A>(fallback: A, run: (signal: AbortSignal) => Promise<A>): Effect.Effect<A> {
+  return ownedPromise(run, (cause) => cause).pipe(Effect.orElseSucceed(() => fallback));
+}
+
+// Temporary Promise wrappers for legacy comic and FB2 callers (#40), over the Effect dispatch above.
+
+export function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
+  return runOwned(listArchiveEntries(filePath), signal);
+}
+
+export function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
+  return runOwned(readArchiveEntry(filePath, entryPath), signal);
+}
+
+export function readEntryText(filePath: string, entryPath: string, signal?: AbortSignal): Promise<string | null> {
+  return runOwned(readArchiveEntryText(filePath, entryPath), signal);
+}
 
 async function listEntriesRar(filePath: string, signal?: AbortSignal): Promise<string[]> {
   try {
@@ -50,20 +108,6 @@ async function listEntriesShell(filePath: string, type: "7z" | "tar", signal?: A
 
     return [];
   }
-}
-
-export async function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
-  const type = await runOwned(detectArchiveType(filePath), signal);
-
-  if (!type) return [];
-
-  if (type === "zip") return runOwned(listZipEntries(filePath), signal);
-
-  if (type === "rar") {
-    return listEntriesRar(filePath, signal);
-  }
-
-  return listEntriesShell(filePath, type, signal);
 }
 
 async function readEntryTar(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
@@ -129,28 +173,4 @@ async function readEntry7z(filePath: string, entryPath: string, signal?: AbortSi
 
     return null;
   }
-}
-
-export async function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  const type = await runOwned(detectArchiveType(filePath), signal);
-
-  if (!type) return null;
-
-  if (type === "zip") return runOwned(readZipEntry(filePath, entryPath), signal);
-
-  if (type === "rar") {
-    return readEntryRar(filePath, entryPath, signal);
-  }
-
-  if (type === "tar") {
-    return readEntryTar(filePath, entryPath, signal);
-  }
-
-  return readEntry7z(filePath, entryPath, signal);
-}
-
-export async function readEntryText(filePath: string, entryPath: string, signal?: AbortSignal): Promise<string | null> {
-  const buffer = await readEntry(filePath, entryPath, signal);
-
-  return buffer ? buffer.toString("utf-8") : null;
 }

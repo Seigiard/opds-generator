@@ -38,7 +38,7 @@ async function abortWhileRunning(command: string, run: (signal: AbortSignal) => 
 }
 
 describe("utils/archive", () => {
-  describe("ZIP cancellation through the Promise wrappers", () => {
+  describe("Cancellation through the Promise wrappers", () => {
     test("aborting a ZIP listing rejects with the abort reason after the command is gone", async () => {
       // #given / #when
       const outcome = await abortWhileRunning("zipinfo", (signal) =>
@@ -53,6 +53,16 @@ describe("utils/archive", () => {
       // #given / #when
       const outcome = await abortWhileRunning("unzip", (signal) =>
         readEntry(join(FIXTURES_DIR, "Test Book - Test Author.fb2.zip"), "Test Book - Test Author.fb2", signal),
+      );
+
+      // #then
+      expect(outcome).toEqual({ settled: "rejected", value: "abort reason", childAlive: false });
+    }, 15_000);
+
+    test("aborting a TAR entry read through the legacy bridge rejects with the abort reason after the command is gone", async () => {
+      // #given / #when
+      const outcome = await abortWhileRunning("tar", (signal) =>
+        readEntry(join(FIXTURES_DIR, "bobby_make_believe_sample.cbt"), "ComicInfo.xml", signal),
       );
 
       // #then

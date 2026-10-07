@@ -3,7 +3,7 @@ import { Cause, Effect, Exit } from "effect";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { listZipEntries, readZipEntry, readZipEntryText } from "../../../src/utils/zip.ts";
+import { listZipEntries, readZipEntry } from "../../../src/utils/zip.ts";
 import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { installHangingCommands, isAlive, waitForHangingChild, type HangingChild } from "../../helpers/hanging-command.ts";
 
@@ -121,9 +121,9 @@ describe("listZipEntries", () => {
 describe("readZipEntry", () => {
   test("reads a text entry", async () => {
     // #given / #when
-    const text = await Effect.runPromise(readZipEntryText(EPUB, "mimetype"));
+    const data = await Effect.runPromise(readZipEntry(EPUB, "mimetype"));
     // #then
-    expect(text).toBe("application/epub+zip");
+    expect(data?.toString("utf-8")).toBe("application/epub+zip");
   });
 
   test("reads a binary entry", async () => {
@@ -149,9 +149,9 @@ describe("readZipEntry", () => {
 
   test("returns null for a file that is not a ZIP archive", async () => {
     // #given / #when
-    const text = await Effect.runPromise(readZipEntryText(TEXT_FILE, "anything"));
+    const data = await Effect.runPromise(readZipEntry(TEXT_FILE, "anything"));
     // #then
-    expect(text).toBeNull();
+    expect(data).toBeNull();
   });
 
   test("returns null when the read command cannot start", async () => {
