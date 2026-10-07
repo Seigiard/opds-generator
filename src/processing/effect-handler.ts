@@ -1,10 +1,9 @@
-import { Cause, Context, Data, Effect, Exit } from "effect";
-import { err, ok, type Result } from "neverthrow";
+import { Context, Data, Effect } from "effect";
 import type { HandlerDeps } from "../context.ts";
-import { EffectFileSystem, effectFileSystemFromPromiseService, type EffectFileSystemService } from "../effect-file-system.ts";
+import type { EffectFileSystem } from "../effect-file-system.ts";
 import type { EventType } from "./types.ts";
 
-export class CatalogueDeps extends Context.Service<CatalogueDeps, Omit<HandlerDeps, "signal">>()("CatalogueDeps") {}
+export class CatalogueDeps extends Context.Service<CatalogueDeps, HandlerDeps>()("CatalogueDeps") {}
 
 /** Constructors for catalogue events; the values stay plain `EventType` members. */
 export const CatalogueEvent = Data.taggedEnum<EventType>();
@@ -19,29 +18,3 @@ export type HandlerError = Error & { readonly _tag: string };
 export type EffectHandler = (event: EventType) => Effect.Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>;
 
 export type EffectHandlers = Readonly<Partial<Record<EventType["_tag"], EffectHandler>>>;
-
-/** Runs an Effect handler behind the Promise handler signature. Interruption by `deps.signal` returns its reason. */
-export async function runAsPromiseHandler(
-  handler: EffectHandler,
-  event: EventType,
-  { signal, ...deps }: HandlerDeps,
-  effectFs: EffectFileSystemService = effectFileSystemFromPromiseService(deps.fs),
-): Promise<Result<readonly EventType[], Error>> {
-  const exit = await Effect.runPromiseExit(
-    handler(event).pipe(Effect.provideService(CatalogueDeps, deps), Effect.provideService(EffectFileSystem, effectFs)),
-    {
-      signal,
-      uninterruptible: true,
-    },
-  );
-
-  if (Exit.isSuccess(exit)) return ok(exit.value);
-
-  if (Cause.hasInterruptsOnly(exit.cause) && signal?.aborted) return err(toError(signal.reason));
-
-  return err(toError(Cause.squash(exit.cause)));
-}
-
-function toError(cause: unknown): Error {
-  return cause instanceof Error ? cause : new Error(String(cause));
-}

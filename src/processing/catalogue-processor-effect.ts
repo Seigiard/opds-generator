@@ -7,7 +7,7 @@ import { CatalogueDeps, type EffectHandlers } from "./effect-handler.ts";
 import type { EventType } from "./types.ts";
 
 interface EffectCatalogueProcessorOptions {
-  readonly deps: Omit<HandlerDeps, "signal">;
+  readonly deps: HandlerDeps;
   readonly handlers: EffectHandlers;
 }
 
@@ -182,7 +182,7 @@ export function createEffectCatalogueProcessor({ deps, handlers }: EffectCatalog
     // Abort interrupts the consumer fiber; the promise settles once the active handler has.
     const exit = await Effect.runPromiseExit(consume, { signal });
 
-    // A defect outside a handler (the logger, the queue) ends the loop; reject as the plain consumer does.
+    // A defect outside a handler (the logger, the queue) ends the loop; reject so the owner sees the dead consumer.
     if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) throw Cause.squash(exit.cause);
   };
 

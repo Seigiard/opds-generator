@@ -2,7 +2,8 @@ import { basename, join } from "node:path";
 import { describe, test, expect, beforeEach } from "bun:test";
 import { Effect } from "effect";
 import { FileSystemNotFound } from "../../../src/effect-file-system.ts";
-import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "../../helpers/effect-test-handlers.ts";
 import { folderCleanupEffect } from "../../../src/processing/handlers/folder-cleanup-effect.ts";
 import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
 import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
@@ -307,8 +308,13 @@ describe("Processing Handlers", () => {
 
     const effectFs = createEffectFileSystemTestDouble({
       exists: () => Effect.succeed(false),
-      rm: () =>
-        Effect.fail(new FileSystemNotFound({ operation: "rm", path: missingDataDir, message: `rm ${missingDataDir} failed: ENOENT` })),
+      rm: () => {
+        const cause = Object.assign(new Error("missing"), { code: "ENOENT" });
+
+        return Effect.fail(
+          new FileSystemNotFound({ operation: "rm", path: missingDataDir, cause, message: `rm ${missingDataDir} failed: ENOENT` }),
+        );
+      },
     });
 
     // #when

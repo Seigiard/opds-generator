@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { runAsPromiseHandler, type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { type EffectHandler } from "../../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "../../helpers/effect-test-handlers.ts";
 import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
 import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
 import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";

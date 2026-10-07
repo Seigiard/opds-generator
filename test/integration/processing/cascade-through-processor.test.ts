@@ -5,7 +5,8 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { ok } from "neverthrow";
 import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { runAsPromiseHandler, type EffectHandler, type EffectHandlers } from "../../../src/processing/effect-handler.ts";
+import { type EffectHandler, type EffectHandlers } from "../../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "../../helpers/effect-test-handlers.ts";
 import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
 import { bookCleanupEffect } from "../../../src/processing/handlers/book-cleanup-effect.ts";
 import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";

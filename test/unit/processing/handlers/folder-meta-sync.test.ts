@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { folderMetaSyncEffect } from "../../../../src/processing/handlers/folder-meta-sync-effect.ts";
-import { runAsPromiseHandler } from "../../../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "../../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
 import { join } from "node:path";

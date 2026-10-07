@@ -17,7 +17,7 @@ import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.
 import { listEntries, readEntry } from "../../src/utils/archive.ts";
 import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
-import { runAsPromiseHandler } from "../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler } from "./effect-test-handlers.ts";
 import { bookSyncEffect } from "../../src/processing/handlers/book-sync-effect.ts";
 import { folderSyncEffect } from "../../src/processing/handlers/folder-sync-effect.ts";
 import { folderMetaSyncEffect } from "../../src/processing/handlers/folder-meta-sync-effect.ts";

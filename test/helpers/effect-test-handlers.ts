@@ -1,14 +1,16 @@
-import { Data, Effect } from "effect";
-import type { Result } from "neverthrow";
+import { Cause, Data, Effect, Exit } from "effect";
+import { err, ok, type Result } from "neverthrow";
 import type { HandlerDeps } from "../../src/context.ts";
-import { EffectFileSystem } from "../../src/effect-file-system.ts";
+import { EffectFileSystem, effectFileSystemFromPromiseService, type EffectFileSystemService } from "../../src/effect-file-system.ts";
 import { CatalogueDeps, type EffectHandler, type EffectHandlers } from "../../src/processing/effect-handler.ts";
 import type { EventType } from "../../src/processing/types.ts";
 import { ownedPromise } from "../../src/utils/owned-promise.ts";
 
 class TestHandlerFailed extends Data.TaggedError("TestHandlerFailed")<{ readonly cause: Error; readonly message: string }> {}
 
-export type TestHandler = (event: EventType, deps: HandlerDeps) => Promise<Result<readonly EventType[], Error>>;
+export type TestHandlerDeps = HandlerDeps & { readonly signal?: AbortSignal };
+
+export type TestHandler = (event: EventType, deps: TestHandlerDeps) => Promise<Result<readonly EventType[], Error>>;
 
 export type TestHandlers = Readonly<Partial<Record<EventType["_tag"], TestHandler>>>;
 
@@ -38,4 +40,30 @@ export function toEffectTestHandlers(handlers: TestHandlers): EffectHandlers {
   }
 
   return effectHandlers;
+}
+
+/** Runs an Effect handler behind the Promise handler signature. Interruption by `deps.signal` returns its reason. */
+export async function runAsPromiseHandler(
+  handler: EffectHandler,
+  event: EventType,
+  { signal, ...deps }: TestHandlerDeps,
+  effectFs: EffectFileSystemService = effectFileSystemFromPromiseService(deps.fs),
+): Promise<Result<readonly EventType[], Error>> {
+  const exit = await Effect.runPromiseExit(
+    handler(event).pipe(Effect.provideService(CatalogueDeps, deps), Effect.provideService(EffectFileSystem, effectFs)),
+    {
+      signal,
+      uninterruptible: true,
+    },
+  );
+
+  if (Exit.isSuccess(exit)) return ok(exit.value);
+
+  if (Cause.hasInterruptsOnly(exit.cause) && signal?.aborted) return err(toError(signal.reason));
+
+  return err(toError(Cause.squash(exit.cause)));
+}
+
+function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause));
 }

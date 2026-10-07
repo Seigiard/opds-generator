@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { bookSyncEffect } from "../../../../src/processing/handlers/book-sync-effect.ts";
-import { runAsPromiseHandler } from "../../../../src/processing/effect-handler.ts";
+import { runAsPromiseHandler, type TestHandlerDeps } from "../../../helpers/effect-test-handlers.ts";
 import type { HandlerDeps } from "../../../../src/context.ts";
 import type { EventType } from "../../../../src/processing/types.ts";
 import { mockPdfInfo, mockPdfToPpmSpawnFailure, resetMocks } from "../../../helpers/mock-tools.ts";
@@ -95,7 +95,7 @@ describe("bookSync handler", () => {
     await mkdir(bookDir);
     await Bun.write(join(bookDir, "entry.xml"), "previous entry");
 
-    const cancellableDeps: HandlerDeps = {
+    const cancellableDeps: TestHandlerDeps = {
       ...deps,
       signal: controller.signal,
       fs: {
@@ -123,7 +123,7 @@ describe("bookSync handler", () => {
     const bookPath = join(FILES_DIR, "test.txt");
     await Bun.write(bookPath, "source book");
 
-    const cancellingDeps: HandlerDeps = {
+    const cancellingDeps: TestHandlerDeps = {
       ...deps,
       signal: controller.signal,
       fs: {

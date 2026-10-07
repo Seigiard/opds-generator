@@ -1,5 +1,4 @@
 import { Context, Data, Effect } from "effect";
-import { access, mkdir, readdir, rename, rm, stat, symlink, unlink } from "node:fs/promises";
 import type { FileSystemService } from "./context.ts";
 import { ownedPromise } from "./utils/owned-promise.ts";
 
@@ -11,6 +10,7 @@ export interface FileStat {
 interface FailureProps {
   readonly operation: string;
   readonly path: string;
+  readonly cause: unknown;
   readonly message: string;
 }
 
@@ -38,41 +38,18 @@ export interface EffectFileSystemService {
 
 export class EffectFileSystem extends Context.Service<EffectFileSystem, EffectFileSystemService>()("EffectFileSystem") {}
 
-export const liveEffectFileSystem: EffectFileSystemService = {
-  mkdir: (path, options) => fsEffect("mkdir", path, async () => mkdir(path, options)),
-  rm: (path, options) => fsEffect("rm", path, async () => rm(path, options)),
-  readdir: (path) => fsEffect("readdir", path, () => readdir(path)),
-  stat: (path) =>
-    fsEffect("stat", path, async () => {
-      const s = await stat(path);
-
-      return { isDirectory: () => s.isDirectory(), size: s.size };
-    }),
-  // Only a missing path answers false; any other errno (EACCES, ELOOP, …) is a failure, not "absent".
-  exists: (path) =>
-    fsEffect("exists", path, async () => (await access(path), true)).pipe(
-      Effect.catchTag("FileSystemNotFound", () => Effect.succeed(false)),
-    ),
-  writeFile: (path, content) => fsEffect("writeFile", path, async () => Bun.write(path, content).then(() => undefined)),
-  atomicWrite: (path, content) =>
-    fsEffect("atomicWrite", path, async () => {
-      const tmpPath = `${path}.tmp`;
-      await Bun.write(tmpPath, content);
-      await rename(tmpPath, path);
-    }),
-  symlink: (target, path) => fsEffect("symlink", path, async () => symlink(target, path)),
-  unlink: (path) => fsEffect("unlink", path, async () => unlink(path)),
-};
-
 export function effectFileSystemFromPromiseService(fs: FileSystemService): EffectFileSystemService {
   return {
     mkdir: (path, options) => fsEffect("mkdir", path, () => fs.mkdir(path, options)),
     rm: (path, options) => fsEffect("rm", path, () => fs.rm(path, options)),
     readdir: (path) => fsEffect("readdir", path, () => fs.readdir(path)),
     stat: (path) => fsEffect("stat", path, () => fs.stat(path)),
-    exists: (path) => fsEffect("exists", path, () => fs.exists(path)),
+    // Only a missing path answers false; any other errno (EACCES, ELOOP, …) is a failure, not "absent".
+    exists: (path) =>
+      fsEffect("exists", path, () => fs.exists(path)).pipe(Effect.catchTag("FileSystemNotFound", () => Effect.succeed(false))),
     writeFile: (path, content) => fsEffect("writeFile", path, () => fs.writeFile(path, content)),
     atomicWrite: (path, content) => fsEffect("atomicWrite", path, () => fs.atomicWrite(path, content)),
+    // Keeps the Promise service's unlink-first replacement behavior.
     symlink: (target, path) => fsEffect("symlink", path, () => fs.symlink(target, path)),
     unlink: (path) => fsEffect("unlink", path, () => fs.unlink(path)),
   };
@@ -85,7 +62,7 @@ function fsEffect<A>(operation: string, path: string, run: () => Promise<A>): Ef
 
 function toFileSystemError(operation: string, path: string, cause: unknown): FileSystemError {
   const code = errnoCode(cause);
-  const props = { operation, path, message: `${operation} ${path} failed: ${code ?? String(cause)}` };
+  const props = { operation, path, cause, message: `${operation} ${path} failed: ${code ?? String(cause)}` };
 
   if (code === "ENOENT") return new FileSystemNotFound(props);
 

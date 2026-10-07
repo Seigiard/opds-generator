@@ -3,6 +3,11 @@ import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
 import type { LogContext } from "./logging/types.ts";
 
+function errnoCode(cause: unknown): string | undefined {
+  // SAFETY: callers pass errors from Node fs promises, which expose errno on `code`.
+  return (cause as NodeJS.ErrnoException).code;
+}
+
 export interface ConfigService {
   readonly filesPath: string;
   readonly dataPath: string;
@@ -40,7 +45,7 @@ export interface AppContext {
   readonly dedup: DeduplicationService;
 }
 
-export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs"> & { readonly signal?: AbortSignal };
+export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">;
 
 export async function buildContext(): Promise<AppContext> {
   const configService: ConfigService = {
@@ -73,8 +78,10 @@ export async function buildContext(): Promise<AppContext> {
         await access(path);
 
         return true;
-      } catch {
-        return false;
+      } catch (error) {
+        if (errnoCode(error) === "ENOENT") return false;
+
+        throw error;
       }
     },
     writeFile: async (path, content) => {
@@ -88,8 +95,8 @@ export async function buildContext(): Promise<AppContext> {
     symlink: async (target, path) => {
       try {
         await unlink(path);
-      } catch {
-        // ignore if doesn't exist
+      } catch (error) {
+        if (errnoCode(error) !== "ENOENT") throw error;
       }
 
       await symlink(target, path);

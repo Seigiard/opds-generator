@@ -54,21 +54,27 @@ describe("Catalogue processor integration", () => {
     };
 
     let pid: number | undefined;
+    let commandFailure: unknown;
 
     const handlers: TestHandlers = {
       BookCreated: async (_event, handlerDeps) => {
-        await spawnWithTimeout({
-          command: [
-            process.execPath,
-            "-e",
-            `
-            require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
-            setInterval(() => {}, 100);
-          `,
-          ],
-          timeout: 3000,
-          signal: handlerDeps.signal,
-        });
+        try {
+          await spawnWithTimeout({
+            command: [
+              process.execPath,
+              "-e",
+              `
+              require("node:fs").writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+              setInterval(() => {}, 100);
+            `,
+            ],
+            timeout: 3000,
+            signal: handlerDeps.signal,
+          });
+        } catch (error) {
+          commandFailure = error;
+          throw error;
+        }
 
         return ok([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
       },
@@ -100,6 +106,7 @@ describe("Catalogue processor integration", () => {
 
       // #then
       expect({ alive, errors }).toEqual({ alive: false, errors: [] });
+      expect(commandFailure).toEqual(expect.objectContaining({ name: "AbortError" }));
     } finally {
       controller.abort(reason);
       await consumerTask;
