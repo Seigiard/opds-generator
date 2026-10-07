@@ -295,3 +295,12 @@ had a handler-chain RSS red whose value was not captured.
   Its JS-object gate is exact. Native retention below ~10 KiB per book in the handler
   chain can pass CI; a long run (≥ 3000 operations, plateau check) is the tool for it.
 - Bounded growth is acceptable: a plateau after the ramp is not a leak.
+
+## Consumer gates batch 100 events — issue #25
+
+- `consumer-enqueue` and `consumer-enqueue-effect` run 100 events per measured operation and divide by 100, as `queue-cycle` does. The limit (1 KB RSS, 0.5 objects per event) is unchanged.
+- At one event per operation the gate could not resolve its limit: clean plain runs read up to 1.09 KB per event, and 1 KiB retained per event read as low as 0.58 (plain) and 0.3 (Effect). The Effect consumer also read 2.4 to 2.7 on clean code during its JIT warmup.
+- Batched, clean runs read at most 0.055 KB per event and 1 KiB retained per event reads 0.97 to 1.13. `memory-oracle-calibration.test.ts` checks the red side on `consumer-enqueue-effect` with 4 KiB retained per event.
+- The batched gates measure retention per event. Retention once per drain (busy/empty edge, idle take) is spread over 100 events; `lifecycle-scan` covers it for the plain processor.
+- Probe children inherit `LOG_LEVEL=warn` from `docker-compose.test.yml`, so the consumer's info logs are off in every gate run.
+- Details: `docs/effect-processing-prototype.md`, "The consumer gate".

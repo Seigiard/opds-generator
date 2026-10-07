@@ -264,17 +264,21 @@ async function buildHandlerChain(tmpDir: string, variant: "plain" | "effect"): P
   };
 }
 
-// One event per operation through the running consumer loop; the operation completes
-// when the registered handler has processed it. The consumer runs a full GC per event,
-// so batching events here would multiply the run time.
+// QUEUE_EVENTS_PER_OP events per operation through the running consumer loop; the operation
+// completes when the registered handler has processed the last one. With one event per
+// operation the gate could not resolve 1 KB per event: clean runs read up to 1.1 and 1 KiB
+// retained per event as low as 0.3. Batching also runs the Effect consumer past its JIT
+// warmup, which read 1.6 to 2.7 KB per event in the first 600 single events (issue #25).
+// Distinct paths, so the processor does not coalesce the batch into one refresh.
 function buildConsumerCycle(variant: "plain" | "effect"): Op {
+  let remaining = 0;
   let markProcessed = () => {};
 
   const { config, logger, fs } = buildContext();
 
   const handlers: Handlers = {
     FolderMetaSyncRequested: async () => {
-      markProcessed();
+      if (--remaining === 0) markProcessed();
 
       return ok<readonly EventType[]>([]);
     },
@@ -296,7 +300,9 @@ function buildConsumerCycle(variant: "plain" | "effect"): Op {
   return () =>
     new Promise<void>((resolve) => {
       markProcessed = resolve;
-      processor.submit({ _tag: "FolderMetaSyncRequested", path: "/test" });
+      remaining = QUEUE_EVENTS_PER_OP;
+
+      for (let e = 0; e < QUEUE_EVENTS_PER_OP; e++) processor.submit({ _tag: "FolderMetaSyncRequested", path: `/test/${e}` });
     });
 }
 

@@ -1,6 +1,6 @@
 # Event processing: plain async vs Effect 4
 
-Issue #25. Recommendation: **go, with one gate decision for the maintainer** (see [Recommendation](#recommendation)). The prototype stays in the tree beside the plain code. `server.ts` still runs the plain processor.
+Issue #25. Recommendation: **go** (see [Recommendation](#recommendation)). The prototype stays in the tree beside the plain code. `server.ts` still runs the plain processor.
 
 ## Setup
 
@@ -27,36 +27,42 @@ In the cascade suite the Effect variant runs the Effect `bookSync` through the E
 
 ## Numbers
 
-Docker (`docker-compose.test.yml`), `effect@4.0.1`. The memory gates use `test/helpers/leak-probe.ts` with unchanged limits and method: own process per run, warmup 300, 600 measured operations, full GC after each. "Retained" is the gate value: the smaller of slope and two-point estimate.
+Docker (`docker-compose.test.yml`), `effect@4.0.1`. The memory gates use `test/helpers/leak-probe.ts` with unchanged limits: own process per run, warmup 300, 600 measured operations, full GC after each. The consumer scenarios now run 100 events per operation and divide by 100 (see [The consumer gate](#the-consumer-gate)). "Retained" is the gate value: the smaller of slope and two-point estimate.
 
-| Measure                                                                   | Plain async                   | Effect 4                                                                  |
-| ------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| `consumer-enqueue`, retained KB per event (4 runs; limit 1.0)             | 0.08, -0.39, 0.31, 0.56       | **2.00, 2.00, 1.99, 1.55 (4 red runs)**                                   |
-| `consumer-enqueue`, JS objects per event (limit 0.5)                      | 0.023 to 0.040                | 0.050 to 0.073                                                            |
-| `consumer-enqueue`, long run, 6000 events: RSS first → last third mean    | 90.9 → 91.3 MB                | 94.2 → 63.9 MB (plateau near 94–96 MB, then a release)                    |
-| `consumer-enqueue`, JIT off (`BUN_JSC_useJIT=false`), 2 runs              | -0.33, -0.48                  | -0.05, 0.00                                                               |
-| `handler-chain`, retained KB per book (4 runs; limit 5)                   | -5.21, -2.12, 0.70, -2.89     | -18.59, -4.86, -0.69, -2.34                                               |
-| `handler-chain`, JS objects per book (limit 0.5)                          | 0.0017 to 0.0033              | 0.0033                                                                    |
-| `handler-chain`, long run, 2400 books: RSS first → last third mean        | 159.2 → 150.7 MB (slope -5.0) | 155.8 → 143.1 MB (slope -8.6)                                             |
-| Stop during an active handler (median / max ms, 15 rounds, 20 ms cleanup) | 23.7 / 28.3                   | 28.3 / 30.9                                                               |
-| Stop with 50 pending cascades (median / max ms)                           | 25.3 / 29.2                   | 26.9 / 31.6                                                               |
-| Work left after stop (handlers running, pending work started)             | 0, 0                          | 0, 0                                                                      |
-| Processor lines (factory function + coalescing queue)                     | 159 + 84 (`SimpleQueue`)      | 192 (coalescing inside) + 76 (`effect-handler.ts`, shared)                |
-| `bookSync` lines (entry builder shared, 41 lines)                         | 92                            | 118: four error classes and their props (21), the owned extraction helper |
-| Effect concepts a reader must hold                                        | none                          | see below                                                                 |
+| Measure                                                                          | Plain async                   | Effect 4                                                                  |
+| -------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `consumer-enqueue`, retained KB per event, 100 events per op (4 runs; limit 1.0) | 0.006, 0.009, 0.055, 0.006    | -0.006, -0.053, -0.062, -0.014                                            |
+| Same, with 1 KiB retained per event (calibration, 4 runs)                        | 1.12, 1.12, 0.97, 1.13        | 1.12, 1.10, 1.11, 1.08                                                    |
+| `consumer-enqueue`, JS objects per event (limit 0.5)                             | 0.0001                        | 0.0001                                                                    |
+| `consumer-enqueue`, one event per op, warmup 300 (old method, 4 runs)            | 0.65, 0.79, **1.09**, 0.98    | **2.57**, 0.73, **2.39**, **2.69**                                        |
+| `consumer-enqueue`, one event per op, JIT off, logging off, 2 runs               | -0.33, -0.48                  | -0.05, 0.00                                                               |
+| `handler-chain`, retained KB per book (4 runs; limit 5)                          | -5.21, -2.12, 0.70, -2.89     | -18.59, -4.86, -0.69, -2.34                                               |
+| `handler-chain`, JS objects per book (limit 0.5)                                 | 0.0017 to 0.0033              | 0.0033                                                                    |
+| `handler-chain`, long run, 2400 books: RSS first → last third mean               | 159.2 → 150.7 MB (slope -5.0) | 155.8 → 143.1 MB (slope -8.6)                                             |
+| Stop during an active handler (median / max ms, 15 rounds, 20 ms cleanup)        | 23.7 / 28.3                   | 28.3 / 30.9                                                               |
+| Stop with 50 pending cascades (median / max ms)                                  | 25.3 / 29.2                   | 26.9 / 31.6                                                               |
+| Work left after stop (handlers running, pending work started)                    | 0, 0                          | 0, 0                                                                      |
+| Processor lines (factory function + coalescing queue)                            | 159 + 84 (`SimpleQueue`)      | 192 (coalescing inside) + 76 (`effect-handler.ts`, shared)                |
+| `bookSync` lines (entry builder shared, 41 lines)                                | 92                            | 118: four error classes and their props (21), the owned extraction helper |
+| Effect concepts a reader must hold                                               | none                          | see below                                                                 |
 
 The four `handler-chain` Effect runs and its long run measured the first port of the extraction, with two bridges (trap 3 below). After the fix, one gate run in `bun run test` read slope -3.28 and two-point 1.83 KB per book, 0.003 objects: green.
 
 Effect concepts in the prototype: `Effect.gen` / `Effect.fn` / `fnUntraced`, `Context.Service` and `provideService`, `Data.TaggedError` and `catchTag`, `Queue`, `Exit` and `Cause` (`hasInterruptsOnly`, `hasDies`, `squash`), `Effect.callback` (the bridge), `interruptible` / `uninterruptible`, `runPromiseExit` with `signal` and `uninterruptible`, `Predicate.isTagged`, `Data.taggedEnum`.
 
-### The red consumer gate
+### The consumer gate
 
-`consumer-enqueue-effect` read 1.55 to 2.00 KB per event against the limit of 1 in all 4 runs. I did not raise the limit. The scenario stays in the probe, but it is **not** added to `memory-leak-runtime.test.ts`, because a red gate would fail `bun run test`. Before the Effect processor replaces the plain one, this gate must be resolved. The evidence says it is warmup, not retention:
+With one event per measured operation, the Effect consumer read red: 2.39 to 2.69 KB per event in 3 of 4 runs against the limit of 1. The limit stays. The cause is warmup, not retention:
 
-- JS objects per event stay at 0.05 to 0.07, far under the limit. The Effect 3 runtime kept about 2.4 objects per event.
-- A 2400-event run grows about 1.2 MB over the first ~600 events and is then flat (93.0 to 93.3 MB). With warmup 1500, the slope is -1.07 KB per event.
-- The 6000-event run stays on a 94–96 MB plateau and then releases memory down to 64 MB.
-- With the JIT off, both variants are flat (-0.05 and 0.00 KB per event for Effect). This points to JIT code memory for the deeper Effect call paths, not to retained data. The 600-event window after a 300-event warmup ends before that compilation does.
+- JS objects per event stay at 0.03 to 0.07 at one event per operation (0.0001 in the batched gate), far under the limit. The Effect 3 runtime kept about 2.4 objects per event.
+- A 2400-event run grows about 1.2 MB over the first ~600 events and is then flat. A 6000-event run stays on a plateau and then releases memory.
+- With the JIT off, both variants are flat (-0.05 and 0.00 KB per event for Effect). This points to JIT code memory for the deeper Effect call paths, not to retained data.
+
+A longer warmup does not give a usable gate at one event per operation. With warmup 600 a clean run still read 1.14; with warmup 900 and 1200 clean runs were green, but 1 KiB retained per event read 1.0 or more in only 1 of 8 runs. The plain gate has the same weakness: clean runs read up to 1.09, and retained memory read 0.58 in 1 of 4 runs. At one event per operation, 1 KB per event is below the RSS resolution of the probe.
+
+The fix applies the method `queue-cycle` already uses: 100 events per operation, divided by 100. The old reason for one event per operation (the consumer forced a GC per event) no longer holds. Warmup 300 then covers 30 000 events, which is past the JIT warmup. Clean runs read at most 0.055 KB per event for both variants; 1 KiB retained per event reads 0.97 to 1.13. `memory-oracle-calibration.test.ts` now proves the red side on `consumer-enqueue-effect`, with 4 KiB retained per event so that the control reads well above the limit.
+
+All runs, mine and the gate's, ran with the consumer's info logs off: `docker-compose.test.yml` sets `LOG_LEVEL=warn`, and probe children inherit it. An earlier draft of this document blamed logging for the spread between my first runs and the gate; that was wrong. The spread is run-to-run variance at one event per operation, the same weakness the paragraph above describes. The 2400- and 6000-event plateau runs in the bullets above used the old one-event method.
 
 `handler-chain` hides the same few MB in its noise: sharp and child processes move RSS by 10 to 20 MB per run.
 
@@ -124,7 +130,7 @@ Effect.runPromise(tempDir);
 
 Go, against the decision rule "not worse than plain on memory, shutdown and code size, and gives type safety and a better development experience":
 
-- **Memory: not worse in the long run, worse in the gate.** No retention: JS objects per event and per book stay at the plain level, 33 to 48× under the Effect 3 figure of about 2.4 per event (0.05 to 0.07 in `consumer-enqueue`; the triage probe read 0.0019, about 1000× under). RSS reaches its plateau later and a few MB higher; that is the accepted tradeoff. But the fixed `consumer-enqueue` gate reads red in 4 of 4 runs for the Effect processor, because its 600-event window ends inside the JIT warmup. **This needs a maintainer decision before the Effect processor ships**: either a calibrated Effect warmup for that scenario (it must still go red on retained memory, as `memory-oracle-calibration.test.ts` proves for the current setting), or keep the gate as is and accept that the Effect processor cannot replace the plain one.
+- **Memory: not worse.** No retention: JS objects per event and per book stay at the plain level. At one event per operation the Effect consumer read 0.03 to 0.07 objects per event, at least 33× under the Effect 3 figure of about 2.4; the batched gate reads 0.0001 for both variants. RSS reaches its plateau later and a few MB higher, which is the accepted tradeoff. The consumer gate now measures per event over batches of 100 and is green for both variants, with a calibrated red side (see [The consumer gate](#the-consumer-gate)). It does not cover retention per drain (one event arriving at an idle processor): the plain processor has that through `lifecycle-scan`, the Effect processor has no such gate yet.
 - **Shutdown: equal for the processor.** 2 to 5 ms slower median, 0 leftover work in both; the floor is the cleanup time of the work. The shutdown test drives lifted Promise handlers. Stop during the Effect `bookSync` cover extraction was not measured: it relies on the single owned extraction Promise from trap 3, which no test exercises.
 - **Code size: about equal, slightly worse.** The processor needs no unrolled queue, and the shared bridge and adapters cost about the same. `bookSync` grows from 92 to 118 lines, mostly error classes and their message props.
 - **Type safety: better on failures and resources.** Exhaustive failure handling (where a caller narrows the error), checked failure tags, and scoped resources are compile-time checks only in Effect. Dependencies and forgotten awaits are equal. Cancellation leaves the error channel, so the documented "rethrow the abort through every fallback" convention goes away.
@@ -136,15 +142,15 @@ The decision record is `docs/adr/0003-effect-owns-event-processing.md` (status: 
 
 Each step is one PR. The plain variant keeps working until step 5.
 
-1. **Settle the consumer gate.** Maintainer decision from the recommendation. If a longer Effect warmup is chosen, calibrate it with `LEAK_PROBE_RETAIN_KB` like the current setting, then add `consumer-enqueue-effect` to `memory-leak-runtime.test.ts`.
+1. **Settle the consumer gate.** Done in this prototype: both consumer gates run 100 events per operation, and the calibration test covers `consumer-enqueue-effect`.
 2. **Handler bridge as the only Promise crossing.** Add an oxlint rule (or extend `anti-slop-effect`) that forbids `Effect.tryPromise` / `Effect.promise` in handler modules, so every crossing goes through `ownedPromise`. Add the handler modules to the `anti-slop-effect` override.
 3. **Port the folder handlers** (`folderSync`, `folderMetaSync`, `bookCleanup`, `folderCleanup`), one PR each or two, with tagged errors per failure class. Keep `describe.each` over both variants for their suites. Decide per swallow listed in the inventory whether it stays a recovered tagged error or becomes a failure.
 4. **`FileSystemService` as an Effect service** with typed errno failures, so the handlers stop wrapping `fs` Promises one by one. `process.ts` drops `runOwned` for callers that are Effects.
-5. **Switch `server.ts` to the Effect processor**, behind the gates from step 1 and `handler-chain-effect`. Remove `fromPromiseHandler`, the plain processor, `SimpleQueue` and the plain handlers in the same PR, and the `describe.each` parameters with them.
+5. **Switch `server.ts` to the Effect processor**, behind the gates from step 1, `handler-chain-effect`, and a per-drain gate for the Effect processor (`lifecycle-scan` built on it; `buildLifecycle` in the probe hard-codes the plain processor today). Remove `fromPromiseHandler`, the plain processor, `SimpleQueue` and the plain handlers in the same PR, and the `describe.each` parameters with them.
 6. **Format extraction** (optional, separate decision): factories and `archive.ts` as Effects, which removes the `throwIfAborted` convention there too. Lifecycle stays plain async (#16) unless its scanner, clock and processor are all Effects by then.
 
 ## What is in the tree
 
 - Prototype code: `src/processing/catalogue-processor-effect.ts`, `src/processing/effect-handler.ts`, `src/processing/handlers/book-sync-effect.ts`, and `bookEntryXml` / the exported helpers in the plain modules.
 - Tests: `describe.each` over both variants in the suites listed in [Setup](#setup), `test/helpers/effect-variants.ts`, and the new `test/unit/processing/processor-shutdown.test.ts`.
-- Probe scenarios `handler-chain-effect` (gated in `memory-leak-handler.test.ts`) and `consumer-enqueue-effect` (probe only, see [The red consumer gate](#the-red-consumer-gate)).
+- Probe scenarios `handler-chain-effect` (gated in `memory-leak-handler.test.ts`) and `consumer-enqueue-effect` (gated in `memory-leak-runtime.test.ts`, calibrated in `memory-oracle-calibration.test.ts`).

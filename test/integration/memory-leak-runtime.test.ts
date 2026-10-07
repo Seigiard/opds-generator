@@ -6,7 +6,9 @@ import { MAX_OBJECTS_PER_ITER, MAX_RUNTIME_LEAK_KB, QUEUE_EVENTS_PER_OP, retaine
 // +0.6…+1.2 KB/iter once that test moved out (issue #13).
 const scenarios = [
   { name: "queue-cycle", label: "SimpleQueue enqueue/take cycle", eventsPerOp: QUEUE_EVENTS_PER_OP },
-  { name: "consumer-enqueue", label: "Consumer + enqueue cycle", eventsPerOp: 1 },
+  { name: "consumer-enqueue", label: "Consumer + enqueue cycle", eventsPerOp: QUEUE_EVENTS_PER_OP },
+  // Issue #25: the Effect 4 processor prototype.
+  { name: "consumer-enqueue-effect", label: "Effect consumer + enqueue cycle", eventsPerOp: QUEUE_EVENTS_PER_OP },
 ];
 
 describe("Runtime memory leak isolation (post-Effect migration)", () => {

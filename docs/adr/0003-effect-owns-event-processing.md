@@ -19,4 +19,4 @@ The prototype in #25 (`docs/effect-processing-prototype.md`) ran the processor, 
 
 - `tsc` checks that failure tags exist and that acquired resources have a scope. It checks that every failure class is handled only where a caller narrows the error type; the handler registry widens it to `HandlerError`. It does not catch an Effect that is never yielded.
 - `Effect.tryPromise` and `Effect.promise` must not be used in handlers: they abandon the Promise on interruption. A lint rule must enforce `ownedPromise` (migration step 2); none exists yet. An object that keeps a signal, such as a format handler, lives inside one `ownedPromise`.
-- The Effect processor reaches its RSS plateau later and a few MB higher. Its `consumer-enqueue` gate reads red at the current warmup; the gate must be settled before the Effect processor replaces the plain one, without raising the limit.
+- The Effect processor reaches its RSS plateau later and a few MB higher. The consumer gates measure per event over batches of 100, so that warmup does not read as retention; the limit is unchanged.
