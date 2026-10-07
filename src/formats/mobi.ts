@@ -1,4 +1,5 @@
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
+import { Effect } from "effect";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
 import { cleanDescription } from "./utils.ts";
 import { logHandlerError } from "../logging/index.ts";
 
@@ -136,56 +137,36 @@ function loadResource(buf: Uint8Array, offsets: number[], index: number): Buffer
   return Buffer.from(buf.subarray(start, end));
 }
 
-async function createMobiHandler(filePath: string): Promise<FormatHandler | null> {
+const extractMobi = Effect.fn("extractMobi")(function* (filePath: string) {
+  const buffer = yield* readBookBytes(filePath);
+  const book = parseBook(filePath, buffer);
+
+  if (!book) return yield* ExtractionFailed.of(filePath, "not a readable MOBI book");
+
+  return book;
+});
+
+export const mobiExtractorRegistration: FormatExtractorRegistration = {
+  extensions: ["mobi", "azw", "azw3"],
+  extract: extractMobi,
+};
+
+/** The read runs to completion: a stop waits for it rather than abandoning it, and is observed after it settles. */
+function readBookBytes(filePath: string): Effect.Effect<Uint8Array, ExtractionFailed> {
+  return Effect.tryPromise({
+    try: () => Bun.file(filePath).arrayBuffer(),
+    catch: (cause) => ExtractionFailed.of(filePath, cause),
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("MOBI", filePath, error.cause))),
+    Effect.map((bytes) => new Uint8Array(bytes)),
+  );
+}
+
+/** Synchronous and not preemptible. Offsets a truncated book points past make DataView throw, which reads as no book. */
+function parseBook(filePath: string, buffer: Uint8Array): ExtractedBook | null {
   try {
-    const file = Bun.file(filePath);
-    const buffer = new Uint8Array(await file.arrayBuffer());
-
-    if (buffer.length < 78) return null;
-
-    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const numRecords = view.getUint16(76);
-
-    if (numRecords === 0) return null;
-
-    const offsets = parseRecordOffsets(view, numRecords, buffer.length);
-
-    if (offsets.length < 2) return null;
-    const firstOffset = offsets[0];
-    const secondOffset = offsets[1];
-
-    if (firstOffset === undefined || secondOffset === undefined) return null;
-    const record0 = buffer.subarray(firstOffset, secondOffset);
-
-    const mobi = parseMobiHeader(record0);
-
-    if (!mobi) return null;
-
-    const exthOffset = 16 + mobi.headerLength;
-    const exth = mobi.exthFlag ? parseExthRecords(record0, exthOffset) : {};
-
-    const metadata: BookMetadata = {
-      title: exth.title || mobi.title || "",
-      author: exth.creator?.[0],
-      description: cleanDescription(exth.description),
-      publisher: exth.publisher,
-      issued: exth.date,
-      subjects: exth.subject,
-      rights: exth.rights,
-    };
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-      async getCover() {
-        const coverIdx = exth.coverOffset ?? exth.thumbnailOffset;
-
-        if (coverIdx === undefined) return null;
-
-        return loadResource(buffer, offsets, mobi.firstImageIndex + coverIdx);
-      },
-    };
+    return parseMobiBook(buffer);
   } catch (error) {
     logHandlerError("MOBI", filePath, error);
 
@@ -193,7 +174,42 @@ async function createMobiHandler(filePath: string): Promise<FormatHandler | null
   }
 }
 
-export const mobiHandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["mobi", "azw", "azw3"],
-  create: createMobiHandler,
-};
+function parseMobiBook(buffer: Uint8Array): ExtractedBook | null {
+  if (buffer.length < 78) return null;
+
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const numRecords = view.getUint16(76);
+
+  if (numRecords === 0) return null;
+
+  const offsets = parseRecordOffsets(view, numRecords, buffer.length);
+
+  if (offsets.length < 2) return null;
+  const firstOffset = offsets[0];
+  const secondOffset = offsets[1];
+
+  if (firstOffset === undefined || secondOffset === undefined) return null;
+  const record0 = buffer.subarray(firstOffset, secondOffset);
+
+  const mobi = parseMobiHeader(record0);
+
+  if (!mobi) return null;
+
+  const exthOffset = 16 + mobi.headerLength;
+  const exth = mobi.exthFlag ? parseExthRecords(record0, exthOffset) : {};
+
+  const meta: BookMetadata = {
+    title: exth.title || mobi.title || "",
+    author: exth.creator?.[0],
+    description: cleanDescription(exth.description),
+    publisher: exth.publisher,
+    issued: exth.date,
+    subjects: exth.subject,
+    rights: exth.rights,
+  };
+
+  const coverIdx = exth.coverOffset ?? exth.thumbnailOffset;
+  const cover = coverIdx === undefined ? null : loadResource(buffer, offsets, mobi.firstImageIndex + coverIdx);
+
+  return { meta, cover };
+}

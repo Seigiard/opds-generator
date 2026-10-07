@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import { MAX_HANDLER_LEAK_KB, MAX_OBJECTS_PER_ITER, retainedKbPerIter, runProbe } from "../helpers/run-leak-probe.ts";
 
-// The handler chain (folder sync → book sync → folder and root feeds, PDF/CBZ/EPUB/DJVU in
+// The handler chain (folder sync → book sync → folder and root feeds, PDF/CBZ/EPUB in
 // turn) runs in the probe subprocess with the same filesystem adapter this test used
 // in-process; sharing the test runner's process faked +10 KB/iter (issue #13).
 describe("Full handler memory leak (target: 0 KB/iter): handler-chain-effect", () => {

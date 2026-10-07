@@ -9,7 +9,7 @@ This file records the memory and stopping values for the Effect-native extractio
 3. Run the stopping regressions: `docker compose -p <project> -f docker-compose.test.yml run --rm test bun test --rerun-each=20 test/integration/processing/pdf-cover-stop.test.ts test/integration/processing/djvu-stop.test.ts`. They print `PDF cover stop`, `DJVU cover command stop`, and `DJVU native conversion stop after release` in ms.
 4. When a gate is red, run the same probe on the base commit and on the branch in turns, at least three times each, under the same host load. The probes are sensitive to host load: other Docker work on the host moves the RSS slope by several KB.
 
-`handler-chain-effect` is the probe for the extraction path. It processes the PDF, CBZ, EPUB, and (since #42) DJVU fixtures in turn through `folderSync`, `bookSync`, and `folderMetaSync`, and requires `entry.xml` and `cover.jpg` for each book.
+`handler-chain-effect` is the probe for the extraction path. It processes the PDF, CBZ, and EPUB fixtures in turn through `folderSync`, `bookSync`, and `folderMetaSync`, and requires `entry.xml` and `cover.jpg` for each book.
 
 ## Values
 
@@ -39,14 +39,15 @@ With the cover requirement added, `handler-chain-effect` read slope -19.12, two-
 
 ## DJVU (#42)
 
-The DJVU fixture joined `handler-chain-effect`. Four formats divide the 12-operation sample interval, so each sample lands after the same format. Host: macOS Docker Desktop, 2026-10-07, other worktrees running Docker work (load average about 8). The same probe ran with DJVU on the legacy adapter and on the native extractor, in alternate turns:
+DJVU is not in the `handler-chain-effect` gate. With the DJVU fixture added as a fourth format, the gate went red on both DJVU paths. Host: macOS Docker Desktop, 2026-10-07/08, other worktrees running Docker work (load average 6 to 9). Values are slope / two-point KB per book and objects per book; the gate reads the smaller estimator against the limit of 5. Runs alternated between conditions:
 
-| DJVU path | slope / two-point KB per book, objects per book                                     |
-| --------- | ----------------------------------------------------------------------------------- |
-| legacy    | 5.17 / 7.93, 0.077; -11.88 / -8.78, 0.110                                           |
-| native    | -31.96 / -22.22, 0.007; 1.43 / 1.37, 0.007; 2.05 / -0.13, 0.015; 3.86 / 6.32, 0.007 |
+| Probe books                 | Runs                                                                                                                                                                | Red |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| PDF, CBZ, EPUB, DJVU native | -31.96 / -22.22, 0.007; 1.43 / 1.37, 0.007; 2.05 / -0.13, 0.015; 3.86 / 6.32, 0.007; 8.99 / 9.41, 0.007; 6.44 / 8.39, 0.007; 4.09 / 1.66, 0.105; 1.89 / 4.03, 0.085 | 2/8 |
+| PDF, CBZ, EPUB, DJVU legacy | 5.17 / 7.93, 0.077; -11.88 / -8.78, 0.110; -15.72 / -8.11, 0.005; -6.00 / -18.61, 0.007; 5.09 / 6.23, 0.070                                                         | 2/5 |
+| PDF, CBZ, EPUB              | -19.48 / -18.36, 0.003; 0.62 / -2.40, 0.033; -33.79 / -19.81, 0.002                                                                                                 | 0/3 |
 
-The gate reads the smaller estimator against the limit of 5. The legacy run at 5.17 was red; every native run is green. RSS ranges overlap, so the RSS values show no difference beyond host noise. JS objects per book fall from 0.08 to 0.11 on the legacy path to 0.007 to 0.015 on the native path. Two further legacy runs printed no probe line; their output was not kept.
+The DJVU workload (two `djvused`, `ddjvu`, a TIFF read by sharp) makes the weak RSS gate red on the legacy path as often as on the native path. Following "Known limits" in `docs/memory-oracle-investigation.md`, a long run checked the native path for retention: DJVU only, 300 warmup and 3000 measured books. It read slope -9.48, two-point -8.09, 0.0013 objects per book; RSS thirds 118.3, 104.2, 99.8 MB (first sample 123.2, last 99.5). RSS falls and then plateaus, so the native path retains no memory per book. The same long run on the legacy path, and two of the short legacy runs, exited without a probe result; the cause was not investigated, because #42 removes that path.
 
 Stopping (`test/integration/processing/djvu-stop.test.ts`):
 

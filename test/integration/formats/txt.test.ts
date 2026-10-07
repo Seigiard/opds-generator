@@ -1,37 +1,27 @@
 import { describe, test, expect } from "bun:test";
-import { txtHandlerRegistration } from "../../../src/formats/txt.ts";
+import { Effect } from "effect";
+import { txtExtractorRegistration } from "../../../src/formats/txt.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
-describe("TXT Handler Integration", () => {
-  describe("with sample_text.txt", () => {
+describe("TXT extractor integration", () => {
+  test("extracts an empty title and no cover, leaving the title to the filename", async () => {
+    // #given
     const txtPath = join(FIXTURES_DIR, "sample_text.txt");
 
-    test("creates handler successfully", async () => {
-      const handler = await txtHandlerRegistration.create(txtPath);
-      expect(handler).not.toBeNull();
-    });
+    // #when
+    const book = await Effect.runPromise(txtExtractorRegistration.extract(txtPath));
 
-    test("returns empty metadata (title derived from filename)", async () => {
-      const handler = await txtHandlerRegistration.create(txtPath);
-      const metadata = handler!.getMetadata();
-
-      expect(metadata.title).toBe("");
-    });
-
-    test("returns null for cover", async () => {
-      const handler = await txtHandlerRegistration.create(txtPath);
-      const cover = await handler!.getCover();
-
-      expect(cover).toBeNull();
-    });
+    // #then
+    expect(book).toEqual({ meta: { title: "" }, cover: null });
   });
 
-  describe("edge cases", () => {
-    test("returns null for non-existent file", async () => {
-      const handler = await txtHandlerRegistration.create("/non/existent/file.txt");
-      expect(handler).toBeNull();
-    });
+  test("fails extraction for a non-existent file", async () => {
+    // #given / #when
+    const error = await Effect.runPromise(Effect.flip(txtExtractorRegistration.extract("/non/existent/file.txt")));
+
+    // #then
+    expect(error._tag).toBe("ExtractionFailed");
   });
 });
