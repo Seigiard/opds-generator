@@ -39,7 +39,11 @@ With the cover requirement added, `handler-chain-effect` read slope -19.12, two-
 
 ## DJVU (#42)
 
-DJVU is not in the `handler-chain-effect` gate. With the DJVU fixture added as a fourth format, the gate went red on both DJVU paths. Host: macOS Docker Desktop, 2026-10-07/08, other worktrees running Docker work (load average 6 to 9). Values are slope / two-point KB per book and objects per book; the gate reads the smaller estimator against the limit of 5. Runs alternated between conditions:
+The CI gate `handler-chain-effect` keeps its calibrated PDF, CBZ, EPUB rotation and its limit of 5. The DJVU values below are diagnostic evidence. Values are slope / two-point KB per book and objects per book; "gate" is the smaller estimator, which the gate compares with the limit.
+
+### First runs: DJVU as a fourth format in the gate
+
+Host: macOS Docker Desktop, 2026-10-07/08, other worktrees running Docker work (load average 6 to 9). These runs went through `docker compose run` on the worktree, with the DJVU source files swapped between conditions in place. Runs alternated between conditions:
 
 | Probe books                 | Runs                                                                                                                                                                | Red |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
@@ -47,12 +51,26 @@ DJVU is not in the `handler-chain-effect` gate. With the DJVU fixture added as a
 | PDF, CBZ, EPUB, DJVU legacy | 5.17 / 7.93, 0.077; -11.88 / -8.78, 0.110; -15.72 / -8.11, 0.005; -6.00 / -18.61, 0.007; 5.09 / 6.23, 0.070                                                         | 2/5 |
 | PDF, CBZ, EPUB              | -19.48 / -18.36, 0.003; 0.62 / -2.40, 0.033; -33.79 / -19.81, 0.002                                                                                                 | 0/3 |
 
-The DJVU workload (two `djvused`, `ddjvu`, a TIFF read by sharp) makes the weak RSS gate red on the legacy path as often as on the native path. Following "Known limits" in `docs/memory-oracle-investigation.md`, a long run checked the native path for retention: DJVU only, 300 warmup and 3000 measured books. It read slope -9.48, two-point -8.09, 0.0013 objects per book; RSS thirds 118.3, 104.2, 99.8 MB (first sample 123.2, last 99.5). RSS falls and then plateaus, so the native path retains no memory per book. The same long run on the legacy path, and two of the short legacy runs, exited without a probe result; the cause was not investigated, because #42 removes that path.
+The four-format rotation went red on the legacy path as often as on the native path, so these reds do not single out the native mechanism. Three legacy runs (two short, one long) gave no probe result. That harness kept only a filtered or last output line and removed the container, so their exit status and stderr were lost and their cause is not known.
+
+### Matched runs
+
+The second series fixed the harness. Each run is `docker run --rm` of the same test image (Bun 1.4.2, sharp 0.35.5 / libvips 8.18.7, DjVuLibre 3.5.28) with read-only mounts of one exported tree. Baseline is the integration tip `ff065bb` (DJVU through the legacy adapter); native is `9db0220` (#42 merged with that tip). The two trees differ only in `src/formats/djvu.ts` and `src/formats/index.ts`. Both copies of `test/helpers/leak-probe.ts` take the book rotation from an environment variable; that change exists only in the exported copies. Every run records the probe exit status, the container exit status, stderr, and wall time. The probe requires `entry.xml` and `cover.jpg` after each book, so a zero exit means every DJVU book got a cover. Procedure as above: 300 warmup and 600 measured books, a sample every 12; conditions alternated. Host load average 6 to 8, 2026-10-08.
+
+| Books                 | Baseline (legacy)                                                    | Native                                                                 |
+| --------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| DJVU only             | -42.37 / -34.91, 0.008; -9.37 / -1.34, 0.010; -15.31 / -11.46, 0.010 | -19.81 / -21.62, 0.010; -17.69 / -10.00, 0.010; -19.01 / -18.28, 0.008 |
+| PDF, CBZ, EPUB, DJVU  | -3.70 / -4.47, 0.060; -4.00 / -1.64, 0.058; -10.53 / -8.13, 0.060    | 5.03 / 4.95, 0.075; -4.11 / -3.18, 0.078; -9.23 / -3.29, 0.073         |
+| DJVU only, 3000 books | -6.81 / -4.99, 0.0013; RSS thirds 121.2, 114.8, 107.6 MB             | -2.68 / -5.61, 0.0017; RSS thirds 106.9, 100.5, 101.9 MB               |
+
+All 14 runs, 7 on each path, exited 0 with a result. No baseline failure reproduced, so the earlier missing results remain unexplained; they are not evidence of a baseline defect. The handler gate's 180 s `beforeAll` deadline was not a factor: a four-format probe took 76 to 80 s, a DJVU-only probe 184 to 187 s outside the gate, and a 3000-book run 674 to 711 s.
+
+Reading: under matched conditions the native and baseline DJVU paths give overlapping RSS estimates and the same object growth (about 0.01 per DJVU book, 0.06 to 0.08 per book in the four-format rotation). Every gate value is below 5; the closest is native 4.95 in the four-format rotation. In both 3000-book runs RSS ends below its first sample. These runs show no sustained growth on either path at this resolution; per "Known limits" in `docs/memory-oracle-investigation.md`, retention below about 10 KiB per book can still escape this probe.
 
 Stopping (`test/integration/processing/djvu-stop.test.ts`):
 
-- Cover command: from abort to processor stop, 0.7 to 1.8 ms. The `ddjvu` child exits, its page directory is removed, the previous `entry.xml` stays, and no download link or cover is created.
-- Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 38 to 41 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
+- Cover command: from abort to processor stop, 0.4 to 4.0 ms over six full-suite runs. The `ddjvu` child exits, its page directory is removed, the previous `entry.xml` stays, and no download link or cover is created.
+- Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 33 to 57 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
 - Metadata commands: interruption ends both `djvused` children before the extraction ends, as interruption and not as `ExtractionFailed`.
 - Calibration: each scenario fails when its ownership is removed. Without `Effect.uninterruptible` on the sharp call, the processor stops before release and sharp finds no TIFF. With the `djvused` commands behind an abandoned Promise, both children stay alive. With the cover command uninterruptible, the processor is still running after 5 s and the child is alive.
 
