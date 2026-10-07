@@ -345,9 +345,10 @@ describe("runCommand", () => {
 
 describe("useTemporaryDirectory", () => {
   test("interruption keeps the directory until an uninterruptible native read settles", async () => {
-    // #given a native read of a file in the temporary directory
+    // #given a native read of a file in the temporary directory, held at a barrier the test releases after interrupting
     const controller = new AbortController();
     const ready = Promise.withResolvers<string>();
+    const release = Promise.withResolvers<void>();
     let consumed = "";
     let directoryAtRead = false;
 
@@ -358,7 +359,7 @@ describe("useTemporaryDirectory", () => {
           yield* Effect.promise(() => Bun.write(file, "reader input")).pipe(Effect.uninterruptible);
           ready.resolve(directory);
           yield* Effect.promise(async () => {
-            await Bun.sleep(50);
+            await release.promise;
             directoryAtRead = existsSync(directory);
             consumed = await Bun.file(file).text();
           }).pipe(Effect.uninterruptible);
@@ -369,13 +370,16 @@ describe("useTemporaryDirectory", () => {
 
     const directory = await ready.promise;
 
-    // #when
+    // #when interrupted while the read is held, then the read is let through
     controller.abort();
+    const endedBeforeRelease = await Promise.race([task.then(() => true), Bun.sleep(100).then(() => false)]);
+    release.resolve();
     const exit = await task;
 
     // #then
-    expect({ exit: exitKind(exit), consumed, directoryAtRead, directoryExists: existsSync(directory) }).toEqual({
+    expect({ exit: exitKind(exit), endedBeforeRelease, consumed, directoryAtRead, directoryExists: existsSync(directory) }).toEqual({
       exit: "interrupted",
+      endedBeforeRelease: false,
       consumed: "reader input",
       directoryAtRead: true,
       directoryExists: false,

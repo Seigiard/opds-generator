@@ -192,6 +192,7 @@
         "src/formats/types.ts",
         "src/formats/index.ts",
         "src/formats/pdf.ts",
+        "src/formats/djvu.ts",
         "src/formats/legacy-adapter.ts",
         "src/effect-file-system.ts",
         "src/processing/effect-handler.ts",

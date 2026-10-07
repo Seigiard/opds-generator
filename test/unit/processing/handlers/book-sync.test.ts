@@ -265,6 +265,45 @@ describe("bookSync handler", () => {
     await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
   });
 
+  test("publishes a DJVU with metadata, cover, thumbnail, download link and a folder refresh", async () => {
+    // #given a known source book
+    const name = "Test Book - Test Author.djvu";
+    const bookPath = join(FILES_DIR, name);
+    await Bun.write(bookPath, Bun.file(join(FIXTURES_DIR, name)));
+
+    // #when
+    const result = await bookSync(bookCreatedEvent(name), deps);
+
+    // #then
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
+    expect({
+      cascade: result._unsafeUnwrap(),
+      title: entry.includes("<title>Test Book</title>"),
+      author: entry.includes("<name>Test Author</name>"),
+      issued: entry.includes("<dc:issued>2025</dc:issued>"),
+      subject: entry.includes("<dc:subject>test</dc:subject>"),
+      extent: entry.includes("<dc:extent>3 pages</dc:extent>"),
+      cover: entry.includes('rel="http://opds-spec.org/image"'),
+      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+      link: await readlink(join(bookDir, name)),
+      thumbFormat: thumb.format,
+    }).toEqual({
+      cascade: [{ _tag: "FolderMetaSyncRequested", path: DATA_DIR }],
+      title: true,
+      author: true,
+      issued: true,
+      subject: true,
+      extent: true,
+      cover: true,
+      thumbnail: true,
+      link: bookPath,
+      thumbFormat: "jpeg",
+    });
+    await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+  });
+
   const PDF_INFO = `Title:          Cover Failure Metadata
 Author:         PDF Author
 Pages:          7

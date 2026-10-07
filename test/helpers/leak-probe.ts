@@ -38,7 +38,12 @@ const EPUB_PATH = join(FIXTURES_DIR, "Test Book - Test Author.epub");
 
 const CBZ_PATH = join(FIXTURES_DIR, "bobby_make_believe_sample.cbz");
 
-const HANDLER_BOOKS = ["Test Book - Test Author.pdf", "bobby_make_believe_sample.cbz", "Test Book - Test Author.epub"];
+const HANDLER_BOOKS = [
+  "Test Book - Test Author.pdf",
+  "bobby_make_believe_sample.cbz",
+  "Test Book - Test Author.epub",
+  "Test Book - Test Author.djvu",
+];
 
 const VALID_PNG = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
@@ -174,7 +179,8 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
   }
 }
 
-// One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).
+// One book per operation through the Effect event handlers (PDF, CBZ, EPUB, DJVU in turn).
+// The format count divides SAMPLE_EVERY, so every RSS sample lands after the same format.
 async function buildHandlerChain(tmpDir: string): Promise<Op> {
   const filesDir = join(tmpDir, "files");
   const dataDir = join(tmpDir, "data");

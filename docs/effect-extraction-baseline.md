@@ -6,10 +6,10 @@ This file records the memory and stopping values for the Effect-native extractio
 
 1. Use the Docker test image built from the current lockfile: `docker compose -p <project> -f docker-compose.test.yml build`.
 2. Run the full suite once: `docker compose -p <project> -f docker-compose.test.yml run --rm test`. Each probe prints `slope`, `two-point`, and `objects` per operation.
-3. Run the stopping regression: `docker compose -p <project> -f docker-compose.test.yml run --rm test bun test --rerun-each=20 test/integration/processing/pdf-cover-stop.test.ts`. It prints `PDF cover stop: <ms>`.
+3. Run the stopping regressions: `docker compose -p <project> -f docker-compose.test.yml run --rm test bun test --rerun-each=20 test/integration/processing/pdf-cover-stop.test.ts test/integration/processing/djvu-stop.test.ts`. They print `PDF cover stop`, `DJVU cover command stop`, and `DJVU native conversion stop after release` in ms.
 4. When a gate is red, run the same probe on the base commit and on the branch in turns, at least three times each, under the same host load. The probes are sensitive to host load: other Docker work on the host moves the RSS slope by several KB.
 
-`handler-chain-effect` is the probe for the extraction path. It processes the PDF, CBZ, and EPUB fixtures in turn through `folderSync`, `bookSync`, and `folderMetaSync`, and requires `entry.xml` and `cover.jpg` for each book.
+`handler-chain-effect` is the probe for the extraction path. It processes the PDF, CBZ, EPUB, and (since #42) DJVU fixtures in turn through `folderSync`, `bookSync`, and `folderMetaSync`, and requires `entry.xml` and `cover.jpg` for each book.
 
 ## Values
 
@@ -36,3 +36,21 @@ With the cover requirement added, `handler-chain-effect` read slope -19.12, two-
 - Processor shutdown (`test/unit/processing/processor-shutdown.test.ts`): before, median 26.6 ms and 26.1 ms; after, median 25.9 ms for both scenarios. Leftover 0, started after stop 0.
 - PDF cover stop (`test/integration/processing/pdf-cover-stop.test.ts`): from abort to processor stop, 0.6 to 1.7 ms on the legacy Promise path and 0.6 to 1.2 ms on the native path. The cover child exits, the previous `entry.xml` stays, and no download link is created.
 - Calibration: when the cover command runs through a Promise bridge without the fiber's interruption, the test fails with `childAlive: true`.
+
+## DJVU (#42)
+
+The DJVU fixture joined `handler-chain-effect`. Four formats divide the 12-operation sample interval, so each sample lands after the same format. Host: macOS Docker Desktop, 2026-10-07, other worktrees running Docker work (load average about 8). The same probe ran with DJVU on the legacy adapter and on the native extractor, in alternate turns:
+
+| DJVU path | slope / two-point KB per book, objects per book                                     |
+| --------- | ----------------------------------------------------------------------------------- |
+| legacy    | 5.17 / 7.93, 0.077; -11.88 / -8.78, 0.110                                           |
+| native    | -31.96 / -22.22, 0.007; 1.43 / 1.37, 0.007; 2.05 / -0.13, 0.015; 3.86 / 6.32, 0.007 |
+
+The gate reads the smaller estimator against the limit of 5. The legacy run at 5.17 was red; every native run is green. RSS ranges overlap, so the RSS values show no difference beyond host noise. JS objects per book fall from 0.08 to 0.11 on the legacy path to 0.007 to 0.015 on the native path. Two further legacy runs printed no probe line; their output was not kept.
+
+Stopping (`test/integration/processing/djvu-stop.test.ts`):
+
+- Cover command: from abort to processor stop, 0.7 to 1.8 ms. The `ddjvu` child exits, its page directory is removed, the previous `entry.xml` stays, and no download link or cover is created.
+- Native conversion: the processor does not stop while sharp holds the page TIFF; a barrier holds sharp for 300 ms after abort. After release, the stop takes 38 to 41 ms, the real conversion of the TIFF. Native work is not cancelled; the stop waits for it.
+- Metadata commands: interruption ends both `djvused` children before the extraction ends, as interruption and not as `ExtractionFailed`.
+- Calibration: each scenario fails when its ownership is removed. Without `Effect.uninterruptible` on the sharp call, the processor stops before release and sharp finds no TIFF. With the `djvused` commands behind an abandoned Promise, both children stay alive. With the cover command uninterruptible, the processor is still running after 5 s and the child is alive.

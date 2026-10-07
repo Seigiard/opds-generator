@@ -5,13 +5,14 @@ Code: `src/utils/process.ts`.
 ## Command execution
 
 - `src/utils/process.ts` owns command execution through Effect 4 scopes. Native extractors yield the Effect operations directly: `runCommand`, `runCommandText` (fail with `CommandFailed`), and `useTemporaryDirectory` (fails with `TemporaryDirectoryFailed`).
-- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy DJVU and archive callers (#40). They take a `signal` and reject with the original cause. Remove them with their last caller.
+- `spawnWithTimeout`, `spawnWithTimeoutText`, `withTemporaryDirectory` are temporary Promise wrappers for legacy archive callers (#40). They take a `signal` and reject with the original cause. Remove them with their last caller.
 - Commands time out after 15 s by default (`timeout` overrides).
 - Timeout or cancellation sends SIGTERM, waits up to 1 s, then SIGKILL and waits for exit.
 - Timeout returns empty stdout, `exitCode: -1`, `timedOut: true`. Cancellation rejects with the caller's abort reason after release.
 - Stdout is file-backed. Stderr is ignored.
 - Each command has its own scope: fd, child, output file, and temporary directory are acquired inside it and released when that command ends (result, spawn failure, timeout, or interruption). Never widen the scope to the whole book.
 - `useTemporaryDirectory` keeps its work interruptible, so commands in it stop on interruption. Cross a native Promise that reads its files (sharp, unrar) with `Effect.uninterruptible`, so removal waits for it.
+- Run sibling commands with `Effect.all([...], { concurrency })`: a failure or interruption of one interrupts and awaits the others, so no child outlives the extraction. Recover with `Effect.catchTag` / `mapError`, which leave interruption alone (see `src/formats/djvu.ts`).
 - `withTemporaryDirectory` callbacks await all work that uses their files. The Promise is uninterruptible, so native sharp/unrar work finishes before cleanup.
 - Shutdown signals are installed before initial sync. The 8 s hard deadline stays. On expiry it logs unfinished work before exit.
 

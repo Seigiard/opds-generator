@@ -6,7 +6,7 @@ import { fb2HandlerRegistration } from "./fb2.ts";
 import { mobiHandlerRegistration } from "./mobi.ts";
 import { pdfExtractorRegistration } from "./pdf.ts";
 import { txtHandlerRegistration } from "./txt.ts";
-import { djvuHandlerRegistration } from "./djvu.ts";
+import { djvuExtractorRegistration } from "./djvu.ts";
 
 const registrations: FormatExtractorRegistration[] = [
   legacyExtractorRegistration(epubHandlerRegistration),
@@ -15,7 +15,7 @@ const registrations: FormatExtractorRegistration[] = [
   legacyExtractorRegistration(mobiHandlerRegistration),
   pdfExtractorRegistration,
   legacyExtractorRegistration(txtHandlerRegistration),
-  legacyExtractorRegistration(djvuHandlerRegistration),
+  djvuExtractorRegistration,
 ];
 
 const extractorMap = new Map<string, Extractor>();
