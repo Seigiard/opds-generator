@@ -1,4 +1,4 @@
-import { mkdir, rm, readdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../config.ts";
 import { FEED_FILE } from "../constants.ts";
@@ -9,8 +9,8 @@ import { adaptSyncPlan } from "../processing/adapters/sync-plan-adapter.ts";
 import { scanFiles, createSyncPlan, removeLegacyHeapSnapshots } from "../scanner.ts";
 import type { CatalogueScanner } from "./lifecycle.ts";
 
-async function seedRootFeed(): Promise<void> {
-  const feedPath = join(config.dataPath, FEED_FILE);
+async function seedRootFeed(dataPath: string): Promise<void> {
+  const feedPath = join(dataPath, FEED_FILE);
 
   if (await Bun.file(feedPath).exists()) return;
 
@@ -28,9 +28,9 @@ async function seedRootFeed(): Promise<void> {
   log.info("InitialSync", "Seed feed.xml created");
 }
 
-async function removeHeapSnapshotLeftovers(): Promise<void> {
+async function removeHeapSnapshotLeftovers(dataPath: string): Promise<void> {
   try {
-    const removed = await removeLegacyHeapSnapshots(config.dataPath);
+    const removed = await removeLegacyHeapSnapshots(dataPath);
 
     if (removed.length > 0) log.info("InitialSync", "Removed leftover heap snapshots", { file: removed.join(", ") });
   } catch (error) {
@@ -38,39 +38,35 @@ async function removeHeapSnapshotLeftovers(): Promise<void> {
   }
 }
 
-async function clearDataDirectory(): Promise<void> {
-  log.info("Resync", "Starting full resync");
-  const entries = await readdir(config.dataPath);
-  await Promise.all(entries.map((entry) => rm(join(config.dataPath, entry), { recursive: true, force: true })));
-  log.info("Resync", "Cleared data directory");
+/** The nginx 503 gate reads `/data/feed.xml`: it is absent until the seed below writes it, and no scan ever removes it. */
+export function createDiskScanner({ filesPath, dataPath }: { readonly filesPath: string; readonly dataPath: string }): CatalogueScanner {
+  return {
+    async scan(request, signal) {
+      if (request.kind === "initial") await removeHeapSnapshotLeftovers(dataPath);
+
+      log.info("InitialSync", "Starting", { scan_kind: request.kind, scan_force: request.force });
+      const startTime = Date.now();
+
+      await mkdir(dataPath, { recursive: true });
+      await seedRootFeed(dataPath);
+
+      const files = await scanFiles(filesPath, signal);
+      log.info("InitialSync", "Books found", { books_found: files.length });
+
+      const plan = await createSyncPlan(files, dataPath, { force: request.force, signal });
+      log.info("InitialSync", "Sync plan created", {
+        books_process: plan.toProcess.length,
+        books_delete: plan.toDelete.length,
+        folders_count: plan.folders.length,
+      });
+
+      signal.throwIfAborted();
+      const events = adaptSyncPlan(plan, filesPath);
+      log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: Date.now() - startTime });
+
+      return events;
+    },
+  };
 }
 
-/** The nginx 503 gate reads `/data/feed.xml`: it is absent until the seed below writes it, and a resync's wipe removes it again. */
-export const diskScanner: CatalogueScanner = {
-  async scan(request) {
-    if (request.kind === "initial") await removeHeapSnapshotLeftovers();
-
-    if (request.kind === "resync") await clearDataDirectory();
-
-    log.info("InitialSync", "Starting");
-    const startTime = Date.now();
-
-    await mkdir(config.dataPath, { recursive: true });
-    await seedRootFeed();
-
-    const files = await scanFiles(config.filesPath);
-    log.info("InitialSync", "Books found", { books_found: files.length });
-
-    const plan = await createSyncPlan(files, config.dataPath);
-    log.info("InitialSync", "Sync plan created", {
-      books_process: plan.toProcess.length,
-      books_delete: plan.toDelete.length,
-      folders_count: plan.folders.length,
-    });
-
-    const events = adaptSyncPlan(plan, config.filesPath);
-    log.info("InitialSync", "Events queued", { entries_count: events.length, duration_ms: Date.now() - startTime });
-
-    return events;
-  },
-};
+export const diskScanner = createDiskScanner(config);

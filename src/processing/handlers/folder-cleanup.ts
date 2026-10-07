@@ -12,6 +12,13 @@ export const folderCleanup = async (event: EventType, deps: HandlerDeps): Promis
   const relativePath = relative(deps.config.filesPath, folderPath);
   const folderDataDir = join(deps.config.dataPath, relativePath);
 
+  // A delete event can be stale: the source may have come back since it was queued.
+  if (await deps.fs.exists(folderPath)) {
+    deps.logger.debug("FolderCleanup", "Source exists, skipping stale delete", { path: relativePath });
+
+    return ok([]);
+  }
+
   deps.logger.info("FolderCleanup", "Removing", { path: relativePath });
 
   try {

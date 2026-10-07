@@ -70,7 +70,7 @@ The app and tests run in Docker. Do not run the app with bun on the host. Shut c
 | `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                       |
 | `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                                  |
 | `curl http://localhost:8080/feed.xml`                                     | Smoke-check the dev feed                                                         |
-| `curl -u admin:secret http://localhost:8080/resync`                       | Force resync (dev credentials)                                                   |
+| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)             |
 | `bun run start` / `bun run rebuild`                                       | Production compose up / build                                                    |
 | `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                             |
 | `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors                 |
@@ -146,7 +146,11 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 - `transition(state, input)` in `src/lifecycle/transition.ts` is pure and owns every rule. Phases: `scanning`, `accepting` (no scan, processor busy), `settled` (no scan, processor empty), `stopping`. Inputs: scan requested/finished, processor busy/empty edges, reconcile tick, shutdown. It returns the next state plus effects (`start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`).
 - `createLifecycle` in `lifecycle.ts` runs the effects with plain async. It takes a `CatalogueScanner`, the processor, and a `Clock`, owns the consumer, scan tasks and reconcile timer, and logs a `Lifecycle` entry (from, to, input) per transition. `server.ts` only wires HTTP to it.
-- Reconciliation starts only when `settled`. A scan request during `scanning` sets one coalesced follow-up (force flags OR'd); the HTTP layer still answers 409 until the resync-in-place change lands.
+- Reconciliation starts only when `settled`. A scan request during `scanning` sets one coalesced follow-up (force flags OR'd); `POST /resync` then answers `202` (`Resync queued`); there is no `409`.
+- Resync repairs in place (ADR 0001): it never removes anything in `/data`, so `feed.xml` never goes back to 503. It runs the same sync plan as reconciliation (mtime-based; the plan deletes entries whose book is gone). `POST /resync?force=1` plans every book for reprocessing. `/resync` always answers `202` (`Resync started` when idle, `Resync queued` during a scan) and `503` only while stopping.
+- `scanFiles` and `createSyncPlan` take an `AbortSignal` and throw its reason between directories and before returning. `createDiskScanner({ filesPath, dataPath })` builds the real scanner for tests.
+- `BookDeleted`/`FolderDeleted` handlers do nothing when the source exists in `/books` at processing time (stale delete).
+- Shutdown: `stop()` enters `stopping`, aborts the active handler and scans, drops pending work and the follow-up scan, awaits owned tasks; `server.ts` races it against the 8 s deadline and exits 0.
 - `disk-scanner.ts` is the real scanner. nginx learns "initializing" from the files, not from Bun: the seed `feed.xml` it writes ends the 503s.
 - Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it; `test/e2e/nginx.test.ts` pins that.
 
@@ -154,7 +158,7 @@ CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plu
 
 <important if="you are working on nginx routing, auth, or the Bun HTTP endpoints">
 
-- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books` (the `/books` watcher) and `POST /resync` (proxied).
+- nginx:80 is external. Bun:3000 is localhost only and serves `POST /events/books` (the `/books` watcher) and `POST /resync[?force=1]` (proxied; always `202`, see lifecycle notes).
 - Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
 - During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
 - `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.

@@ -102,16 +102,16 @@ docker compose up -d --build
 
 ## API
 
-| Endpoint               | Audience | Description                                  |
-| ---------------------- | -------- | -------------------------------------------- |
-| `GET /`                | Browser  | Redirect to /index.html (HTML catalog)       |
-| `GET /{path}/`         | Browser  | Subcatalog rendered as HTML (index.html)     |
-| `GET /opds`            | Reader   | Root catalog (OPDS feed, 200 XML)            |
-| `GET /feed.xml`        | Reader   | Root catalog (OPDS feed)                     |
-| `GET /{path}/feed.xml` | Reader   | Subcatalog feed                              |
-| `GET /{book}/file`     | Both     | Download book file (symlink)                 |
-| `GET /static/*`        | Both     | Static assets (style.css, main.js, favicons) |
-| `GET /resync`          | Admin    | Trigger full resync (requires Basic Auth)    |
+| Endpoint               | Audience | Description                                              |
+| ---------------------- | -------- | -------------------------------------------------------- |
+| `GET /`                | Browser  | Redirect to /index.html (HTML catalog)                   |
+| `GET /{path}/`         | Browser  | Subcatalog rendered as HTML (index.html)                 |
+| `GET /opds`            | Reader   | Root catalog (OPDS feed, 200 XML)                        |
+| `GET /feed.xml`        | Reader   | Root catalog (OPDS feed)                                 |
+| `GET /{path}/feed.xml` | Reader   | Subcatalog feed                                          |
+| `GET /{book}/file`     | Both     | Download book file (symlink)                             |
+| `GET /static/*`        | Both     | Static assets (style.css, main.js, favicons)             |
+| `GET /resync`          | Admin    | Resync in place; `?force=1` reprocesses all (Basic Auth) |
 
 Browsers get server-rendered HTML (`index.html`, generated at sync time — no browser XSLT); OPDS readers get the `feed.xml` graph via `/opds`. Returns 503 with `Retry-After: 5` while the initial sync is still building a folder.
 

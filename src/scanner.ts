@@ -4,10 +4,12 @@ import type { FileInfo, FolderInfo } from "./types.ts";
 import { BOOK_EXTENSIONS } from "./types.ts";
 import { ENTRY_FILE, FOLDER_ENTRY_FILE } from "./constants.ts";
 
-export async function scanFiles(rootPath: string): Promise<FileInfo[]> {
+/** Throws the signal's reason when it aborts; checked between directories so a long walk stops promptly. */
+export async function scanFiles(rootPath: string, signal?: AbortSignal): Promise<FileInfo[]> {
   const files: FileInfo[] = [];
 
   async function scan(dirPath: string): Promise<void> {
+    signal?.throwIfAborted();
     const entries = await readdir(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
@@ -88,10 +90,12 @@ export function buildFolderStructure(files: FileInfo[]): FolderInfo[] {
   return folders;
 }
 
-async function scanDataMirror(dataPath: string): Promise<Set<string>> {
+async function scanDataMirror(dataPath: string, signal?: AbortSignal): Promise<Set<string>> {
   const paths = new Set<string>();
 
   async function scan(dirPath: string, relativePath: string): Promise<void> {
+    signal?.throwIfAborted();
+
     try {
       const entries = await readdir(dirPath, { withFileTypes: true });
 
@@ -115,7 +119,8 @@ async function scanDataMirror(dataPath: string): Promise<Set<string>> {
           await scan(entryPath, entryRelPath);
         }
       }
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw error;
       // Directory doesn't exist
     }
   }
@@ -131,9 +136,19 @@ export interface SyncPlan {
   folders: FolderInfo[];
 }
 
-export async function createSyncPlan(files: FileInfo[], dataPath: string): Promise<SyncPlan> {
+interface SyncPlanOptions {
+  /** Process every book, not only the ones whose file is newer than its entry. */
+  readonly force?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+export async function createSyncPlan(
+  files: FileInfo[],
+  dataPath: string,
+  { force = false, signal }: SyncPlanOptions = {},
+): Promise<SyncPlan> {
   const folders = buildFolderStructure(files);
-  const existingPaths = await scanDataMirror(dataPath);
+  const existingPaths = await scanDataMirror(dataPath, signal);
 
   const currentFilePaths = new Set(files.map((f) => f.relativePath));
   const currentFolderPaths = new Set(folders.map((f) => f.path).filter((p) => p !== ""));
@@ -143,6 +158,13 @@ export async function createSyncPlan(files: FileInfo[], dataPath: string): Promi
   const foldersToProcess: FolderInfo[] = [];
 
   for (const file of files) {
+    signal?.throwIfAborted();
+
+    if (force) {
+      toProcess.push(file);
+      continue;
+    }
+
     const dataDir = join(dataPath, file.relativePath);
     const entryFile = Bun.file(join(dataDir, ENTRY_FILE));
 
@@ -167,6 +189,8 @@ export async function createSyncPlan(files: FileInfo[], dataPath: string): Promi
   for (const folder of folders) {
     foldersToProcess.push(folder);
   }
+
+  signal?.throwIfAborted();
 
   return { toProcess, toDelete, folders: foldersToProcess };
 }

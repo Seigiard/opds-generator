@@ -73,10 +73,12 @@ async function main(): Promise<void> {
         if (req.method === "POST" && url.pathname === "/resync") {
           if (!lifecycle.accepting()) return new Response("Queue not ready", { status: 503 });
 
-          if (lifecycle.status().state === "scanning") return new Response("Sync already in progress", { status: 409 });
-          lifecycle.requestScan({ kind: "resync", force: false });
+          const force = url.searchParams.get("force") === "1";
+          const admission = lifecycle.requestScan({ kind: "resync", force });
 
-          return new Response("Resync started", { status: 202 });
+          if (admission === "rejected") return new Response("Queue not ready", { status: 503 });
+
+          return new Response(admission === "queued" ? "Resync queued" : "Resync started", { status: 202 });
         }
 
         if (req.method === "GET" && url.pathname === "/status") return Response.json(lifecycle.status());

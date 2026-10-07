@@ -33,7 +33,7 @@ Review base: b204f0b57ef62e1b96fbad59c7613c458653970c
       `isReady`/`isSyncing` and the detached tasks in `src/server.ts`; `Lifecycle` log entry per
       transition; internal `GET /status` on Bun (not proxied); reconciliation only when Settled
       (unit test on `transition`, #15 check 5).
-- [ ] P6 · #15 resync in place, abortable scans, stale deletes, shutdown
+- [x] P6 · #15 resync in place, abortable scans, stale deletes, shutdown
       Done: resync never removes `/data`, mtime by default, `?force=1` reprocesses all; `202` +
       coalesced follow-up during Scanning (force OR'd), no `409`; `scanFiles`/`createSyncPlan` take
       an `AbortSignal`; `BookDeleted`/`FolderDeleted` no-op when the source exists; shutdown drops

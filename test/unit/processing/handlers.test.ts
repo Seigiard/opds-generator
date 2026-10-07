@@ -132,6 +132,28 @@ describe("Processing Handlers", () => {
     });
   });
 
+  describe("stale deletes", () => {
+    const existing = (path: string): HandlerDeps => ({ ...asyncDeps, fs: { ...asyncDeps.fs, exists: async (p) => p === path } });
+
+    test("bookCleanup keeps the entry when the book exists in the books directory", async () => {
+      // #given the book is back in /books by the time the delete runs
+      const deps = existing("/test/books/Fiction/Book.epub");
+      // #when
+      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "Book.epub"), deps);
+      // #then
+      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+    });
+
+    test("folderCleanup keeps the data when the folder exists in the books directory", async () => {
+      // #given
+      const deps = existing("/test/books/Fiction/Author");
+      // #when
+      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), deps);
+      // #then
+      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+    });
+  });
+
   describe("folderSync", () => {
     test("creates data directory for new folder", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);

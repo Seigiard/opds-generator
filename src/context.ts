@@ -1,4 +1,4 @@
-import { mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
+import { access, mkdir, rm, readdir, stat, rename, symlink, unlink } from "node:fs/promises";
 import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
 import type { LogContext } from "./logging/types.ts";
@@ -70,7 +70,9 @@ export async function buildContext(): Promise<AppContext> {
     },
     exists: async (path) => {
       try {
-        return await Bun.file(path).exists();
+        await access(path);
+
+        return true;
       } catch {
         return false;
       }
