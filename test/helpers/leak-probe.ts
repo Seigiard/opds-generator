@@ -14,7 +14,8 @@
  */
 import { spawnWithTimeoutText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
-import { listEntries, readEntry } from "../../src/utils/archive.ts";
+import { listArchiveEntries, listEntries, readArchiveEntry, readEntry } from "../../src/utils/archive.ts";
+import { Effect } from "effect";
 import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
 import { runAsPromiseHandler } from "./effect-test-handlers.ts";
@@ -138,6 +139,14 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       return () => readEntry(CBZ_PATH, image).then(() => {});
     }
 
+    // The same page images in each archive type: RAR runs native WASM extraction, 7z and TAR run commands.
+    case "archive-rar":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cbr"));
+    case "archive-7z":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cb7"));
+    case "archive-tar":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cbt"));
+
     case "save-buffer-as-image":
       return async (i) => {
         await saveBufferAsImage(VALID_PNG, join(tmpDir, `img-${i}.jpg`), 100);
@@ -172,6 +181,18 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     default:
       throw new Error(`Unknown scenario: ${name}`);
   }
+}
+
+// One listing and one page read per operation through the Effect archive dispatch. A dispatch that silently
+// returns nothing must not pass the gate by avoiding the workload.
+function buildArchiveReads(archive: string): Op {
+  return async () => {
+    const page = await Effect.runPromise(
+      listArchiveEntries(archive).pipe(Effect.flatMap((entries) => readArchiveEntry(archive, entries.at(-1) ?? ""))),
+    );
+
+    if (!page || page.byteLength === 0) throw new Error(`No page read from ${archive}`);
+  };
 }
 
 // One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).

@@ -11,6 +11,7 @@ import {
   resetMocks,
 } from "../../../helpers/mock-tools.ts";
 import { assertCoverMatchesReference } from "../../../helpers/image-compare.ts";
+import { SAMPLE_IMAGES, buildComic, sampleImage } from "../../../helpers/comic-archives.ts";
 import sharp from "sharp";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -323,6 +324,71 @@ describe("bookSync handler", () => {
       cover: entry.includes('rel="http://opds-spec.org/image"'),
     }).toEqual({ title: true, author: true, issued: true, cover: true });
     await assertCoverMatchesReference(await readFile(join(bookDir, "cover.jpg")));
+  });
+
+  test.each(["cbz", "cb7", "cbt"] as const)(
+    "publishes a %s comic with merged ComicInfo and CoMet metadata and its hinted cover page",
+    async (type) => {
+      // #given a comic built from the sample pages, with ComicInfo naming page 1 as front cover and CoMet adding rights
+      const name = `Built Comic.${type}`;
+
+      const archive = await buildComic(TEST_DIR, `source.${type}`, type, {
+        "ComicInfo.xml": `<ComicInfo><Title>Bobby's Dream</Title><Series>Bobby Make-Believe</Series><Number>3</Number>
+          <Writer>Frank King</Writer><LanguageISO>en</LanguageISO><PageCount>4</PageCount>
+          <Pages><Page Image="1" Type="FrontCover"/></Pages></ComicInfo>`,
+        "CoMet.xml": "<comet><title>Ignored</title><rights>Public domain</rights></comet>",
+        [SAMPLE_IMAGES[0]!]: await sampleImage(0),
+        [SAMPLE_IMAGES[1]!]: await sampleImage(1),
+        [SAMPLE_IMAGES[2]!]: await sampleImage(2),
+      });
+
+      await Bun.write(join(FILES_DIR, name), Bun.file(archive));
+
+      // #when
+      await bookSync(bookCreatedEvent(name), deps);
+
+      // #then page 1 is the cover: its 975x1320 size is unique among the sample pages and below the cover limit
+      const bookDir = join(DATA_DIR, name);
+      const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+      const cover = await sharp(join(bookDir, "cover.jpg")).metadata();
+      expect({
+        title: entry.includes("<title>Bobby's Dream</title>"),
+        author: entry.includes("<name>Frank King</name>"),
+        series: entry.includes("<dc:isPartOf>Bobby Make-Believe #3</dc:isPartOf>"),
+        language: entry.includes("<dc:language>en</dc:language>"),
+        extent: entry.includes("<dc:extent>4 pages</dc:extent>"),
+        rights: entry.includes("<rights>Public domain</rights>"),
+        link: await readlink(join(bookDir, name)),
+        cover: { width: cover.width, height: cover.height },
+      }).toEqual({
+        title: true,
+        author: true,
+        series: true,
+        language: true,
+        extent: true,
+        rights: true,
+        link: join(FILES_DIR, name),
+        cover: { width: 975, height: 1320 },
+      });
+    },
+  );
+
+  test("publishes the image-only CBR sample under its filename title with its first page as cover", async () => {
+    // #given
+    const name = "Bobby_Sample.cbr";
+    await Bun.write(join(FILES_DIR, name), Bun.file(join(FIXTURES_DIR, "bobby_make_believe_sample.cbr")));
+
+    // #when
+    await bookSync(bookCreatedEvent(name), deps);
+
+    // #then page 0 is the cover: its 975x1349 size is unique among the sample pages and below the cover limit
+    const bookDir = join(DATA_DIR, name);
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const cover = await sharp(join(bookDir, "cover.jpg")).metadata();
+    expect({
+      title: entry.includes("<title>Bobby Sample</title>"),
+      cover: { width: cover.width, height: cover.height },
+    }).toEqual({ title: true, cover: { width: 975, height: 1349 } });
   });
 
   test("uses the filename title when an EPUB has no readable container", async () => {
