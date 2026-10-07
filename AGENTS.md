@@ -12,7 +12,8 @@ src/
 ├── scanner.ts       # File scanning, sync planning
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
 ├── watcher.sh       # inotifywait on /books → POST /events/books
-├── context.ts       # AppContext, HandlerDeps, buildContext()
+├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
+├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
 ├── queue.ts         # SimpleQueue<T> (vanilla TS, no Effect)
 ├── lifecycle/       # transition.ts (pure rules), lifecycle.ts (executes them), disk-scanner.ts
 ├── processing/      # neverthrow + async/await
