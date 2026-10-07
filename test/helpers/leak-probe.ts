@@ -183,7 +183,9 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       return buildConsumerCycle("effect");
 
     case "lifecycle-scan":
-      return buildLifecycleScans();
+      return buildLifecycleScans("plain");
+    case "lifecycle-scan-effect":
+      return buildLifecycleScans("effect");
     case "lifecycle-restart":
       return buildLifecycleRestarts();
 
@@ -306,13 +308,21 @@ function buildConsumerCycle(variant: "plain" | "effect"): Op {
     });
 }
 
-function buildLifecycle() {
+function buildLifecycle(variant: "plain" | "effect") {
   const { config, logger, fs } = buildContext();
 
-  const processor = createCatalogueProcessor({
-    deps: { config, logger, fs },
-    handlers: { FolderMetaSyncRequested: async () => ok<readonly EventType[]>([]) },
-  });
+  const handler = async () => ok<readonly EventType[]>([]);
+
+  const processor =
+    variant === "plain"
+      ? createCatalogueProcessor({
+          deps: { config, logger, fs },
+          handlers: { FolderMetaSyncRequested: handler },
+        })
+      : createEffectCatalogueProcessor({
+          deps: { config, logger, fs },
+          handlers: { FolderMetaSyncRequested: fromPromiseHandler(handler) },
+        });
 
   const scanner: CatalogueScanner = { scan: async () => [{ _tag: "FolderMetaSyncRequested", path: "/test" }] };
 
@@ -329,8 +339,8 @@ async function untilSettled(lifecycle: ReturnType<typeof buildLifecycle>): Promi
 }
 
 // One lifecycle for the whole run; each cycle is a resync scan whose one folder refresh runs through the consumer.
-function buildLifecycleScans(): Op {
-  const lifecycle = buildLifecycle();
+function buildLifecycleScans(variant: "plain" | "effect"): Op {
+  const lifecycle = buildLifecycle(variant);
   lifecycle.start();
 
   return async () => {
@@ -346,7 +356,7 @@ function buildLifecycleScans(): Op {
 function buildLifecycleRestarts(): Op {
   return async () => {
     for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
-      const lifecycle = buildLifecycle();
+      const lifecycle = buildLifecycle("plain");
       lifecycle.start();
       await untilSettled(lifecycle);
       await lifecycle.stop();

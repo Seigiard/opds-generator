@@ -304,3 +304,9 @@ had a handler-chain RSS red whose value was not captured.
 - The batched gates measure retention per event. Retention once per drain (busy/empty edge, idle take) is spread over 100 events; `lifecycle-scan` covers it for the plain processor.
 - Probe children inherit `LOG_LEVEL=warn` from `docker-compose.test.yml`, so the consumer's info logs are off in every gate run.
 - Details: `docs/effect-processing-prototype.md`, "The consumer gate".
+
+## Effect per-drain lifecycle gate — issue #33
+
+- `lifecycle-scan-effect` runs the existing lifecycle scan workload with `createEffectCatalogueProcessor`. It measures one folder refresh arriving at an idle Effect processor, batched by `LIFECYCLE_CYCLES_PER_OP` like the plain `lifecycle-scan` gate.
+- The gate uses the unchanged runtime limits: 1 KB RSS per drain and 0.5 JS objects per drain.
+- `memory-oracle-calibration.test.ts` checks the red side with `LEAK_PROBE_RETAIN_KB` at 4 KiB per Effect drain, multiplied by `LIFECYCLE_CYCLES_PER_OP` because the probe retains once per measured operation.
