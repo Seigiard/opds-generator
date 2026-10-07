@@ -32,7 +32,7 @@ interface CatalogueProcessorOptions {
   readonly handlers: Handlers;
 }
 
-function generateEventId(event: EventType, path: string | undefined): string {
+export function generateEventId(event: EventType, path: string | undefined): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 7);
 
@@ -49,7 +49,7 @@ export function getEventPath(event: EventType): string | undefined {
 
 let eventCounter = 0;
 
-function logMemorySnapshot(): void {
+export function logMemorySnapshot(): void {
   eventCounter++;
 
   if (eventCounter % 50 === 0) {

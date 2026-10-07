@@ -1,0 +1,118 @@
+import { Data, Effect, Predicate } from "effect";
+import { join, relative, dirname } from "node:path";
+import { getHandlerFactory } from "../../formats/index.ts";
+import type { BookMetadata, FormatHandlerFactory } from "../../formats/types.ts";
+import { saveCoverAndThumbnail, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
+import { CatalogueDeps, CatalogueEvent, ownedPromise } from "../effect-handler.ts";
+import type { EventType } from "../types.ts";
+import { ENTRY_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
+import { bookEntryXml } from "./book-sync.ts";
+
+// `message` carries the cause's text: the logger writes an error's message and stack, never its `cause`.
+interface FailureProps {
+  readonly path: string;
+  readonly cause: unknown;
+  readonly message: string;
+}
+
+class BookStatFailed extends Data.TaggedError("BookStatFailed")<FailureProps> {}
+
+class BookDataDirFailed extends Data.TaggedError("BookDataDirFailed")<FailureProps> {}
+
+class EntryPublishFailed extends Data.TaggedError("EntryPublishFailed")<FailureProps> {}
+
+/** Recovered inside `bookSync`: the book falls back to its filename title and no cover. */
+class ExtractionFailed extends Data.TaggedError("ExtractionFailed")<FailureProps> {}
+
+const NO_METADATA = { meta: { title: "" }, hasCover: false };
+
+/**
+ * The Effect 4 variant of `bookSync` (issue #25). Shutdown may interrupt only the preparation:
+ * every Promise boundary in it is owned, so an interrupted book waits for its extraction to settle
+ * and leaves the previous `entry.xml` untouched. Publication runs in the uninterruptible handler
+ * context, so both writes always finish.
+ */
+export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType) {
+  if (!Predicate.isTagged(event, "BookCreated")) return [];
+
+  const { logger, fs } = yield* CatalogueDeps;
+  const book = yield* Effect.interruptible(prepareBook(event.parent, event.name));
+
+  yield* ownedPromise(
+    async () => {
+      await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
+      await fs.symlink(book.filePath, join(book.dataDir, event.name));
+    },
+    (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
+  );
+  logger.info("BookSync", "Done", { path: book.relativePath, has_cover: book.hasCover });
+
+  return [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(book.dataDir) })];
+});
+
+const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
+  const { config, logger, fs } = yield* CatalogueDeps;
+  const filePath = join(parent, name);
+  const relativePath = relative(config.filesPath, filePath);
+  const dataDir = join(config.dataPath, relativePath);
+
+  logger.info("BookSync", "Processing", { path: relativePath });
+
+  const fileStat = yield* ownedPromise(
+    () => fs.stat(filePath),
+    (cause) => new BookStatFailed(failure(filePath, cause)),
+  );
+
+  yield* ownedPromise(
+    () => fs.mkdir(dataDir, { recursive: true }),
+    (cause) => new BookDataDirFailed(failure(dataDir, cause)),
+  );
+
+  const { meta, hasCover } = yield* extractMetadataAndCover(filePath, dataDir).pipe(
+    Effect.catchTag("ExtractionFailed", () => Effect.succeed(NO_METADATA)),
+  );
+
+  return { filePath, relativePath, dataDir, hasCover, entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size) };
+});
+
+const extractMetadataAndCover = Effect.fnUntraced(function* (filePath: string, bookDataDir: string) {
+  const createHandler = getHandlerFactory(filePath.split(".").pop() ?? "");
+
+  if (!createHandler) return NO_METADATA;
+
+  const failed = (cause: unknown) => new ExtractionFailed(failure(filePath, cause));
+  // One owned Promise for the format handler's whole life: handlers keep the factory's signal for getCover(),
+  // so shutdown must abort that same signal to kill a running cover command.
+  const book = yield* ownedPromise((signal) => readBook(createHandler, filePath, signal), failed);
+
+  if (!book) return NO_METADATA;
+
+  const { meta, cover } = book;
+
+  if (!cover) return { meta, hasCover: false };
+
+  const hasCover = yield* ownedPromise(
+    () => saveCoverAndThumbnail(cover, join(bookDataDir, COVER_FILE), COVER_MAX_SIZE, join(bookDataDir, THUMB_FILE), THUMBNAIL_MAX_SIZE),
+    failed,
+  ).pipe(Effect.catchTag("ExtractionFailed", () => Effect.succeed(false)));
+
+  return { meta, hasCover };
+});
+
+async function readBook(
+  createHandler: FormatHandlerFactory,
+  filePath: string,
+  signal: AbortSignal,
+): Promise<{ meta: BookMetadata; cover: Buffer | null } | null> {
+  const handler = await createHandler(filePath, signal);
+
+  if (!handler) return null;
+
+  const meta = handler.getMetadata();
+
+  return { meta, cover: await handler.getCover() };
+}
+
+function failure(path: string, cause: unknown): FailureProps {
+  return { path, cause, message: cause instanceof Error ? cause.message : String(cause) };
+}

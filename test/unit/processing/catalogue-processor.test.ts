@@ -1,6 +1,9 @@
 import { describe, test, expect } from "bun:test";
+import { Effect } from "effect";
 import { err, ok } from "neverthrow";
 import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
+import { toEffectHandlers } from "../../helpers/effect-variants.ts";
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 
@@ -43,15 +46,21 @@ function recordEdges(processor: CatalogueProcessor, log: string[]): void {
   processor.onEmpty(() => log.push("empty"));
 }
 
-function startWith(handlers: Handlers) {
-  const processor = createCatalogueProcessor({ deps, handlers });
-  const controller = new AbortController();
-  const task = processor.start(controller.signal);
+// Issue #25: the same contract runs against the plain and the Effect 4 processor.
+const variants = [
+  { name: "plain", create: (handlers: Handlers) => createCatalogueProcessor({ deps, handlers }) },
+  { name: "effect", create: (handlers: Handlers) => createEffectCatalogueProcessor({ deps, handlers: toEffectHandlers(handlers) }) },
+];
 
-  return { processor, controller, task };
-}
+describe.each(variants)("CatalogueProcessor ($name)", ({ create }) => {
+  function startWith(handlers: Handlers) {
+    const processor = create(handlers);
+    const controller = new AbortController();
+    const task = processor.start(controller.signal);
 
-describe("CatalogueProcessor", () => {
+    return { processor, controller, task };
+  }
+
   test("busy and empty fire exactly once for one piece of work", async () => {
     // #given
     const edges: string[] = [];
@@ -384,5 +393,39 @@ describe("CatalogueProcessor", () => {
     await task;
     // #then
     expect(edges).toEqual([]);
+  });
+});
+
+describe("Effect CatalogueProcessor", () => {
+  test("shutdown drops the cascade of a handler that finishes after abort in its uninterruptible part", async () => {
+    // #given an Effect handler that sees shutdown arrive mid-run and still returns its cascade
+    const controller = new AbortController();
+    let cascadeRuns = 0;
+
+    const processor = createEffectCatalogueProcessor({
+      deps,
+      handlers: {
+        BookCreated: () =>
+          Effect.sync(() => {
+            controller.abort();
+
+            return [refresh("/test/data")];
+          }),
+        FolderMetaSyncRequested: () =>
+          Effect.sync(() => {
+            cascadeRuns++;
+
+            return [];
+          }),
+      },
+    });
+
+    const task = processor.start(controller.signal);
+    // #when
+    processor.submit(book("a.epub"));
+    await task;
+    await settle();
+    // #then
+    expect({ cascadeRuns, pending: processor.status().pending }).toEqual({ cascadeRuns: 0, pending: 0 });
   });
 });

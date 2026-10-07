@@ -184,7 +184,12 @@
   ],
   "overrides": [
     {
-      "files": ["src/utils/process.ts"],
+      "files": [
+        "src/utils/process.ts",
+        "src/processing/effect-handler.ts",
+        "src/processing/catalogue-processor-effect.ts",
+        "src/processing/handlers/book-sync-effect.ts"
+      ],
       "rules": {
         "anti-slop-effect/no-manual-effect-error-tag": "error",
         "anti-slop-effect/no-manual-tag-comparison": "error",

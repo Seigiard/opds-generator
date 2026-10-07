@@ -32,3 +32,11 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - `onBusy` fires when work enters an idle processor. `onEmpty` fires when the last pending event (cascades included) finishes. Both are silent after shutdown.
 - These edges drive the lifecycle phase. Periodic reconciliation starts only in `settled`, so a lost `empty` edge blocks reconciliation.
 - The processor never forces GC per event. The periodic memory snapshot logs at `debug` level.
+
+## Effect prototype (#25)
+
+- `createEffectCatalogueProcessor` and `bookSyncEffect` meet the same contract as the plain code. `server.ts` does not use them. Findings and go/no-go: `docs/effect-processing-prototype.md`.
+- Suites run against both variants through `describe.each`; `test/helpers/effect-variants.ts` builds the Effect registry.
+- In Effect handlers, cross a Promise boundary only through `ownedPromise`. `Effect.tryPromise` abandons the Promise on interruption, and the handler outlives `stop()`.
+- An object that keeps a signal (a format handler keeps the factory's for `getCover()`) lives inside one `ownedPromise`. Each bridge has its own signal, so a second bridge leaves the kept one dead.
+- Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.

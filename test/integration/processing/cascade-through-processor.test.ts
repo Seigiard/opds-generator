@@ -5,6 +5,8 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { ok } from "neverthrow";
 import { createCatalogueProcessor, type Handlers } from "../../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
+import { toEffectHandlers } from "../../helpers/effect-variants.ts";
 import { bookSync } from "../../../src/processing/handlers/book-sync.ts";
 import { bookCleanup } from "../../../src/processing/handlers/book-cleanup.ts";
 import { folderSync } from "../../../src/processing/handlers/folder-sync.ts";
@@ -75,27 +77,6 @@ function gate() {
   return { promise, open };
 }
 
-function run(handlers: Handlers = realHandlers) {
-  const processor = createCatalogueProcessor({ deps, handlers });
-  const controller = new AbortController();
-  const task = processor.start(controller.signal);
-
-  const idle = (): Promise<void> =>
-    new Promise((resolve) => {
-      const off = processor.onEmpty(() => {
-        off();
-        resolve();
-      });
-    });
-
-  const stop = async () => {
-    controller.abort();
-    await task;
-  };
-
-  return { processor, idle, stop };
-}
-
 /** Real folder refresh, recording each path it runs for. */
 function recordingRefresh(paths: string[], hold?: () => Promise<void>): Handlers["FolderMetaSyncRequested"] {
   return async (event, handlerDeps) => {
@@ -118,7 +99,34 @@ async function addBook(folder: string): Promise<void> {
   await Bun.write(join(FILES_DIR, folder, EPUB), await Bun.file(FIXTURE).arrayBuffer());
 }
 
-describe("Cascades through the catalogue processor", () => {
+// Issue #25: the effect variant runs the Effect processor with the Effect `bookSync`.
+const variants = [
+  { name: "plain", create: (handlers: Handlers) => createCatalogueProcessor({ deps, handlers }) },
+  { name: "effect", create: (handlers: Handlers) => createEffectCatalogueProcessor({ deps, handlers: toEffectHandlers(handlers) }) },
+];
+
+describe.each(variants)("Cascades through the catalogue processor ($name)", ({ create }) => {
+  function run(handlers: Handlers = realHandlers) {
+    const processor = create(handlers);
+    const controller = new AbortController();
+    const task = processor.start(controller.signal);
+
+    const idle = (): Promise<void> =>
+      new Promise((resolve) => {
+        const off = processor.onEmpty(() => {
+          off();
+          resolve();
+        });
+      });
+
+    const stop = async () => {
+      controller.abort();
+      await task;
+    };
+
+    return { processor, idle, stop };
+  }
+
   beforeEach(async () => {
     await rm(TEST_DIR, { recursive: true, force: true });
     await mkdir(FILES_DIR, { recursive: true });

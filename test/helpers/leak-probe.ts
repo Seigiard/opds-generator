@@ -18,7 +18,10 @@ import { listEntries, readEntry } from "../../src/utils/archive.ts";
 import { bookSync } from "../../src/processing/handlers/book-sync.ts";
 import { folderSync } from "../../src/processing/handlers/folder-sync.ts";
 import { folderMetaSync } from "../../src/processing/handlers/folder-meta-sync.ts";
-import { createCatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
+import { createCatalogueProcessor, type CatalogueProcessor, type Handlers } from "../../src/processing/catalogue-processor.ts";
+import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
+import { fromPromiseHandler, runAsPromiseHandler } from "../../src/processing/effect-handler.ts";
+import { bookSyncEffect } from "../../src/processing/handlers/book-sync-effect.ts";
 import { createLifecycle, type CatalogueScanner } from "../../src/lifecycle/lifecycle.ts";
 import { SimpleQueue } from "../../src/queue.ts";
 import type { AppContext, HandlerDeps } from "../../src/context.ts";
@@ -159,7 +162,9 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     }
 
     case "handler-chain":
-      return buildHandlerChain(tmpDir);
+      return buildHandlerChain(tmpDir, "plain");
+    case "handler-chain-effect":
+      return buildHandlerChain(tmpDir, "effect");
 
     case "queue-cycle": {
       const queue = new SimpleQueue<EventType>();
@@ -173,7 +178,9 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     }
 
     case "consumer-enqueue":
-      return buildConsumerCycle();
+      return buildConsumerCycle("plain");
+    case "consumer-enqueue-effect":
+      return buildConsumerCycle("effect");
 
     case "lifecycle-scan":
       return buildLifecycleScans();
@@ -186,8 +193,9 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
 }
 
 // One book per operation through the event handlers (PDF, CBZ, EPUB in turn), with the
-// filesystem adapter the original in-process handler test used.
-async function buildHandlerChain(tmpDir: string): Promise<Op> {
+// filesystem adapter the original in-process handler test used. The effect variant runs the
+// Effect 4 `bookSync` (issue #25); the folder handlers stay plain in both.
+async function buildHandlerChain(tmpDir: string, variant: "plain" | "effect"): Promise<Op> {
   const filesDir = join(tmpDir, "files");
   const dataDir = join(tmpDir, "data");
   await mkdir(filesDir, { recursive: true });
@@ -243,7 +251,8 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
     try {
       await Bun.write(join(folderPath, bookFile), await Bun.file(join(FIXTURES_DIR, bookFile)).arrayBuffer());
       (await folderSync({ _tag: "FolderCreated", parent: filesDir, name: folderName }, deps))._unsafeUnwrap();
-      (await bookSync({ _tag: "BookCreated", parent: folderPath, name: bookFile }, deps))._unsafeUnwrap();
+      const book: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
+      (variant === "plain" ? await bookSync(book, deps) : await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
       (await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
       (await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
       // A handler that silently skips the book must not pass the gate by avoiding the workload.
@@ -258,21 +267,26 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
 // One event per operation through the running consumer loop; the operation completes
 // when the registered handler has processed it. The consumer runs a full GC per event,
 // so batching events here would multiply the run time.
-function buildConsumerCycle(): Op {
+function buildConsumerCycle(variant: "plain" | "effect"): Op {
   let markProcessed = () => {};
 
   const { config, logger, fs } = buildContext();
 
-  const processor = createCatalogueProcessor({
-    deps: { config, logger, fs },
-    handlers: {
-      FolderMetaSyncRequested: async () => {
-        markProcessed();
+  const handlers: Handlers = {
+    FolderMetaSyncRequested: async () => {
+      markProcessed();
 
-        return ok<readonly EventType[]>([]);
-      },
+      return ok<readonly EventType[]>([]);
     },
-  });
+  };
+
+  const processor: CatalogueProcessor =
+    variant === "plain"
+      ? createCatalogueProcessor({ deps: { config, logger, fs }, handlers })
+      : createEffectCatalogueProcessor({
+          deps: { config, logger, fs },
+          handlers: { FolderMetaSyncRequested: fromPromiseHandler(handlers.FolderMetaSyncRequested!) },
+        });
 
   processor.start(new AbortController().signal).catch(() => {
     console.error("leak-probe: consumer loop failed");
