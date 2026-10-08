@@ -114,7 +114,7 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 <important if="you are extracting the shared synchronization engine, migrating an application to it, or updating the engine package">
 
-Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS has adopted the released engine (#57). TTRPG Map Viewer and OPML Generator have not. `docs/agents/shared-sync-engine.md` holds the package boundary, the update procedure and the evidence.
+Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS, TTRPG Map Viewer and OPML Generator all run the released engine (`@seigiard/sync-engine@0.5.0`). `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure. `docs/agents/shared-sync-evidence.md` holds the cross-application evidence.
 
 </important>
 
