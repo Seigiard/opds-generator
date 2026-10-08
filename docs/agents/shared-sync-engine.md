@@ -191,6 +191,20 @@ COMPOSE_PROJECT_NAME=opds49-56 STARTUP_PORT=18557 STARTUP_IMAGE=opds49-56-startu
 
 In-process counterpart: `test/integration/lifecycle/startup-readiness.test.ts`.
 
+**#57 adoption point.** Docker `HEALTHCHECK` and the Compose probes still test only that
+`/feed.xml` exists, which is the legacy seed. Real deployment health under the shared composition
+must adopt the minimum: the root feed and the root page, as reported by `available` in `/status`.
+#56 leaves the probes unchanged because the legacy composition, still the default, never publishes
+the root page early.
+
+Verification record (#56). The full Docker suite (`bun run test`, project `opds49-56`) passed with
+0 failures on the committed tree: 707 pass, 1075 assertions, 61 files, 338.79 s, exit 0. An earlier
+full run ended 706 pass and 1 fail: `cascade-flow` still pinned the old behavior "a failed
+`index.html` write is logged and the handler succeeds". Root and folder page failures are now handler
+failures by design, so that test was replaced (handler fails, `feed.xml` exists, no `_entry.xml`)
+and the handler contract is owned by `folder-meta-sync.test.ts`. The memory and RSS gates ran at
+unchanged limits in both runs.
+
 ## Output ownership
 
 ### Cooperative shutdown (#55)
