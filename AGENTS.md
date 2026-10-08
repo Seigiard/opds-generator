@@ -49,6 +49,7 @@ tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never ad
 ## Always-on rules
 
 - `static/` and `test/golden/*` are generated. Change their sources, run `bun run build:ui` / `bun run render:golden`, and commit the output.
+- Run `build:ui` and `build:ui:check` with the Bun version that `.github/workflows/docker.yml` pins (`bun-version`). Minified output changes between Bun versions, so another version fails the freshness check.
 - `src/render/*` and `src/types.ts` stay browser-importable: no node builtins, no `Bun` globals. `render:pure` and an oxlint override enforce it.
 - The app and tests run in Docker. Shut containers down gracefully when you finish.
 
