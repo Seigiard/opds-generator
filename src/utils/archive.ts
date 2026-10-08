@@ -32,12 +32,9 @@ export function listArchiveEntries(filePath: string): Effect.Effect<string[]> {
 
 /**
  * One entry's bytes from any supported archive, or `null`; dispatched and recovered like `listArchiveEntries`.
- * An option-like (`-…`) entry path reads as missing.
+ * In the command-backed variants (ZIP, 7z, TAR) an option-like (`-…`) entry path reads as missing.
  */
 export function readArchiveEntry(filePath: string, entryPath: string): Effect.Effect<Buffer | null> {
-  // Entry paths come from book contents; one starting with "-" would reach tar/7zz/unzip as an option.
-  if (entryPath.startsWith("-")) return Effect.succeed(null);
-
   return detectArchiveType(filePath).pipe(
     Effect.flatMap((type) => {
       switch (type) {
@@ -48,9 +45,9 @@ export function readArchiveEntry(filePath: string, entryPath: string): Effect.Ef
         case "rar":
           return readRarEntry(filePath, entryPath);
         case "7z":
-          return readCommandEntry(["7zz", "e", "-so", filePath, entryPath]);
+          return readCommandEntry(["7zz", "e", "-so", filePath], entryPath);
         case "tar":
-          return readCommandEntry(["tar", "-xOf", filePath, entryPath]);
+          return readCommandEntry(["tar", "-xOf", filePath], entryPath);
       }
     }),
   );
@@ -67,8 +64,11 @@ function listCommandEntries(command: string[], parse: (stdout: string) => string
   );
 }
 
-function readCommandEntry(command: string[]): Effect.Effect<Buffer | null> {
-  return runCommand({ command }).pipe(
+function readCommandEntry(command: string[], entryPath: string): Effect.Effect<Buffer | null> {
+  // Entry paths come from book contents; one starting with "-" would reach the command as an option.
+  if (entryPath.startsWith("-")) return Effect.succeed(null);
+
+  return runCommand({ command: [...command, entryPath] }).pipe(
     Effect.map(({ stdout, exitCode, timedOut }) => (timedOut || exitCode !== 0 || stdout.byteLength === 0 ? null : Buffer.from(stdout))),
     Effect.catchTag("CommandFailed", () => Effect.succeed(null)),
   );

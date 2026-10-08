@@ -6,7 +6,16 @@ import { dirname, join } from "node:path";
 import * as unrar from "node-unrar-js";
 import { listArchiveEntries, readArchiveEntry, readArchiveEntryText } from "../../../src/utils/archive.ts";
 import { installHangingCommands, isAlive, waitForHangingChild, type HangingChild } from "../../helpers/hanging-command.ts";
-import { FIXTURES_DIR, SAMPLE_IMAGE_SHA256, SAMPLE_IMAGES, buildComic, sampleImage, sha256 } from "../../helpers/comic-archives.ts";
+import {
+  DASHED_PAGE,
+  FIXTURES_DIR,
+  SAMPLE_IMAGE_SHA256,
+  SAMPLE_IMAGES,
+  buildComic,
+  sampleImage,
+  sha256,
+  writeDashedCbr,
+} from "../../helpers/comic-archives.ts";
 
 const CBR = join(FIXTURES_DIR, "bobby_make_believe_sample.cbr");
 
@@ -227,6 +236,15 @@ describe("readArchiveEntry", () => {
     const data = await run(readArchiveEntry(path, OPTION_LIKE_ENTRY));
     // #then
     expect({ data, injected: commands.flat().filter((arg) => arg === OPTION_LIKE_ENTRY) }).toEqual({ data: null, injected: [] });
+  });
+
+  test("a RAR entry whose real name starts with a dash is read, since RAR passes no name to a command", async () => {
+    // #given the sample CBR with page 0 renamed to start with "-"
+    const path = await writeDashedCbr(await tempDir("archive-dashed-"));
+    // #when
+    const result = { listed: (await run(listArchiveEntries(path)))[0], page: sha256(await run(readArchiveEntry(path, DASHED_PAGE))) };
+    // #then
+    expect(result).toEqual({ listed: DASHED_PAGE, page: SAMPLE_IMAGE_SHA256[0] });
   });
 
   test.each(["cb7", "cbt"] as const)("returns null for a %s directory entry and for an empty file", async (type) => {
