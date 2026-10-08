@@ -31,7 +31,7 @@
     "postinstall": "simple-git-hooks || true"
   },
   "dependencies": {
-    "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.2.0-4ca09aea.tgz",
+    "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.3.1-3c2ea0cfefb649d720eac756048aa5772fdb77cb.tgz",
     "effect": "4.0.1",
     "fast-xml-parser": "^5.11.2",
     "hono": "^4.13.13",
@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "1.87.0",
+    "@seigiard/sync-engine-previous": "file:vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz",
     "@types/bun": "latest",
     "autoprefixer": "^10.6.1",
     "cssnano": "^9.3.2",

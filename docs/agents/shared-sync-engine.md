@@ -1,7 +1,7 @@
-# Shared synchronization engine: catalogue dependencies (#50–#51)
+# Shared synchronization engine: catalogue dependencies and freshness (#50–#53)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
-`@seigiard/sync-engine@0.2.0` artifact in `vendor/`. It is not published to npm.
+`@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
 Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 
 ## Reproduce
@@ -9,9 +9,9 @@ Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 ```sh
 bun install --frozen-lockfile
 git submodule update --init
-COMPOSE_PROJECT_NAME=opds49-51 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts
-COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml down
+COMPOSE_PROJECT_NAME=opds49-53 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-53 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts test/integration/lifecycle/engine-freshness.test.ts
+COMPOSE_PROJECT_NAME=opds49-53 docker compose -f docker-compose.test.yml down
 ```
 
 The tests use temporary trees, production filesystem services and all existing
@@ -53,6 +53,40 @@ Each folder still writes its own feed. A book's symlink exists before its entry
 is published. A new folder publishes its child feed before `_entry.xml`, so a
 parent cannot publish a reference to a missing child feed. Publication is gradual.
 
+## Freshness
+
+`initialEngineCatalogue(deps, options)` and `openEngineCatalogue(deps, options)`
+accept `check: "metadata" | "content"` and
+`processingVersions: { book?: string, folder?: string }`. Each version defaults
+to `"1"`. Change `book` for extractor/book-entry changes; change `folder` for
+feed/browser renderer changes. The engine package version is not a processing
+version. `engineOptions` exposes the same declaration for later lifecycle slices.
+
+The package records successful work by application-declared result kind and
+source-relative paths. An ordinary initial check reuses existing results when
+source size, mtime and the relevant processing version match. Required output
+paths must exist. A changed book invalidates its required folder publication;
+the existing summary comparison still stops unchanged ancestor propagation.
+Root publication is declared folder work, so warm checks also reuse root files.
+
+`submit(work)` explicitly reprocesses the submitted results. Pass declarations
+use `submit(work, { force: false, changedPaths: [] })` for ordinary checks.
+`changedPaths` contains source-relative watcher hints; matching work is
+reconsidered even when size and mtime match. A hint during active work prevents
+its earlier source read from being recorded as current. `force: true` bypasses saved
+freshness. These inputs do not install watcher transport or resync scheduling.
+
+Known limit: without a watcher hint, equal size and mtime can hide replaced
+content. Select `check: "content"` to additionally hash regular-file contents.
+This reads each declared file and costs more than the default metadata check.
+
+Dirty freshness is invalidated before processing. New successful information
+is retained after required work completes. Failed or interrupted batches are
+replayed by a fresh instance. Book publication keeps its previous entry on a
+pre-publication failure. Engine metadata belongs outside projected source paths.
+The dev-only `sync-engine-previous` package alias tests a real packed 0.3.0 to
+0.3.1 upgrade against real handlers and dated publications.
+
 ## Output ownership
 
 Both selections use the package's `acquireOutputTree` lease. The legacy disk
@@ -76,7 +110,7 @@ unlinking it while an owner runs permits a second lock identity.
 The engine requires disjoint source/output trees and excludes source symlinks.
 Read errors fail the initial pass instead of publishing an empty replacement.
 Handler failures prevent final publication and release ownership. This slice
-has no engine watcher, freshness, resync or reconciliation.
+has no engine watcher transport, resync scheduling or reconciliation.
 
 ## Interface fit
 

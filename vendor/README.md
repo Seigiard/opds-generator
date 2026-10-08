@@ -1,4 +1,6 @@
 # Local engine package
 
-The content-qualified `seigiard-sync-engine-0.2.0-*.tgz` is a packed release from the separate
-`Seigiard/sync-engine` repository. It is not an npm publication.
+Content-qualified engine tarballs are packed releases from the separate
+`Seigiard/sync-engine` repository. `package.json` selects the runtime release.
+The dev-only previous-release alias is an independent upgrade fixture for the
+freshness integration test. These artifacts are not npm publications.
