@@ -23,7 +23,13 @@ interface CommandText {
 class CoverConversionFailed extends Data.TaggedError("CoverConversionFailed")<{ readonly cause: unknown; readonly message: string }> {}
 
 const extractDjvu = Effect.fn("extractDjvu")(function* (filePath: string) {
-  const exists = yield* Effect.promise(() => Bun.file(filePath).exists()).pipe(Effect.uninterruptible);
+  const exists = yield* Effect.tryPromise({
+    try: () => Bun.file(filePath).exists(),
+    catch: (cause) => ExtractionFailed.of(filePath, cause),
+  }).pipe(
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("DJVU", filePath, error.cause))),
+    Effect.uninterruptible,
+  );
 
   if (!exists) return yield* ExtractionFailed.of(filePath, "file does not exist");
 

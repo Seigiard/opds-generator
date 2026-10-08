@@ -6,7 +6,8 @@ import { runCommand, runCommandText, useTemporaryDirectory } from "./process.ts"
 import { listZipEntries, readZipEntry } from "./zip.ts";
 
 /**
- * File entries of any supported archive, dispatched by magic bytes. Unknown input yields `[]`.
+ * Entries of any supported archive, dispatched by magic bytes. ZIP and TAR listings drop directories;
+ * 7z and RAR listings keep them. Unknown input yields `[]`.
  * An unreadable archive, a command that cannot run, times out or exits nonzero also yield `[]`.
  * Interruption stops running commands and stays interruption.
  */
@@ -29,8 +30,14 @@ export function listArchiveEntries(filePath: string): Effect.Effect<string[]> {
   );
 }
 
-/** One entry's bytes from any supported archive, or `null`; dispatched and recovered like `listArchiveEntries`. */
+/**
+ * One entry's bytes from any supported archive, or `null`; dispatched and recovered like `listArchiveEntries`.
+ * An option-like (`-…`) entry path reads as missing.
+ */
 export function readArchiveEntry(filePath: string, entryPath: string): Effect.Effect<Buffer | null> {
+  // Entry paths come from book contents; one starting with "-" would reach tar/7zz/unzip as an option.
+  if (entryPath.startsWith("-")) return Effect.succeed(null);
+
   return detectArchiveType(filePath).pipe(
     Effect.flatMap((type) => {
       switch (type) {

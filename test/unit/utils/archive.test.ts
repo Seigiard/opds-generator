@@ -18,6 +18,9 @@ const CBZ = join(FIXTURES_DIR, "bobby_make_believe_sample.cbz");
 
 const TEXT_FILE = join(FIXTURES_DIR, "sample_text.txt");
 
+// An entry name a book could carry that a command would read as an option.
+const OPTION_LIKE_ENTRY = "--to-command=touch /tmp/opds-injected";
+
 const cleanups: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
@@ -50,6 +53,22 @@ function failSpawnOf(name: string): void {
   });
 
   cleanups.push(async () => spy.mockRestore());
+}
+
+function recordSpawns(): string[][] {
+  const originalSpawn = Bun.spawn.bind(Bun);
+  const commands: string[][] = [];
+
+  // SAFETY: the spy forwards Bun.spawn's own arguments unchanged.
+  const spy = spyOn(Bun, "spawn").mockImplementation((command: any, options?: any) => {
+    commands.push(command);
+
+    return originalSpawn(command, options);
+  });
+
+  cleanups.push(async () => spy.mockRestore());
+
+  return commands;
 }
 
 function exitKind<A>(exit: Exit.Exit<A>): "interrupted" | "completed" {
@@ -195,6 +214,19 @@ describe("readArchiveEntry", () => {
     const data = await run(readArchiveEntry(path, "missing.jpg"));
     // #then
     expect(data).toBeNull();
+  });
+
+  test.each([
+    { type: "7z", path: CB7 },
+    { type: "TAR", path: CBT },
+    { type: "ZIP", path: CBZ },
+  ])("an option-like $type entry path reads as missing and never reaches a command", async ({ path }) => {
+    // #given
+    const commands = recordSpawns();
+    // #when
+    const data = await run(readArchiveEntry(path, OPTION_LIKE_ENTRY));
+    // #then
+    expect({ data, injected: commands.flat().filter((arg) => arg === OPTION_LIKE_ENTRY) }).toEqual({ data: null, injected: [] });
   });
 
   test.each(["cb7", "cbt"] as const)("returns null for a %s directory entry and for an empty file", async (type) => {

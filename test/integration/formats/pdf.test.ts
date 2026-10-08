@@ -10,6 +10,11 @@ const extract = (path: string) => Effect.runPromise(pdfExtractorRegistration.ext
 
 const failureTag = (path: string) => Effect.runPromise(Effect.flip(pdfExtractorRegistration.extract(path))).then((error) => error._tag);
 
+// Longer than Linux PATH_MAX (4096), so the existence check itself fails with ENAMETOOLONG.
+const PATH_TOO_LONG = `/books/${"a/".repeat(3000)}book.pdf`;
+
+const errnoCode = (cause: unknown) => (cause instanceof Error && "code" in cause ? cause.code : undefined);
+
 describe("PDF extractor integration", () => {
   describe("with Test Book - Test Author.pdf", () => {
     const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
@@ -51,6 +56,17 @@ describe("PDF extractor integration", () => {
       const tag = await failureTag(join(FIXTURES_DIR, "Test Book - Test Author.epub"));
       // #then
       expect(tag).toBe("ExtractionFailed");
+    });
+
+    test("fails extraction with the path and cause when the existence check fails", async () => {
+      // #given / #when
+      const error = await Effect.runPromise(Effect.flip(pdfExtractorRegistration.extract(PATH_TOO_LONG)));
+      // #then
+      expect({ tag: error._tag, path: error.path, code: errnoCode(error.cause) }).toEqual({
+        tag: "ExtractionFailed",
+        path: PATH_TOO_LONG,
+        code: "ENAMETOOLONG",
+      });
     });
   });
 });

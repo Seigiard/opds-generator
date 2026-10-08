@@ -10,6 +10,11 @@ const extract = (path: string) => Effect.runPromise(djvuExtractorRegistration.ex
 
 const failureTag = (path: string) => Effect.runPromise(Effect.flip(djvuExtractorRegistration.extract(path))).then((error) => error._tag);
 
+// Longer than Linux PATH_MAX (4096), so the existence check itself fails with ENAMETOOLONG.
+const PATH_TOO_LONG = `/books/${"a/".repeat(3000)}book.djvu`;
+
+const errnoCode = (cause: unknown) => (cause instanceof Error && "code" in cause ? cause.code : undefined);
+
 describe("DJVU extractor integration", () => {
   describe("with Test Book - Test Author.djvu", () => {
     const djvuPath = join(FIXTURES_DIR, "Test Book - Test Author.djvu");
@@ -50,6 +55,17 @@ describe("DJVU extractor integration", () => {
       const tag = await failureTag(join(FIXTURES_DIR, "Test Book - Test Author.epub"));
       // #then
       expect(tag).toBe("ExtractionFailed");
+    });
+
+    test("fails extraction with the path and cause when the existence check fails", async () => {
+      // #given / #when
+      const error = await Effect.runPromise(Effect.flip(djvuExtractorRegistration.extract(PATH_TOO_LONG)));
+      // #then
+      expect({ tag: error._tag, path: error.path, code: errnoCode(error.cause) }).toEqual({
+        tag: "ExtractionFailed",
+        path: PATH_TOO_LONG,
+        code: "ENAMETOOLONG",
+      });
     });
   });
 });
