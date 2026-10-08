@@ -12,11 +12,10 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
-      - SYNC_ENGINE=${SYNC_ENGINE:-legacy}
       - ADMIN_USER=admin
       - ADMIN_TOKEN=secret
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
+      test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
       interval: 10s
       timeout: 5s
       retries: 3

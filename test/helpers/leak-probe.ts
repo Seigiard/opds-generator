@@ -15,18 +15,15 @@
 import { runCommandText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
 import { listArchiveEntries, readArchiveEntry } from "../../src/utils/archive.ts";
-import { Effect } from "effect";
-import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
-import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
+import { Effect, Scope } from "effect";
+import { createWorkScheduler } from "@seigiard/sync-engine";
 import { runAsPromiseHandler } from "./effect-test-handlers.ts";
 import { bookSyncEffect } from "../../src/processing/handlers/book-sync-effect.ts";
 import { folderSyncEffect } from "../../src/processing/handlers/folder-sync-effect.ts";
 import { folderMetaSyncEffect } from "../../src/processing/handlers/folder-meta-sync-effect.ts";
-import { createLifecycle, type CatalogueScanner } from "../../src/lifecycle/lifecycle.ts";
-import type { AppContext, HandlerDeps } from "../../src/context.ts";
+import { createLiveEngineLifecycle } from "../../src/lifecycle/live-engine-lifecycle.ts";
+import type { HandlerDeps } from "../../src/context.ts";
 import type { EventType } from "../../src/processing/types.ts";
-import { ok } from "neverthrow";
-import { testEffectHandler } from "./effect-test-handlers.ts";
 import { LIFECYCLE_CYCLES_PER_OP, QUEUE_EVENTS_PER_OP } from "./run-leak-probe.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -173,9 +170,9 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     case "consumer-enqueue-effect":
       return buildConsumerCycle();
     case "lifecycle-scan-effect":
-      return buildLifecycleScans();
+      return buildLifecycleScans(tmpDir);
     case "lifecycle-restart":
-      return buildLifecycleRestarts();
+      return buildLifecycleRestarts(tmpDir);
 
     default:
       throw new Error(`Unknown scenario: ${name}`);
@@ -199,8 +196,8 @@ function buildArchiveReads(archive: string): Op {
   };
 }
 
-// One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).
-async function buildHandlerChain(tmpDir: string): Promise<Op> {
+// Real filesystem services over a temporary source/output pair; logging off so a probe run stays quiet.
+async function realDeps(tmpDir: string): Promise<{ filesDir: string; dataDir: string; deps: HandlerDeps }> {
   const filesDir = join(tmpDir, "files");
   const dataDir = join(tmpDir, "data");
   await mkdir(filesDir, { recursive: true });
@@ -246,6 +243,13 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
     },
   };
 
+  return { filesDir, dataDir, deps };
+}
+
+// One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).
+async function buildHandlerChain(tmpDir: string): Promise<Op> {
+  const { filesDir, dataDir, deps } = await realDeps(tmpDir);
+
   return async (i) => {
     const folderName = `book-${i}`;
     const folderPath = join(filesDir, folderName);
@@ -270,109 +274,73 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
   };
 }
 
-// QUEUE_EVENTS_PER_OP events per operation through the running consumer loop; the operation
-// completes when the registered handler has processed the last one. With one event per
+// QUEUE_EVENTS_PER_OP events per operation through the engine's work scheduler, the consumer of production work; the
+// operation completes when the registered handler has processed the last one. With one event per
 // operation the gate could not resolve 1 KB per event: clean runs read up to 1.1 and 1 KiB
-// retained per event as low as 0.3. Batching also runs the Effect consumer past its JIT
+// retained per event as low as 0.3. Batching also runs the consumer past its JIT
 // warmup, which read 1.6 to 2.7 KB per event in the first 600 single events (issue #25).
-// Distinct paths, so the processor does not coalesce the batch into one refresh.
+// Distinct paths, so the scheduler does not coalesce the batch into one refresh.
 function buildConsumerCycle(): Op {
   let remaining = 0;
   let markProcessed = () => {};
 
-  const { config, logger, fs } = buildContext();
+  const scope = Effect.runSync(Scope.make());
 
-  const handler = testEffectHandler(async () => {
-    if (--remaining === 0) markProcessed();
+  const scheduler = Effect.runSync(
+    createWorkScheduler<EventType, never, never>({
+      handle: () =>
+        Effect.sync(() => {
+          if (--remaining === 0) markProcessed();
 
-    return ok<readonly EventType[]>([]);
-  });
-
-  const processor: CatalogueProcessor = createEffectCatalogueProcessor({
-    deps: { config, logger, fs },
-    handlers: { FolderMetaSyncRequested: handler },
-  });
-
-  processor.start(new AbortController().signal).catch(() => {
-    console.error("leak-probe: consumer loop failed");
-    process.exit(1);
-  });
+          return [];
+        }),
+    }).pipe(Scope.provide(scope)),
+  );
 
   return () =>
     new Promise<void>((resolve) => {
       markProcessed = resolve;
       remaining = QUEUE_EVENTS_PER_OP;
 
-      for (let e = 0; e < QUEUE_EVENTS_PER_OP; e++) processor.submit({ _tag: "FolderMetaSyncRequested", path: `/test/${e}` });
+      Effect.runSync(
+        scheduler.submit(
+          Array.from({ length: QUEUE_EVENTS_PER_OP }, (_, e): EventType => ({ _tag: "FolderMetaSyncRequested", path: `/test/${e}` })),
+        ),
+      );
     });
 }
 
-function buildLifecycle() {
-  const { config, logger, fs } = buildContext();
-
-  const handler = testEffectHandler(async () => ok<readonly EventType[]>([]));
-
-  const processor = createEffectCatalogueProcessor({
-    deps: { config, logger, fs },
-    handlers: { FolderMetaSyncRequested: handler },
-  });
-
-  const scanner: CatalogueScanner = { scan: async () => [{ _tag: "FolderMetaSyncRequested", path: "/test" }] };
-
-  return createLifecycle({
-    scanner,
-    processor,
-    clock: { sleep: () => new Promise<void>(() => {}) },
-    reconcileIntervalSeconds: 0,
-  });
+async function untilCompleted(lifecycle: ReturnType<typeof createLiveEngineLifecycle>): Promise<void> {
+  while (!(await lifecycle.status()).completed) await new Promise((resolve) => setImmediate(resolve));
 }
 
-async function untilSettled(lifecycle: ReturnType<typeof buildLifecycle>): Promise<void> {
-  while (lifecycle.status().state !== "settled") await new Promise((resolve) => setImmediate(resolve));
-}
-
-// One lifecycle for the whole run; each cycle is a resync scan whose one folder refresh runs through the consumer.
-function buildLifecycleScans(): Op {
-  const lifecycle = buildLifecycle();
-  lifecycle.start();
+// One production lifecycle for the whole run; each cycle is a resync pass over an empty source, which declares the
+// root catalogue and finds it fresh. A resync request admitted while idle starts exactly one pass.
+async function buildLifecycleScans(tmpDir: string): Promise<Op> {
+  const { deps } = await realDeps(tmpDir);
+  const lifecycle = createLiveEngineLifecycle(deps, { reconcileIntervalMs: 0 });
+  await lifecycle.start();
+  await untilCompleted(lifecycle);
 
   return async () => {
     for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
-      await untilSettled(lifecycle);
-      lifecycle.requestScan({ kind: "resync", force: false });
-      await untilSettled(lifecycle);
+      await lifecycle.requestScan({ kind: "resync", force: false });
+      await untilCompleted(lifecycle);
     }
   };
 }
 
-// A fresh lifecycle per cycle: start, one scan, stop. Catches anything that survives its owner.
-function buildLifecycleRestarts(): Op {
+// A fresh production lifecycle per cycle: start, first pass, stop. Catches anything that survives its owner.
+async function buildLifecycleRestarts(tmpDir: string): Promise<Op> {
+  const { deps } = await realDeps(tmpDir);
+
   return async () => {
     for (let cycle = 0; cycle < LIFECYCLE_CYCLES_PER_OP; cycle++) {
-      const lifecycle = buildLifecycle();
-      lifecycle.start();
-      await untilSettled(lifecycle);
+      const lifecycle = createLiveEngineLifecycle(deps, { reconcileIntervalMs: 0 });
+      await lifecycle.start();
+      await untilCompleted(lifecycle);
       await lifecycle.stop();
     }
-  };
-}
-
-function buildContext(): AppContext {
-  return {
-    config: { filesPath: "/test/files", dataPath: "/test/data", port: 3000, reconcileInterval: 1800 },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-    fs: {
-      mkdir: async () => {},
-      rm: async () => {},
-      readdir: async () => [],
-      stat: async () => ({ isDirectory: () => false, size: 0 }),
-      exists: async () => false,
-      writeFile: async () => {},
-      atomicWrite: async () => {},
-      symlink: async () => {},
-      unlink: async () => {},
-    },
-    dedup: { shouldProcess: () => true },
   };
 }
 
@@ -449,3 +417,6 @@ const result = {
 await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 
 console.log(JSON.stringify(result));
+
+// A scenario may keep a long-lived session open (the production lifecycle holds a lease child); the result is out.
+process.exit(0);

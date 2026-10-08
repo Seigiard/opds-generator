@@ -5,14 +5,9 @@ import { join } from "node:path";
 import { Effect } from "effect";
 import { acquireOutputTree, OutputOwnershipFailed } from "@seigiard/sync-engine";
 import { buildContext } from "../../../src/context.ts";
-import { createInitialEngineScanner, initialEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { initialEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
-import { createLifecycle, systemClock } from "../../../src/lifecycle/lifecycle.ts";
-import { createDiskScanner } from "../../../src/lifecycle/disk-scanner.ts";
-import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
-import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
-import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";
 
 function gate() {
   let open = () => {};
@@ -88,21 +83,9 @@ test("packaged engine publishes a TXT book, its root catalogue and a working dow
   const ctx = await buildContext();
   const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
 
-  const processor = createEffectCatalogueProcessor({
-    deps,
-    handlers: { BookCreated: bookSyncEffect, FolderCreated: folderSyncEffect, FolderMetaSyncRequested: folderMetaSyncEffect },
-  });
-
-  const lifecycle = createLifecycle({
-    scanner: createInitialEngineScanner(deps),
-    processor,
-    clock: systemClock,
-    reconcileIntervalSeconds: 0,
-  });
-
   try {
     // #when the initial pass runs through the packaged public interface
-    await lifecycle.start();
+    await Effect.runPromise(initialEngineCatalogue(deps));
     // #then public artifacts and the download resolve to the independent example
     const feedFile = Bun.file(join(outputPath, "feed.xml"));
     const htmlFile = Bun.file(join(outputPath, "index.html"));
@@ -129,13 +112,12 @@ test("packaged engine publishes a TXT book, its root catalogue and a working dow
       sourceBytes: "Independent source bytes.\n",
     });
   } finally {
-    await lifecycle.stop();
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("a resync during legacy lease acquisition cannot publish into another owner's output", async () => {
-  // #given another composition owns the output before the legacy lifecycle starts
+test("a resync during startup against another owner's output queues and publishes nothing", async () => {
+  // #given another composition owns the output before the production lifecycle starts
   const root = await mkdtemp(join(tmpdir(), "opds-engine-admission-"));
   const sourcePath = join(root, "source");
   const outputPath = join(root, "output");
@@ -144,18 +126,7 @@ test("a resync during legacy lease acquisition cannot publish into another owner
   const release = await Effect.runPromise(acquireOutputTree(outputPath, join(outputPath, ".sync-engine")));
   const ctx = await buildContext();
   const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
-
-  const processor = createEffectCatalogueProcessor({
-    deps,
-    handlers: { BookCreated: bookSyncEffect, FolderCreated: folderSyncEffect, FolderMetaSyncRequested: folderMetaSyncEffect },
-  });
-
-  const lifecycle = createLifecycle({
-    scanner: createDiskScanner(deps.config),
-    processor,
-    clock: systemClock,
-    reconcileIntervalSeconds: 0,
-  });
+  const lifecycle = createLiveEngineLifecycle(deps);
 
   try {
     // #when startup is pending and a forced resync arrives before it owns output
@@ -164,15 +135,13 @@ test("a resync during legacy lease acquisition cannot publish into another owner
       (error) => (error instanceof OutputOwnershipFailed ? "owned" : "other failure"),
     );
 
-    const admission = lifecycle.requestScan({ kind: "resync", force: true });
-    const acceptingWatcher = lifecycle.accepting();
+    const admission = await lifecycle.requestScan({ kind: "resync", force: true });
     const outcome = await start;
     await lifecycle.stop();
-    // #then the request stays queued and no competing publication starts
-    expect({ outcome, admission, acceptingWatcher, feed: await Bun.file(join(outputPath, "feed.xml")).exists() }).toEqual({
+    // #then the request was queued behind the open and no competing publication started
+    expect({ outcome, admission, feed: await Bun.file(join(outputPath, "feed.xml")).exists() }).toEqual({
       outcome: "owned",
       admission: "queued",
-      acceptingWatcher: false,
       feed: false,
     });
   } finally {
@@ -182,8 +151,8 @@ test("a resync during legacy lease acquisition cannot publish into another owner
   }
 });
 
-test("legacy ownership refuses a second composition until legacy stops", async () => {
-  // #given the real legacy lifecycle has exclusive ownership of an output tree
+test("the production lifecycle refuses a second composition until it stops", async () => {
+  // #given the production lifecycle has exclusive ownership of an output tree
   const root = await mkdtemp(join(tmpdir(), "opds-engine-owner-"));
   const sourcePath = join(root, "source");
   const outputPath = join(root, "output");
@@ -191,18 +160,7 @@ test("legacy ownership refuses a second composition until legacy stops", async (
   await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
   const ctx = await buildContext();
   const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
-
-  const processor = createEffectCatalogueProcessor({
-    deps,
-    handlers: { BookCreated: bookSyncEffect, FolderCreated: folderSyncEffect, FolderMetaSyncRequested: folderMetaSyncEffect },
-  });
-
-  const lifecycle = createLifecycle({
-    scanner: createDiskScanner(deps.config),
-    processor,
-    clock: systemClock,
-    reconcileIntervalSeconds: 0,
-  });
+  const lifecycle = createLiveEngineLifecycle(deps);
 
   try {
     await lifecycle.start();

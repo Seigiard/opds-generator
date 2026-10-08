@@ -16,7 +16,8 @@ COPY src ./src
 COPY static ./static
 COPY nginx.conf.template /app/nginx.conf.template
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY healthcheck.sh /app/healthcheck.sh
+RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh
 
 ENV FILES=/books
 ENV DATA=/data
@@ -27,8 +28,9 @@ EXPOSE 80
 
 VOLUME ["/books", "/data"]
 
+# Healthy means the root feed and root page are available (see healthcheck.sh), not that verification finished.
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
-  CMD wget -q --spider http://127.0.0.1/feed.xml || exit 1
+  CMD ["/bin/sh", "/app/healthcheck.sh"]
 
 ENTRYPOINT []
 CMD ["/bin/sh", "/app/entrypoint.sh"]

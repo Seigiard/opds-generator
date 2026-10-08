@@ -1,13 +1,6 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
-type EventType =
-  | "event_received"
-  | "event_ignored"
-  | "event_deduplicated"
-  | "handler_start"
-  | "handler_complete"
-  | "handler_error"
-  | "cascades_generated";
+type EventType = "event_received" | "event_ignored" | "handler_start" | "handler_complete" | "handler_error" | "cascades_generated";
 
 export interface LogContext {
   // Event context

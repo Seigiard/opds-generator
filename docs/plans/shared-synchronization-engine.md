@@ -69,7 +69,7 @@ The engine owns a dedicated area of derived data. Applications associate outputs
 
 A pass completed with errors is distinct from a confirmed up-to-date representation. An empty queue proves neither successful processing nor freshness by itself.
 
-OPDS currently uses `Settled` for the absence of scans and pending or active catalogue work. The shared engine must expose failures separately from work completion. Its public state names and the mapping from the existing OPDS states are not yet specified.
+OPDS reports four independent facts: available, verifying, completed and retained errors (glossary: **Available**, **Verifying**, **Completed**, **Retained error**). They replace the former single `Settled` state. A pass that failed with usable output stays `failed` in the engine and `available` for readers until a retry succeeds.
 
 ## Shutdown and restart
 
@@ -95,7 +95,7 @@ Publish a versioned npm package. Each application records its resolved dependenc
 
 Verify the engine before a release. Verify the consuming application's integration before adopting the release. One shared fix reaches all three applications through those explicit updates.
 
-The repository name, npm package name and release automation are not selected by this contract.
+The repository is `Seigiard/sync-engine` and the package is `@seigiard/sync-engine`. A release is a maintainer-run `npm publish` of a verified archive (`scripts/verify-pack.ts` in the engine repository); no automation is selected.
 
 ## Migration and completion
 
@@ -106,6 +106,12 @@ Consider scenarios from all three applications when designing the interface. Mig
 3. **OPML:** adopt the validated engine and move handlers to Effect 4. Change resync from cache clearing to repair in place.
 
 Extraction is complete only when all three applications use the engine for the agreed shared responsibilities. Moving utility functions alone does not meet the goal.
+
+### Status
+
+- **OPDS: adopted (#57).** The released package is the only synchronization path in the standard Docker startup. The legacy lifecycle, scanner, consumer and temporary selection are removed. The engine owns first-pass retry and reconciliation. Evidence and reproduction: `docs/agents/shared-sync-engine.md`.
+- **TTRPG Map Viewer: pending.**
+- **OPML Generator: pending.**
 
 ### Behavioral evidence for migration
 

@@ -10,24 +10,12 @@ import { folderMetaSyncEffect } from "../processing/handlers/folder-meta-sync-ef
 import { folderSyncEffect } from "../processing/handlers/folder-sync-effect.ts";
 import { ownedPromise } from "../utils/owned-promise.ts";
 import type { EventType } from "../processing/types.ts";
-import type { CatalogueScanner } from "./lifecycle.ts";
+import { orphanedOutputs } from "./orphans.ts";
 import { engineSourceWork } from "./engine-source-work.ts";
+import { withHandlerLogs } from "./handler-logging.ts";
 import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
 
-/** Temporary selection at createLifecycle's scanner seam; only an initial pass is supported. */
-export function createInitialEngineScanner(deps: HandlerDeps): CatalogueScanner {
-  return {
-    async scan(request, signal) {
-      if (request.kind !== "initial") throw new Error("The engine slice supports only the initial pass");
-      // The engine takes the output lease itself and finishes its declared work before this scan returns.
-      await Effect.runPromise(initialEngineCatalogue(deps), { signal });
-
-      return [];
-    },
-  };
-}
-
-/** Explicit initial-pass selection seam. Production keeps its legacy lifecycle. */
+/** Initial-pass composition for contract tests; production runs the live composition. */
 export function initialEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueOptions = {}) {
   return runInitialPass(engineOptions(deps, options)).pipe(
     Effect.provideService(CatalogueDeps, deps),
@@ -81,11 +69,13 @@ export function engineOptions(
       });
 
       const root = CatalogueEvent.FolderMetaSyncRequested({ path: deps.config.dataPath });
+      const removed = yield* orphanedOutputs(deps, entries);
 
       return {
         // The root feed and page are the minimum a deployment is usable with. Book entries join it as work completes.
         minimum: [root],
         work: [
+          ...removed,
           ...books,
           ...folders.map((folder) => CatalogueEvent.FolderMetaSyncRequested({ path: join(deps.config.dataPath, folder.path) })),
           root,
@@ -143,7 +133,7 @@ export function engineOptions(
     handle: (event) => {
       const handler = handlers[event._tag];
 
-      return engineSourceWork(deps, event, handler);
+      return withHandlerLogs(deps, event, engineSourceWork(deps, event, handler));
     },
   };
 }

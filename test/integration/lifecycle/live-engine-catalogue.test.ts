@@ -57,7 +57,7 @@ test("HTTP watcher input publishes a real book without a manual resync", async (
   // #given an empty published catalogue and a real local control server
   const { root, sourcePath, outputPath, deps } = await tree();
   const runtime = createLiveEngineLifecycle(deps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
 
   try {
     await runtime.start();
@@ -113,7 +113,7 @@ test("HTTP resync while busy retains results and preserves forced follow-up afte
   };
 
   const runtime = createLiveEngineLifecycle(heldDeps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   const url = server.url.href.slice(0, -1);
   const ancient = new Date("2020-01-01T00:00:00Z");
 
@@ -245,7 +245,7 @@ test("a watcher-triggered update repairs a later source replacement without anot
   };
 
   const runtime = createLiveEngineLifecycle(heldDeps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
 
   try {
     await runtime.start();

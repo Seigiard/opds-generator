@@ -12,14 +12,13 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
-      - SYNC_ENGINE=${SYNC_ENGINE:-legacy}
       # Uncomment to enable /resync endpoint with Basic Auth:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret
       # - RATE_LIMIT_MB=5
       # - RECONCILE_INTERVAL=1800
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/feed.xml"]
+      test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 3

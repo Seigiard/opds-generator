@@ -58,7 +58,6 @@ for (const phase of ["initial", "resync"] as const) {
       PORT: String(port),
       LOG_LEVEL: "info",
       RECONCILE_INTERVAL: "0",
-      SYNC_ENGINE: "shared",
     };
 
     const child = Bun.spawn(["bun", serverPath], { env: { ...env, PATH: `${bin}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe" });

@@ -1,18 +1,3 @@
-export interface FileInfo {
-  path: string;
-  relativePath: string;
-  size: number;
-  mtime: number;
-  extension: string;
-}
-
-export interface FolderInfo {
-  path: string;
-  name: string;
-  subfolders: string[];
-  bookCount: number;
-}
-
 export const MIME_TYPES = new Map(
   Object.entries({
     epub: "application/epub+zip",

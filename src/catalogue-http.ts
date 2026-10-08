@@ -1,27 +1,16 @@
-import type { DeduplicationService } from "./context.ts";
 import { log } from "./logging/index.ts";
 import { adaptBooksEvent } from "./processing/adapters/books-adapter.ts";
 import { isRawBooksEvent, type EventType } from "./processing/types.ts";
-import type { LiveStatus } from "@seigiard/sync-engine";
-import type { createLifecycle } from "./lifecycle/lifecycle.ts";
-
-type CatalogueHttpStatus =
-  | ReturnType<ReturnType<typeof createLifecycle>["status"]>
-  | LiveStatus<EventType>
-  | { readonly state: string; readonly pass: string | null };
 
 export interface CatalogueHttpRuntime {
   accepting(): boolean;
-  submit(event: EventType): void | Promise<void>;
-  requestScan(request: {
-    readonly kind: "resync";
-    readonly force: boolean;
-  }): "started" | "queued" | "rejected" | Promise<"started" | "queued" | "rejected">;
-  status(): CatalogueHttpStatus | Promise<CatalogueHttpStatus>;
+  submit(event: EventType): Promise<void>;
+  requestScan(request: { readonly kind: "resync"; readonly force: boolean }): Promise<"started" | "queued" | "rejected">;
+  status(): Promise<object>;
 }
 
 /** The Bun-local routes. nginx retains authentication and external routing. */
-export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime, dedup: DeduplicationService) {
+export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
 
@@ -37,7 +26,7 @@ export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime, dedup:
           return new Response("Invalid event", { status: 400 });
         }
 
-        const event = adaptBooksEvent(body, dedup);
+        const event = adaptBooksEvent(body);
 
         if (event === null) return new Response("Deduplicated", { status: 202 });
         await runtime.submit(event);

@@ -19,7 +19,6 @@ services:
       - FILES=${STARTUP_FILES:-/books/src}
       - DATA=/data
       - PORT=3000
-      - SYNC_ENGINE=shared
       - RECONCILE_INTERVAL=0
       - ADMIN_USER=admin
       - ADMIN_TOKEN=secret

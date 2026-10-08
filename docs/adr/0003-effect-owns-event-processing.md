@@ -2,6 +2,8 @@
 status: accepted
 ---
 
+> Update (#57): the shared engine (ADR 0004) replaced the catalogue processor's consumer fiber and the plain-async lifecycle. The handler contract, cancellation convention and resource-ownership decisions below still hold; references to the consumer describe the former implementation.
+
 # Effect owns event processing
 
 Effect 4 was limited to command and resource ownership in `src/utils/process.ts`. Event processing stayed neverthrow + async/await after the Effect 3 runtime retained about 2.4 JS objects per event (`docs/memory-leak-investigation.md`). Handlers return `Result<readonly EventType[], Error>`, so failure classes are lost, and cancellation travels as an abort reason that every fallback `catch` must rethrow by convention.

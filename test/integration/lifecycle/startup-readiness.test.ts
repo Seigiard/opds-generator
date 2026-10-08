@@ -76,7 +76,7 @@ test("a cold start reports availability at the root minimum while held book work
   };
 
   const runtime = createLiveEngineLifecycle(heldDeps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   const url = server.url.href.slice(0, -1);
 
   try {
@@ -158,7 +158,7 @@ test("a warm start reports prior output while a held verification is active, the
   };
 
   const runtime = createLiveEngineLifecycle(heldDeps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   const url = server.url.href.slice(0, -1);
 
   try {
@@ -211,7 +211,7 @@ test("a cold start whose root page cannot be published never becomes available a
   };
 
   const runtime = createLiveEngineLifecycle(failingDeps, { onFatal: (cause) => fatal.push(cause) });
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
 
   try {
     // #when the first pass runs
@@ -253,7 +253,7 @@ test("a damaged replacement is a retained error after completion while the indep
   await copyFile(fixture, join(sourcePath, "Damaged.fb2"));
   await copyFile(fixture, join(sourcePath, "Independent.fb2"));
   const runtime = createLiveEngineLifecycle(deps);
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   const url = server.url.href.slice(0, -1);
 
   try {
@@ -312,7 +312,7 @@ test("a warm start whose source cannot be read keeps the prior catalogue availab
   await rename(sourcePath, moved);
   const fatal: unknown[] = [];
   const runtime = createLiveEngineLifecycle(deps, { onFatal: (cause) => fatal.push(cause) });
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   const url = server.url.href.slice(0, -1);
 
   try {

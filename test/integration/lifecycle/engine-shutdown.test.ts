@@ -51,7 +51,7 @@ test("stop awaits started book publication, closes HTTP admission and startup re
     },
   });
 
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime, { shouldProcess: () => true }) });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
   let stopped = false;
 
   try {
@@ -204,7 +204,18 @@ test("stop during initial preparation settles startup without a fatal failure an
         final: parseFeed(await readFile(join(dataPath, "feed.xml"), "utf8")).entries.map((book) => book.title),
       }).toEqual({
         startup: "cancelled",
-        stopped: { state: "stopped", pass: null, available: false, availableFrom: null, verifying: false, completed: false, errors: [] },
+        stopped: {
+          state: "stopped",
+          pass: null,
+          followUp: null,
+          failure: null,
+          work: { state: "stopped", pending: 0, active: null, errors: [] },
+          available: false,
+          availableFrom: null,
+          verifying: false,
+          completed: false,
+          errors: [],
+        },
         fatal: [],
         entryExisted: false,
         final: ["Test Book"],

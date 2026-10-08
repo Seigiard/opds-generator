@@ -1,18 +1,20 @@
-# Shared synchronization engine: live catalogue, freshness, recovery, shutdown and readiness (#50–#56)
+# Shared synchronization engine: production adoption, live catalogue, freshness, recovery, shutdown and readiness (#50–#57)
 
-The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
-`@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
-Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
+The separate repository is `Seigiard/sync-engine`. OPDS depends on the released npm package
+`@seigiard/sync-engine` (exact version in `package.json`; the lock records the registry tarball and its integrity).
+Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled. The engine is the only synchronization
+path in production: `server.ts` starts `createLiveEngineLifecycle` and nothing else. TTRPG Map Viewer and
+OPML Generator still use their own synchronization (later tickets of the shared-engine plan).
 
 ## Reproduce
 
 ```sh
 bun install --frozen-lockfile
 git submodule update --init
-COMPOSE_PROJECT_NAME=opds49-52 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle
-COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml run --rm --user 65534 test bun test test/integration/lifecycle/engine-recovery.test.ts --test-name-pattern 'OPDS ignores'
-COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml down
+COMPOSE_PROJECT_NAME=opds49-57 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle
+COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.test.yml run --rm --user 65534 test bun test test/integration/lifecycle/engine-recovery.test.ts --test-name-pattern 'OPDS ignores'
+COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.test.yml down
 ```
 
 The tests use temporary trees, production filesystem services and all existing
@@ -23,59 +25,45 @@ independent work, source-read errors, confirmed removal, stale hints, moves,
 state-safe cleanup and the existing non-dot source contract. The non-root command
 confirms that excluded unreadable subtrees are skipped before traversal.
 
-## Temporary selection seam
+## Test compositions (#51–#53)
 
-`createLifecycle` selects its scanner through dependency injection.
-`createDiskScanner` remains the production choice. For the engine slice, select
-`createInitialEngineScanner(deps)` from `src/lifecycle/initial-engine-catalogue.ts`.
-Disable reconciliation for this selection. Non-initial requests fail; server
-adoption is #57. This scanner runs `initialEngineCatalogue`, an Effect composed
-with the public `runInitialPass`. The engine owns traversal and required work
-execution. OPDS declares book events and root publication, provides handler
-services, and retains extraction and rendering. The scan returns no legacy
-work because the engine finished the work before returning.
+`initialEngineCatalogue(deps)` (`src/lifecycle/initial-engine-catalogue.ts`) runs one initial pass with the public
+`runInitialPass`, and `openEngineCatalogue(deps)` opens the scoped session for submitted catalogue work. Production
+does not call them. Contract tests use them to drive handlers, freshness, recovery and shutdown at the engine boundary
+without a watcher or an HTTP server. `engineOptions` is shared with production, so these tests exercise the real
+declaration.
 
-For incremental catalogue work, select `openEngineCatalogue(deps)` inside
-`Effect.scoped`. It composes the public `openSynchronization` package API and
-completes the same initial publication before returning a `WorkScheduler`.
-Keep the scope open while calling `submit([CatalogueEvent...])`,
-`awaitCompletion`, and `status`. Closing the scope joins the owned consumer
-before releasing its output lease. Book and new-folder events use existing
-Effect handlers. BookDeleted and FolderDeleted use engine-owned associated-output
-cleanup and explicit parent refreshes. `engine-source-work.ts` supplies source
-authority; `engine-policy.ts` declares source selection and state placement.
+Inside `Effect.scoped`, keep the scope open while calling `submit([CatalogueEvent...])`, `awaitCompletion`, and
+`status`. Closing the scope joins the owned consumer before releasing its output lease. Book and new-folder events use
+the existing Effect handlers. BookDeleted and FolderDeleted use engine-owned associated-output cleanup and explicit
+parent refreshes. `engine-source-work.ts` supplies source authority; `engine-policy.ts` declares source selection and
+state placement.
 
-The engine combines pending work only for OPDS-declared folder-refresh keys.
-A repeated pending refresh moves behind intervening work. A refresh requested
-while equivalent work is active schedules one pending follow-up. Handler-returned
-cascades enter pending work before active clears. `status.state` stays `working`
-until required cascades publish; `complete` means work completion, not freshness.
-Typed failures retain their previous results while independent work continues.
-`awaitCompletion` resolves after required work drains. `complete-with-errors`
-retains public `{ work, cause }` records after that drain. A successful retry
-clears the matching OPDS source/folder identity. Defects and interruption still
-stop the consumer. Initial failures prevent the final minimum publication.
+The engine combines pending work only for OPDS-declared folder-refresh keys. A repeated pending refresh moves behind
+intervening work. A refresh requested while equivalent work is active schedules one pending follow-up.
+Handler-returned cascades enter pending work before active clears. `status.state` stays `working` until required
+cascades publish; `complete` means work completion, not freshness. Typed failures retain their previous results while
+independent work continues. `awaitCompletion` resolves after required work drains. `complete-with-errors` retains
+public `{ work, cause }` records after that drain. A successful retry clears the matching OPDS source/folder identity.
+Defects and interruption still stop the consumer. Initial failures prevent the final minimum publication.
 
-OPDS owns the propagation rule: a book refreshes its folder, and folder summaries
-propagate to the parent only when `_entry.xml` changes without its timestamp.
-Each folder still writes its own feed. A book's symlink exists before its entry
-is published. A new folder publishes its child feed before `_entry.xml`, so a
-parent cannot publish a reference to a missing child feed. Publication is gradual.
+OPDS owns the propagation rule: a book refreshes its folder, and folder summaries propagate to the parent only when
+`_entry.xml` changes without its timestamp. Each folder still writes its own feed. A book's symlink exists before its
+entry is published. A new folder publishes its child feed before `_entry.xml`, so a parent cannot publish a reference
+to a missing child feed. Publication is gradual.
 
-## Live selection (#54)
+## Live composition (#54, production since #57)
 
-`SYNC_ENGINE=shared` selects `createLiveEngineLifecycle` in `server.ts`.
-Compose files forward this variable. The legacy composition remains the default.
-`src/catalogue-http.ts` owns the shared Bun-local watcher, resync and status routes.
-nginx continues to own external Basic Auth and audience routing.
+`startLiveEngineCatalogue(deps)` composes the public `startLiveSynchronization` inside the caller's Effect scope.
+`createLiveEngineLifecycle` (`src/lifecycle/live-engine-lifecycle.ts`) is the Promise-facing adapter that `server.ts`
+runs. `src/catalogue-http.ts` owns the Bun-local watcher, resync and status routes. nginx continues to own external
+Basic Auth and audience routing.
 
-`openLiveEngineCatalogue(deps)` composes the public `openLiveSynchronization`
-inside the caller's Effect scope. The engine owns traversal, each pass, pending
-pass coalescing, required processing/publication, and the periodic timer.
-`requestPass({force})` returns `started`, `queued` or `rejected`. A pending request
-combines with later requests and preserves any forced mode. Requests stay pending
-through processing and required publication, rather than only through traversal.
-`notify(relativePaths)` retains watcher hints and schedules prompt reconsideration.
+The engine owns traversal, each pass, pending pass coalescing, required processing/publication, the periodic timer,
+admission while the first pass runs, and the retry of a failed first pass. The adapter keeps no timer, queue or retained
+hints. `requestPass({force})` returns `started`, `queued` or `rejected`. A pending request combines with later
+requests and preserves any forced mode. Requests stay pending through processing and required publication, rather than
+only through traversal. `notify(relativePaths)` retains watcher hints and schedules prompt reconsideration.
 
 Each pass reads current source paths. A post-processing traversal detects size,
 mtime, kind, addition and removal changes during execution, and requests another
@@ -87,11 +75,16 @@ OPDS supplies domain work and final publication through the shared engine option
 Resync writes in place. Existing feeds, HTML and entries remain available while
 preparation runs. Every pass declares every applicable book to freshness, including
 ordinary resync and reconciliation. The engine receives `force` and `changedPaths`
-for each pass; freshness selects actual rebuilding. Watcher hints
-use engine coalescing instead of the legacy half-second dedup window, so a second
-replacement during active work remains actionable. While the initial scoped
-session opens, the HTTP adapter retains dirty hints and ORs resync force requests
-for admission immediately after initial publication.
+for each pass; freshness selects actual rebuilding. Watcher hints use engine
+coalescing, so a second replacement during active work remains actionable (the former
+half-second dedup window is gone). Hints and forced requests made while the first pass
+runs are retained by the engine and run as one follow-up after it.
+
+Every pass also declares orphan cleanup (`orphans.ts`). It walks DATA for book entries (`entry.xml`) and folder
+entries (`_entry.xml`) whose source is not in the scan, and emits `BookDeleted` / `FolderDeleted` candidates. This
+covers sources removed while the service was down, deletions the watcher missed, and the deletion hints the
+adapter forwards. The source work removes only on confirmed absence. A directory that cannot be read yields no
+candidates.
 
 `status` separates the active pass, pending follow-up and work status.
 `awaitCompletion` includes all admitted passes and required cascades.
@@ -99,17 +92,18 @@ for admission immediately after initial publication.
 `reconcileIntervalMs` at the composition seam to observe the actual owned timer.
 
 ```sh
-COMPOSE_PROJECT_NAME=opds49-54 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-54 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/live-engine-catalogue.test.ts
-COMPOSE_PROJECT_NAME=opds49-54 SYNC_ENGINE=shared TEST_PORT=18554 docker compose -f docker-compose.e2e.yml up -d --build --wait
-COMPOSE_PROJECT_NAME=opds49-54 TEST_BASE_URL=http://localhost:18554 bun test test/e2e/nginx.test.ts
-COMPOSE_PROJECT_NAME=opds49-54 docker compose -f docker-compose.e2e.yml down
+COMPOSE_PROJECT_NAME=opds49-57 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/live-engine-catalogue.test.ts
+COMPOSE_PROJECT_NAME=opds49-57 TEST_PORT=18558 docker compose -f docker-compose.e2e.yml up -d --build --wait
+COMPOSE_PROJECT_NAME=opds49-57 TEST_BASE_URL=http://localhost:18558 bun test test/e2e/nginx.test.ts
+COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.e2e.yml down
 ```
 
 ## Freshness
 
 `initialEngineCatalogue(deps, options)`, `openEngineCatalogue(deps, options)`,
-`openLiveEngineCatalogue(deps, options)` and `createLiveEngineLifecycle(deps, options)`
+`startLiveEngineCatalogue(deps, options)`, `openLiveEngineCatalogue(deps, options)` and
+`createLiveEngineLifecycle(deps, options)`
 accept `check: "metadata" | "content"` and
 `processingVersions: { book?: string, folder?: string }`. Each version defaults
 to `"1"`. Change `book` for extractor/book-entry changes; change `folder` for
@@ -138,8 +132,8 @@ Dirty freshness is invalidated before processing. New successful information
 is retained after required work completes. Failed or interrupted batches are
 replayed by a fresh instance. Book publication keeps its previous entry on a
 pre-publication failure. Engine metadata belongs outside projected source paths.
-The dev-only `sync-engine-previous` package alias tests a real packed 0.3.0 to
-0.3.1 upgrade against real handlers and dated publications.
+The dev-only `sync-engine-previous` package alias (a packed 0.3.0 archive, immutable) tests a real package upgrade
+against real handlers and dated publications. It is a devDependency and is not part of the production image's runtime.
 
 ### Persistent state composition (#52)
 
@@ -157,7 +151,7 @@ Keep the immutable packed 0.3.0 upgrade fixture and its shared configuration
 external-default upgrade independently of OPDS's configured state selection.
 Ordinary freshness tests use the configured OPDS state.
 
-## Startup readiness (#56)
+## Startup readiness (#56, health #57)
 
 Minimum = the root `feed.xml` and `index.html`. `initialEngineCatalogue` declares it as
 `minimum: [root]` in the engine plan; book and folder work follow as remaining required work.
@@ -174,11 +168,17 @@ end of `work` so the final feed lists every book.
 | `completed`                  | Required work drained and nothing is verifying.                                                                                           |
 | `errors`                     | `{ source: "work" \| "pass", message }` records. `work` entries are typed failures retained after completion; `pass` is a failed pass.    |
 
-Failure map for the first pass: without a usable minimum the start promise rejects and the server
-exits 1 (the entrypoint passes that status to the container). With a usable minimum the start
-promise resolves, nginx keeps serving the previous publication, `errors` holds the pass failure,
-and `POST /resync` (or the reconcile interval) opens the session again in the same process.
-Download links are symlinks to the source, so they cannot be served while the source itself is absent.
+Failure map for the first pass, owned by the engine's `recovery` option: without a usable minimum the start
+promise rejects and the server exits 1 (the entrypoint passes that status to the container). With a usable
+minimum the start promise resolves, nginx keeps serving the previous publication, `errors` holds the pass
+failure, and the engine reopens the session in the same scope on `POST /resync`, a watcher notice or a
+reconcile tick. Download links are symlinks to the source, so they cannot be served while the source itself is absent.
+
+Deployment health (#57): the image `HEALTHCHECK` and every Compose probe run `healthcheck.sh`. It needs
+`"available":true` from Bun's `/status` (read inside the container) and a 200 from nginx for `/feed.xml` and
+`/index.html`. A feed without its page is unhealthy. A running verification is healthy once the minimum is
+available. `test/e2e/startup-readiness.test.ts` pins the image's declared check and runs it in the cold
+(feed-only → unhealthy, minimum → healthy) and warm (prior output during held verification → healthy) scenarios.
 
 `test/e2e/startup-readiness.test.ts` runs the production image (server, nginx, entrypoint) per
 scenario. `test/e2e/startup/` holds its Compose overlay: a PATH `unzip` wrapper that holds real
@@ -186,16 +186,10 @@ extraction until `gate/hold-unzip` is removed, and a Bun preload that holds one 
 `Bun.write` listed in `gate/holds.json`. Both are test-only mounts; the image is unchanged.
 
 ```sh
-COMPOSE_PROJECT_NAME=opds49-56 STARTUP_PORT=18557 STARTUP_IMAGE=opds49-56-startup bun test test/e2e/startup-readiness.test.ts
+COMPOSE_PROJECT_NAME=opds49-57 STARTUP_PORT=18558 STARTUP_IMAGE=opds49-57-startup bun test test/e2e/startup-readiness.test.ts
 ```
 
 In-process counterpart: `test/integration/lifecycle/startup-readiness.test.ts`.
-
-**#57 adoption point.** Docker `HEALTHCHECK` and the Compose probes still test only that
-`/feed.xml` exists, which is the legacy seed. Real deployment health under the shared composition
-must adopt the minimum: the root feed and the root page, as reported by `available` in `/status`.
-#56 leaves the probes unchanged because the legacy composition, still the default, never publishes
-the root page early.
 
 Verification record (#56). The full Docker suite (`bun run test`, project `opds49-56`) passed with
 0 failures on the committed tree: 707 pass, 1075 assertions, 61 files, 338.79 s, exit 0. An earlier
@@ -243,23 +237,17 @@ COMPOSE_PROJECT_NAME=opds49-55 docker compose -f docker-compose.test.yml run --r
 
 ### Lease lifetime
 
-Both selections use the package's `acquireOutputTree` lease. The legacy disk
-scanner declares its output path. `createLifecycle.start()` acquires that lease
-before starting the consumer or scan, and keeps it until `stop()` joins owned
-work. The engine acquires and releases its lease in an Effect scope. An open catalogue
-session retains that lease even when its work is complete. Existing
-handlers keep interruptible preparation and uninterruptible publication.
-While legacy acquisition is pending, watcher admission stays closed and resync
-requests combine into a follow-up after initial scan admission. A failed
-acquisition starts no consumer, scan or publication.
+The engine session uses the package's `acquireOutputTree` lease, acquired and released in an Effect scope.
+An open session retains the lease even when its work is complete. A first pass that fails with usable output
+releases the lease while the session waits for its retry; the retry acquires it again. Existing handlers keep
+interruptible preparation and uninterruptible publication. A failed acquisition starts no scan or publication.
 
 Linux `flock` is supplied by `util-linux` in both Docker images. A child holds
 the lock while its stdin remains open. A handshake confirms acquisition before
 work starts. Release closes stdin and waits for exit. Bun's death closes the
 pipe and releases the lock. Contention waits at most one second, then fails
 with `OutputOwnershipFailed`. Canonical output paths share one persistent
-`DATA/.sync-engine/lock` inode. Both legacy lifecycle acquisition and scoped
-engine compositions explicitly use this state area. The existing DATA Docker
+`DATA/.sync-engine/lock` inode. Every engine composition explicitly uses this state area. The existing DATA Docker
 mount therefore shares the lease and persistent engine state across containers.
 Keep the inode stable while owners may acquire it. All compositions sharing DATA
 must select this same canonical state area, including aliases of DATA.
@@ -291,10 +279,34 @@ release ownership.
 - OPML can declare final OPML after required RSS work and cascades. Cache
   projection, domain identity and rendering stay in the application.
 
-## Replace the local package
+## Update the package
 
-Run the engine's Docker checks, then `bun pm pack` in its checkout. Copy the
-tarball into `vendor/` with a content-qualified filename and update the file
-dependency. Run `bun install` and rebuild the OPDS test image. A new basename
-avoids Bun's same-path file dependency cache. Consume a packed artifact rather
-than a checkout import or symlink.
+Release path (engine repository, `README.md` "Verify, pack and release"): run its Docker checks, then
+`bun scripts/verify-pack.ts` from a clean checkout. It prints the archive hash and lock integrity. After the
+maintainer publishes the version to npm, compare `npm view @seigiard/sync-engine@<version> dist.integrity` with
+that integrity.
+
+Consumer update: set the exact version in `package.json`, run `bun install` to regenerate `bun.lock`, and rebuild the
+test and production images (`bun run rebuild:test`, `docker compose build`). Check that `bun.lock` records the
+registry tarball and that `node_modules/@seigiard/sync-engine/package.json` has the version. The production image
+installs with `--frozen-lockfile --production`.
+
+While preparing an unpublished engine, a content-qualified `file:vendor/…tgz` dependency may stand in. Use a new
+basename each time: Bun caches file dependencies by path. Such a build is a candidate, never a release. The
+immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-package upgrade fixture.
+
+## Adoption record (#57)
+
+- Release: `@seigiard/sync-engine@0.4.0`, published from engine commit `fb94341ce4fac88798c98fdc73f403dde60356b1` (parent `fac2140`). Archive: 16284 bytes, SHA256 `9b6a6725da04bb9a6a3099c05a14dfcd4ffde13073fd44fb29bd9fc27ce2f087`. Registry `dist.integrity` and `bun.lock` both read `sha512-LQfGhwk0nzKCmI/2BnWyrvaVQxaerDJ8TM4ymPzNeKfmcybHwcIPfft6MDGUtc0CZKj8vciG58FjDCwgzA61yw==`. The installed files, in `node_modules` and in the production image, are byte-identical to that archive.
+- `package.json` pins the exact version. The only `file:` dependency left is the dev-only `@seigiard/sync-engine-previous` fixture (SHA256 `06810f27f2e2c05c35fdb520e246dc820c414f0f416d97b93bb687fcc0027a00`).
+- The full Docker suite (`COMPOSE_PROJECT_NAME=opds49-57 bun run test`) passed with 0 failures against the registry dependency: 630 pass, 55 files. The count is lower than #56's 707 because the legacy lifecycle, consumer and scanner suites were retired. Their contracts moved as follows.
+
+| Retired suite                                                                                                                                     | Contract                                                                                                                                                             | Owner now                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unit/lifecycle/lifecycle.test.ts`, `transition.test.ts`                                                                                          | Request coalescing with force OR'd; reconciliation timing and the disabled interval; failed resync keeps running; failed first pass fatal or not; restart after stop | Engine `live.test.ts`, `recovery.test.ts`; OPDS `live-engine-catalogue.test.ts`, `startup-readiness.test.ts`                                     |
+| `unit/lifecycle/shutdown.test.ts`, `unit/processing/processor-shutdown.test.ts`, `integration/processing/queue-consumer.test.ts` (shutdown cases) | Stop joins active work, drops pending work and cascades, awaits cooperative cleanup                                                                                  | Engine `shutdown.test.ts`; OPDS `engine-shutdown.test.ts`, `engine-signal.test.ts`, the five `*-stop.test.ts` suites on the production lifecycle |
+| `unit/processing/catalogue-processor.test.ts`, `queue-consumer.test.ts` (coalescing)                                                              | Pending refresh coalescing; refresh requested while active runs once more; cascade completion; failed work yields no cascade                                         | Engine `work.test.ts`; OPDS `engine-catalogue.test.ts`, `cascade-through-engine.test.ts`                                                         |
+| `integration/processing/cascade-through-processor.test.ts`                                                                                        | Folder summary propagation, count changes up to the root, removal refreshes parents                                                                                  | `cascade-through-engine.test.ts` (same six scenarios on the engine session)                                                                      |
+| `unit/scanner.test.ts`                                                                                                                            | Folder structure, hash, abort, plan, orphan detection, heap-snapshot housekeeping                                                                                    | Engine `source.test.ts`, `freshness.test.ts`; OPDS `resync-in-place.test.ts` (downtime removals), `legacy-data.test.ts`                          |
+| `unit/processing/events.test.ts` dedup case                                                                                                       | Watcher dedup window                                                                                                                                                 | Removed by design: repeated notices pass through; `live-engine-catalogue.test.ts` pins a second replacement during active work                   |
+| `initial-engine-catalogue.test.ts` lease-acquisition cases                                                                                        | Lease contention during startup                                                                                                                                      | Same file, on the production lifecycle                                                                                                           |

@@ -309,3 +309,16 @@ had a handler-chain RSS red whose value was not captured.
 - `lifecycle-scan-effect` runs the existing lifecycle scan workload with `createEffectCatalogueProcessor`. It measures one folder refresh arriving at an idle Effect processor, batched by `LIFECYCLE_CYCLES_PER_OP` like the plain `lifecycle-scan` gate.
 - The gate uses the unchanged runtime limits: 1 KB RSS per drain and 0.5 JS objects per drain.
 - `memory-oracle-calibration.test.ts` checks the red side with `LEAK_PROBE_RETAIN_KB` at 4 KiB per Effect drain, multiplied by `LIFECYCLE_CYCLES_PER_OP` because the probe retains once per measured operation.
+
+## Gates retargeted to the shared engine — issue #57
+
+The legacy consumer, lifecycle and scanner were removed. The gates keep their names, batching constants and limits (1 KB RSS and 0.5 objects per event or cycle). Their scenario bodies now run the code that owns that work in production:
+
+- `consumer-enqueue-effect`: `createWorkScheduler` from the engine package with a no-op handler. `QUEUE_EVENTS_PER_OP` distinct events per operation; the operation ends when the handler saw the last one. Clean reads: −3.85 and 1.55 KB per operation (per event 0.016).
+- `lifecycle-scan-effect`: one `createLiveEngineLifecycle` over a real temporary source/output pair. A cycle is a resync request admitted while idle plus the wait for `completed`. Clean reads: −0.58 to −4.66 KB per operation of 10 cycles, 0.01 to 0.06 objects.
+- `lifecycle-restart`: a fresh production lifecycle per cycle (start, first pass, stop). Clean reads: 0.03 to −3.15 KB per operation, 0.003 to 0.02 objects.
+- `handler-chain-effect` and `full-chain` are unchanged.
+
+Calibration: `memory-oracle-calibration.test.ts` retains 4 KiB per event or cycle on the retargeted scenarios. They read 405 and 40 KB per operation, which is 4.05 and 4.0 KB per event or cycle, above the 1 KB limit. The 64 KiB `full-chain` control reads 46 to 65.
+The probe ends with `process.exit(0)` after printing its result: the production lifecycle holds a lease child process that keeps a plain script alive.
+First run: both lifecycle gates timed out at 120 s and 180 s because the probe never exited. That was a probe defect, not retention.

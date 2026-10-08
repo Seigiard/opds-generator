@@ -1,12 +1,11 @@
-# Local engine package
+# Local engine packages
 
-Content-qualified engine tarballs are packed releases from the separate
-`Seigiard/sync-engine` repository. `package.json` selects the runtime release.
-The dev-only previous-release alias is an independent upgrade fixture for the
-freshness integration test. These artifacts are not npm publications.
+`package.json` selects the runtime engine from the npm registry. This directory keeps only the immutable
+previous-package upgrade fixture.
 
-Runtime 0.3.1 is packed from engine commit
-`fac2140` on `spec/49-ticket-56`, including recovery, state ownership, freshness, live scheduling, shutdown
-and minimum-publication readiness (`minimum`, `onMinimum`, `LiveStatus.failure`).
-The separate packed 0.3.0 archive is immutable. Keep it and its lock integrity
-when replacing the runtime archive.
+`seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz` is a packed 0.3.0 archive. It is the
+dev-only `@seigiard/sync-engine-previous` alias that `engine-freshness.test.ts` installs to test a real
+package upgrade against real handlers. Keep it and its lock integrity. It is not a runtime dependency and is not part
+of the production image's installed packages.
+
+The procedure to update the runtime package is in `docs/agents/shared-sync-engine.md`.

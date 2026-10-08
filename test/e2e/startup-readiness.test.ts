@@ -85,6 +85,11 @@ class Scenario {
     return code === 0 ? (JSON.parse(stdout) as Facts) : undefined;
   }
 
+  /** The deployment health check exactly as the image declares it, run inside the container. Exit 0 = healthy. */
+  async health(): Promise<number> {
+    return (await this.compose("exec", "-T", "opds", "/bin/sh", "/app/healthcheck.sh")).code;
+  }
+
   async container(): Promise<{ readonly state: string; readonly exitCode: number } | undefined> {
     const { stdout } = await this.compose("ps", "-a", "--format", "json");
 
@@ -205,6 +210,18 @@ afterAll(async () => {
 });
 
 describe("startup readiness through the production server and nginx", () => {
+  test("the image declares the minimum-honoring health check as its default", async () => {
+    // #given the production image built for these scenarios
+    const inspect = Bun.spawn(["docker", "image", "inspect", "--format", "{{json .Config.Healthcheck.Test}}", IMAGE], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const declared = JSON.parse((await new Response(inspect.stdout).text()).trim());
+    // #then it runs the script that needs the available fact, the feed and the page, not the feed alone
+    expect({ code: await inspect.exited, declared }).toEqual({ code: 0, declared: ["CMD", "/bin/sh", "/app/healthcheck.sh"] });
+  });
+
   test("a warm start serves previously published results through nginx while verification is held", async () => {
     // #given a real two-folder catalogue built by the production image, then stopped gracefully
     await withScenario("warm", {}, async (s) => {
@@ -224,6 +241,7 @@ describe("startup readiness through the production server and nginx", () => {
       await s.compose("up", "-d");
       await until("held extraction", () => s.entered("unzip-entered"));
       const during = await s.status();
+      const duringHealth = await s.health();
       const served = await publicationOf(paths);
       const root = await get("/", {});
       const challenge = await resync("", false);
@@ -231,6 +249,7 @@ describe("startup readiness through the production server and nginx", () => {
       expect({
         gracefulStop: { code: stopped.code, exit: stoppedState?.exitCode },
         facts: summary(during),
+        health: duringHealth,
         served: Object.fromEntries(paths.map((path) => [path, served[path]!.equals(prior[path]!)])),
         downloadIsSource: served["/Book.epub/Book.epub"]!.equals(await readFile(EPUB)),
         priorTitles: titles(prior["/opds"]!).sort(),
@@ -239,6 +258,7 @@ describe("startup readiness through the production server and nginx", () => {
       }).toEqual({
         gracefulStop: { code: 0, exit: 0 },
         facts: { available: true, availableFrom: "prior-output", verifying: true, completed: false, errors: [] },
+        health: 0,
         served: Object.fromEntries(paths.map((path) => [path, true])),
         downloadIsSource: true,
         priorTitles: ["Nested", "Test Book"],
@@ -265,12 +285,20 @@ describe("startup readiness through the production server and nginx", () => {
       // #when the first pass has written the root feed but not the root page
       await s.compose("up", "-d");
       await until("held root page", () => s.entered("entered-_data_index.html.tmp"));
-      const feedOnly = { facts: await s.status(), opds: (await get("/opds")).status, page: (await get("/index.html")).status };
+
+      const feedOnly = {
+        facts: await s.status(),
+        opds: (await get("/opds")).status,
+        page: (await get("/index.html")).status,
+        health: await s.health(),
+      };
+
       // #and the page is published while the book extraction is still held
       await s.setHolds([]);
       await until("availability", async () => (await s.status())?.available);
       await until("held extraction", () => s.entered("unzip-entered"));
       const minimum = await s.status();
+      const minimumHealth = await s.health();
       const feed = await get("/opds");
       const page = await get("/index.html");
       // #and the held book work finishes
@@ -279,9 +307,10 @@ describe("startup readiness through the production server and nginx", () => {
       const final = await get("/opds");
       // #then readiness needs the root feed and page, ignores pending book work, and completion is separate
       expect({
-        feedOnly: { facts: summary(feedOnly.facts), opds: feedOnly.opds, page: feedOnly.page },
+        feedOnly: { facts: summary(feedOnly.facts), opds: feedOnly.opds, page: feedOnly.page, health: feedOnly.health },
         minimum: {
           facts: summary(minimum),
+          health: minimumHealth,
           feedStatus: feed.status,
           feedTitles: titles(feed.body),
           pageStatus: page.status,
@@ -295,9 +324,12 @@ describe("startup readiness through the production server and nginx", () => {
           facts: { available: false, availableFrom: null, verifying: true, completed: false, errors: [] },
           opds: 200,
           page: 503,
+          // A served feed alone is not health: the root page is part of the declared minimum.
+          health: 1,
         },
         minimum: {
           facts: { available: true, availableFrom: "minimum-publication", verifying: true, completed: false, errors: [] },
+          health: 0,
           feedStatus: 200,
           feedTitles: [],
           pageStatus: 200,
