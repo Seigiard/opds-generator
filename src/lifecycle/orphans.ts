@@ -11,7 +11,7 @@ import { ownedPromise } from "../utils/owned-promise.ts";
 /**
  * Output entries whose source is no longer in the scan: a book folder (`entry.xml`) or a catalogue folder
  * (`_entry.xml`) in DATA. They are candidates only. The engine's source work re-observes each path and removes it
- * on confirmed absence; an unreadable source never authorizes removal. Dot and underscore names are bookkeeping.
+ * on confirmed absence; an unreadable source never authorizes removal. Dot names are bookkeeping.
  */
 export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry[]): Effect.Effect<readonly EventType[]> {
   const books = new Set<string>();
@@ -22,7 +22,7 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
     else if (BOOK_EXTENSIONS.includes(extname(entry.path).slice(1).toLowerCase())) books.add(entry.path);
   }
 
-  return ownedPromise(
+  const scan = ownedPromise(
     async () => {
       const orphans: EventType[] = [];
 
@@ -37,7 +37,7 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
         }
 
         for (const name of names.sort()) {
-          if (name.startsWith(".") || name.startsWith("_")) continue;
+          if (name.startsWith(".")) continue;
           const relative = path === "" ? name : join(path, name);
           const absolute = join(deps.config.dataPath, relative);
 
@@ -45,19 +45,23 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
             if (!(await deps.fs.stat(absolute)).isDirectory()) continue;
 
             if (await deps.fs.exists(join(absolute, ENTRY_FILE))) {
-              if (!books.has(relative))
+              if (!books.has(relative)) {
                 orphans.push(
                   CatalogueEvent.BookDeleted({ parent: dirname(join(deps.config.filesPath, relative)), name: basename(relative) }),
                 );
+              }
 
               continue;
             }
 
             if (await deps.fs.exists(join(absolute, FOLDER_ENTRY_FILE))) {
-              if (!folders.has(relative))
+              if (!folders.has(relative)) {
                 orphans.push(
                   CatalogueEvent.FolderDeleted({ parent: dirname(join(deps.config.filesPath, relative)), name: basename(relative) }),
                 );
+
+                continue;
+              }
             }
 
             await walk(relative);
@@ -72,5 +76,7 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
       return orphans;
     },
     (cause) => new Error(String(cause)),
-  ).pipe(Effect.orElseSucceed(() => []));
+  );
+
+  return scan.pipe(Effect.orElseSucceed((): readonly EventType[] => []));
 }

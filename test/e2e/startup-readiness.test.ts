@@ -189,7 +189,16 @@ async function completed(scenario: Scenario) {
 }
 
 async function publicationOf(paths: readonly string[]) {
-  return Object.fromEntries(await Promise.all(paths.map(async (path) => [path, (await get(path)).body] as const)));
+  const publications = await Promise.all(
+    paths.map(async (path) => {
+      const response = await get(path);
+      expect(response.status).toBe(200);
+
+      return [path, response.body] as const;
+    }),
+  );
+
+  return Object.fromEntries(publications);
 }
 
 beforeAll(async () => {

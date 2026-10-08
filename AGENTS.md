@@ -88,7 +88,7 @@ Run, and fix until clean:
 2. `bun --bun tsc --noEmit`
 3. `bun run test` — 0 failures before every commit, no exceptions
 4. `npx knip`
-5. After touching `ui/` or `src/render`: `bun run build:ui`. After touching `src/render` markup: `bun run render:golden`.
+5. After touching `ui/` or `src/render`: `bun run build:ui`. After touching `src/render` markup: bump `PROCESSING_VERSIONS.folder` in `src/processing-versions.ts`, run `bun run render:golden`, and commit regenerated output. After changing extractor metadata, cover handling or book entry/link output, bump `PROCESSING_VERSIONS.book`.
 6. `git status` shows `static/` and `test/golden/` committed with the change.
 
 The pre-commit hook (`simple-git-hooks` → `nano-staged`, config in `.nano-staged.mjs`) runs `oxfmt --write`, `oxlint --fix` and `tsc --noEmit` on staged files and re-stages the fixes. It covers steps 1–2 only; tests and `knip` stay manual. A fresh clone gets the hook from `bun install` (`postinstall`).
@@ -160,7 +160,7 @@ Read `docs/agents/reader.md` first.
 - Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
 - During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
 - `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.
-- The Docker healthcheck uses `wget` (`wget -q --spider http://127.0.0.1/feed.xml`); the alpine image has no `curl`.
+- The Docker healthcheck is `/app/healthcheck.sh`: Bun `/status` must be available and nginx must serve `/feed.xml` plus `/index.html`. It uses `wget` because the alpine image has no `curl`.
 
 </important>
 

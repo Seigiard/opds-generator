@@ -7,13 +7,12 @@ import { BOOK_EXTENSIONS } from "../types.ts";
 import { CatalogueDeps, CatalogueEvent, type EffectHandlers } from "../processing/effect-handler.ts";
 import { bookSyncEffect } from "../processing/handlers/book-sync-effect.ts";
 import { folderMetaSyncEffect } from "../processing/handlers/folder-meta-sync-effect.ts";
-import { folderSyncEffect } from "../processing/handlers/folder-sync-effect.ts";
-import { ownedPromise } from "../utils/owned-promise.ts";
 import type { EventType } from "../processing/types.ts";
 import { orphanedOutputs } from "./orphans.ts";
 import { engineSourceWork } from "./engine-source-work.ts";
 import { withHandlerLogs } from "./handler-logging.ts";
 import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
+import { PROCESSING_VERSIONS } from "../processing-versions.ts";
 
 /** Initial-pass composition for contract tests; production runs the live composition. */
 export function initialEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueOptions = {}) {
@@ -44,7 +43,6 @@ export function engineOptions(
 ): InitialPass<EventType, Error, CatalogueDeps | EffectFileSystem> {
   const handlers: EffectHandlers = {
     BookCreated: bookSyncEffect,
-    FolderCreated: folderSyncEffect,
     FolderMetaSyncRequested: folderMetaSyncEffect,
   };
 
@@ -53,13 +51,6 @@ export function engineOptions(
       const folders = entries
         .filter((entry) => entry.kind === "directory")
         .sort((a, b) => b.path.split("/").length - a.path.split("/").length);
-
-      for (const folder of folders) {
-        yield* ownedPromise(
-          () => deps.fs.mkdir(join(deps.config.dataPath, folder.path), { recursive: true }),
-          (cause) => new Error(String(cause)),
-        );
-      }
 
       const books = entries.flatMap((entry) => {
         if (entry.kind !== "file" || !BOOK_EXTENSIONS.includes(extname(entry.path).slice(1).toLowerCase())) return [];
@@ -100,7 +91,7 @@ export function engineOptions(
           return {
             sourcePaths: [source],
             resultKind: "book",
-            processingVersion: options.processingVersions?.book ?? "1",
+            processingVersion: options.processingVersions?.book ?? PROCESSING_VERSIONS.book,
             outputPaths: [join(source, "entry.xml"), join(source, event.name)],
           };
         }
@@ -113,7 +104,7 @@ export function engineOptions(
           return {
             sourcePaths: [source],
             resultKind: "folder",
-            processingVersion: options.processingVersions?.folder ?? "1",
+            processingVersion: options.processingVersions?.folder ?? PROCESSING_VERSIONS.folder,
             outputPaths: [join(source, "feed.xml"), join(source, "index.html"), ...(source ? [join(source, "_entry.xml")] : [])],
           };
         }

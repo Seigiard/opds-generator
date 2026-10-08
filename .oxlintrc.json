@@ -207,7 +207,6 @@
         "src/lifecycle/live-engine-lifecycle.ts",
         "src/lifecycle/engine-source-work.ts",
         "src/processing/effect-handler.ts",
-        "src/processing/catalogue-processor-effect.ts",
         "src/processing/handlers/**/*-effect.ts"
       ],
       "rules": {

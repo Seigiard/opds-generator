@@ -10,6 +10,7 @@ import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-li
 import { CatalogueDeps, CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../../../src/effect-file-system.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
+import { PROCESSING_VERSIONS } from "../../../src/processing-versions.ts";
 import { runInitialPass as runReleasedEngine040 } from "@seigiard/sync-engine-0-4";
 import { runInitialPass as runPreviousEngine } from "@seigiard/sync-engine-previous";
 import { runInitialPass as runCurrentEngine } from "@seigiard/sync-engine";
@@ -61,7 +62,7 @@ test("a released engine package update alone keeps OPDS publications fresh", asy
 
   try {
     await Effect.runPromise(
-      runReleasedEngine040(engineOptions(deps, { processingVersions: { book: "1", folder: "1" } })).pipe(
+      runReleasedEngine040(engineOptions(deps, { processingVersions: PROCESSING_VERSIONS })).pipe(
         Effect.provideService(CatalogueDeps, deps),
         Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
       ),
@@ -115,6 +116,57 @@ test("a fresh packaged engine instance reuses real book and folder publications"
       titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
       downloadMatchesFixture: (await readFile(join(outputPath, "Fiction", "Book.fb2", "Book.fb2"))).equals(await readFile(fixture)),
     }).toEqual({ mtimes: artifacts.map(() => ancient.getTime()), titles: ["Test Book"], downloadMatchesFixture: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the application default processing versions rebuild results from an older release", async () => {
+  // #given old application processing versions and independently dated published artifacts
+  const { root, outputPath, deps } = await tree();
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const completedHandlers: string[] = [];
+
+  const countedDeps = {
+    ...deps,
+    logger: {
+      ...deps.logger,
+      info: (component: string, message: string, fields?: LogContext) => {
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        deps.logger.info(component, message, fields);
+      },
+    },
+  };
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "1", folder: "1" } }));
+
+    for (const path of artifacts) await utimes(join(outputPath, path), ancient, ancient);
+
+    const runtime = createLiveEngineLifecycle(countedDeps);
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+    const url = server.url.href.slice(0, -1);
+
+    try {
+      // #when production verifies the same tree with the current app-owned default versions
+      await runtime.start();
+
+      // #then stale release outputs are rebuilt without a force resync or source change
+      expect({
+        versions: PROCESSING_VERSIONS,
+        status: await facts(url),
+        rewritten: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs !== ancient.getTime())),
+        titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+      }).toEqual({
+        versions: { book: "2", folder: "2" },
+        status: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
+        rewritten: [true, true, true, true, true],
+        titles: ["Test Book"],
+      });
+    } finally {
+      await runtime.stop();
+      server.stop(true);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -215,7 +267,7 @@ test("failed real book publication retains its old entry and is replayed by a fr
   const source = join(sourcePath, "Fiction", "Book.fb2");
   const entry = join(outputPath, "Fiction", "Book.fb2", "entry.xml");
   await utimes(source, ancient, ancient);
-  const versions = { processingVersions: { book: "2" } };
+  const versions = { processingVersions: { book: "3" } };
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
@@ -272,7 +324,7 @@ test("interrupted real book preparation is not considered current by a fresh ins
     release = resolve;
   });
 
-  const versions = { processingVersions: { book: "2" } };
+  const versions = { processingVersions: { book: "3" } };
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
@@ -331,11 +383,11 @@ test("book and folder processing versions rebuild their own kinds and required d
 
     for (const path of paths) await utimes(path, ancient, ancient);
     // #when only the book processing version changes, then only the folder version changes
-    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "2" } }));
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "3" } }));
     const bookVersion = await Promise.all(paths.map(async (path) => (await stat(path)).mtimeMs !== ancient.getTime()));
 
     for (const path of paths) await utimes(path, ancient, ancient);
-    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "2", folder: "2" } }));
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "3", folder: "3" } }));
     const folderVersion = await Promise.all(paths.map(async (path) => (await stat(path)).mtimeMs !== ancient.getTime()));
     // #then the selected kinds are rebuilt in place and acquisition results remain usable
     expect({

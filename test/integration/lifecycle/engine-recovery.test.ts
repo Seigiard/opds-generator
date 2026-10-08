@@ -1,13 +1,14 @@
 import { test, expect } from "bun:test";
 import { Effect, Cause } from "effect";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, utimes } from "node:fs/promises";
 import { engineStatePath, acquireOutputTree } from "@seigiard/sync-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
 import { buildContext } from "../../../src/context.ts";
 import { CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
+import type { LogContext } from "../../../src/logging/types.ts";
 
 const fixture = join(import.meta.dir, "../../../files/test/Test Book - Test Author.fb2");
 
@@ -88,10 +89,10 @@ test("a failed book update retains successful artifacts while an independent boo
       retained: [true, true, true],
       titles: ["Independent Book", "Test Book"],
       count: ["📚 2"],
-      state: "complete-with-errors",
+      state: "complete",
       pending: 0,
       active: null,
-      errors: [{ tag: "BookCreated", message: true }],
+      errors: [],
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -149,6 +150,86 @@ test("a failed file read retains its entry and independent work still publishes"
 
     // #then only the independent result changes while the failure stays public
     expect(observation).toEqual({ retained: true, titles: ["Independent", "Test Book"], state: "complete-with-errors", errors: [true] });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a failing derived directory creation is isolated to that folder work", async () => {
+  // #given one source folder whose output mkdir fails and one independent real book
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Blocked", "Nested"), { recursive: true });
+  await copyFile(fixture, join(sourcePath, "Good.fb2"));
+  const blockedOutput = join(outputPath, "Blocked", "Nested");
+
+  const faultyDeps = {
+    ...deps,
+    fs: {
+      ...deps.fs,
+      mkdir: async (path: string, options?: { recursive?: boolean }) => {
+        if (path === blockedOutput) throw Object.assign(new Error("Output directory denied"), { code: "EACCES" });
+
+        await deps.fs.mkdir(path, options);
+      },
+    },
+  };
+
+  try {
+    // #when the first pass declares both sources
+    const exit = await Effect.runPromiseExit(initialEngineCatalogue(faultyDeps));
+
+    // #then the independent book publishes even though the folder work fails
+    expect({
+      failed: exit._tag,
+      good: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+      blocked: await Bun.file(join(blockedOutput, "feed.xml")).exists(),
+    }).toEqual({ failed: "Failure", good: ["Blocked", "Test Book"], blocked: false });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a stable broken book with a previous entry converges after one pass", async () => {
+  // #given a damaged book with a previous fallback-looking entry and an independent unchanged book
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await Bun.write(join(sourcePath, "Broken.fb2"), "Not a FictionBook");
+  await copyFile(fixture, join(sourcePath, "Good.fb2"));
+  await Effect.runPromise(initialEngineCatalogue(deps));
+  const goodEntry = join(outputPath, "Good.fb2", "entry.xml");
+  const brokenEntry = join(outputPath, "Broken.fb2", "entry.xml");
+  const ancient = new Date("2020-01-01T00:00:00Z");
+  await utimes(goodEntry, ancient, ancient);
+  await rm(join(outputPath, ".sync-engine"), { recursive: true, force: true });
+  const completedHandlers: string[] = [];
+
+  const countedDeps = {
+    ...deps,
+    logger: {
+      ...deps.logger,
+      info: (component: string, message: string, fields?: LogContext) => {
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        deps.logger.info(component, message, fields);
+      },
+    },
+  };
+
+  try {
+    // #when a fresh engine sees the stable broken source twice
+    await Effect.runPromise(initialEngineCatalogue(countedDeps));
+    await utimes(goodEntry, ancient, ancient);
+    completedHandlers.length = 0;
+    await Effect.runPromise(initialEngineCatalogue(countedDeps));
+
+    // #then the failure is recorded as current and the second pass reuses both books
+    expect({
+      second: completedHandlers,
+      goodMtime: (await stat(goodEntry)).mtimeMs,
+      brokenTitle: parseFeed(`<feed>${await readFile(brokenEntry, "utf8")}</feed>`).entries.map((entry) => entry.title),
+    }).toEqual({
+      second: [],
+      goodMtime: ancient.getTime(),
+      brokenTitle: ["Broken"],
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -287,6 +368,71 @@ test("moves use old-path removal and new-path creation while stale hints preserv
       neighbour: "Neighbour source",
       state: "complete",
     });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test.each(["folder-to-book", "book-to-folder"] as const)("a source kind change removes obsolete %s artifacts", async (mode) => {
+  // #given a published representation that will be replaced by the opposite source kind
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const name = "Novel.fb2";
+
+  try {
+    if (mode === "folder-to-book") {
+      await mkdir(join(sourcePath, name));
+      await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
+    } else {
+      await copyFile(fixture, join(sourcePath, name));
+    }
+
+    await Effect.runPromise(initialEngineCatalogue(deps));
+
+    if (mode === "folder-to-book") {
+      await rm(join(sourcePath, name), { recursive: true });
+      await copyFile(fixture, join(sourcePath, name));
+    } else {
+      await rm(join(sourcePath, name));
+      await mkdir(join(sourcePath, name));
+      await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
+    }
+
+    // #when the next pass observes the same relative path with the opposite kind
+    await Effect.runPromise(initialEngineCatalogue(deps));
+
+    // #then the parent points at the current representation, not the obsolete marker
+    expect({
+      rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map(
+        (entry) => entry.href ?? entry.acquisitions?.[0]?.href,
+      ),
+      folderMarker: await Bun.file(join(outputPath, name, "_entry.xml")).exists(),
+      bookMarker: await Bun.file(join(outputPath, name, "entry.xml")).exists(),
+    }).toEqual(
+      mode === "folder-to-book"
+        ? { rootReferences: [`/${name}/${name}`], folderMarker: false, bookMarker: true }
+        : { rootReferences: [`/${name}/feed.xml`], folderMarker: true, bookMarker: false },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("underscore-prefixed source deletions are cleaned from DATA", async () => {
+  // #given a supported underscore-prefixed source folder with a published book
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "_Archive"));
+  await copyFile(fixture, join(sourcePath, "_Archive", "Book.fb2"));
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    const before = await Bun.file(join(outputPath, "_Archive", "Book.fb2", "entry.xml")).exists();
+
+    // #when that source disappears while the service is down
+    await rm(join(sourcePath, "_Archive"), { recursive: true });
+    await Effect.runPromise(initialEngineCatalogue(deps));
+
+    // #then orphan cleanup removes the direct URL artifacts too
+    expect({ before, after: await Bun.file(join(outputPath, "_Archive")).exists() }).toEqual({ before: true, after: false });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

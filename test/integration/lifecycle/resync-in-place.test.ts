@@ -1,11 +1,12 @@
 /**
  * The production lifecycle and real handlers on a temporary filesystem (issue #15 checks 1, 3 and 6, now on the shared engine).
  */
-import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import { copyFile, mkdir, readdir, readFile, rm, stat, symlink, unlink } from "node:fs/promises";
+import { describe, test, expect, beforeEach, afterAll, beforeAll } from "bun:test";
+import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HandlerDeps } from "../../../src/context.ts";
+import { buildContext } from "../../../src/context.ts";
 import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
 
 const TEST_DIR = join(tmpdir(), `opds-resync-in-place-${Date.now()}`);
@@ -18,34 +19,7 @@ const EPUB = "Test Book - Test Author.epub";
 
 const FIXTURE = join(import.meta.dir, "../../../files/test", EPUB);
 
-const deps: HandlerDeps = {
-  config: { filesPath: FILES_DIR, dataPath: DATA_DIR, port: 3000, reconcileInterval: 0 },
-  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-  fs: {
-    mkdir: async (path, options) => {
-      await mkdir(path, options);
-    },
-    rm: (path, options) => rm(path, options),
-    readdir: (path) => readdir(path),
-    stat: async (path) => {
-      const s = await stat(path);
-
-      return { isDirectory: () => s.isDirectory(), size: s.size };
-    },
-    exists: async (path) =>
-      stat(path)
-        .then(() => true)
-        .catch(() => false),
-    writeFile: async (path, content) => {
-      await Bun.write(path, content);
-    },
-    atomicWrite: async (path, content) => {
-      await Bun.write(path, content);
-    },
-    symlink: (target, path) => symlink(target, path),
-    unlink: (path) => unlink(path),
-  },
-};
+let deps: HandlerDeps;
 
 function start() {
   const lifecycle = createLiveEngineLifecycle(deps);
@@ -74,6 +48,15 @@ const exists = (path: string) =>
 const rootFeed = () => readFile(join(DATA_DIR, "feed.xml"), "utf8");
 
 describe("Resync repairs the catalogue in place", () => {
+  beforeAll(async () => {
+    const ctx = await buildContext();
+    deps = {
+      ...ctx,
+      config: { ...ctx.config, filesPath: FILES_DIR, dataPath: DATA_DIR, reconcileInterval: 0 },
+      logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    };
+  });
+
   beforeEach(async () => {
     await rm(TEST_DIR, { recursive: true, force: true });
     await mkdir(join(FILES_DIR, "Fiction"), { recursive: true });
@@ -151,15 +134,18 @@ describe("Resync repairs the catalogue in place", () => {
     // #when a forced resync reprocesses every book, and feed.xml is probed throughout
     await lifecycle.requestScan({ kind: "resync", force: true });
     await untilSettled(lifecycle, probe);
+    const status = await lifecycle.status();
     await lifecycle.stop();
     // #then feed.xml was present at every probe, and the book is still catalogued
     expect({
       missing,
+      errors: status.errors,
       sentinel: await exists(sentinel),
       bookKept: await exists(join(DATA_DIR, "Fiction", EPUB, "entry.xml")),
       feed: (await rootFeed()).length > 0,
     }).toEqual({
       missing: [],
+      errors: [],
       sentinel: true,
       bookKept: true,
       feed: true,

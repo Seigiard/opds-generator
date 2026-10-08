@@ -26,6 +26,8 @@ class CoverSaveFailed extends Data.TaggedError("CoverSaveFailed")<FailureProps> 
 
 const NO_METADATA = { meta: { title: "" }, hasCover: false };
 
+const FALLBACK_ENTRY_FILE = ".extraction-failed";
+
 /**
  * `bookSync` shutdown may interrupt only the preparation:
  * extraction runs in this fiber and every Promise boundary in it is owned, so an interrupted book waits for its
@@ -38,10 +40,19 @@ export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType)
   const { logger, fs } = yield* CatalogueDeps;
   const book = yield* Effect.interruptible(prepareBook(event.parent, event.name));
 
+  if (book.entryXml === undefined) {
+    logger.warn("BookSync", "Keeping previous entry after extraction failure", { path: book.relativePath });
+
+    return [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(book.dataDir) })];
+  }
+
   yield* ownedPromise(
     async () => {
       await fs.symlink(book.filePath, join(book.dataDir, event.name));
       await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
+
+      if (book.fallback) await fs.atomicWrite(join(book.dataDir, FALLBACK_ENTRY_FILE), "1\n");
+      else if (await fs.exists(join(book.dataDir, FALLBACK_ENTRY_FILE))) await fs.unlink(join(book.dataDir, FALLBACK_ENTRY_FILE));
     },
     (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
   );
@@ -68,16 +79,27 @@ const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
     (cause) => new BookDataDirFailed(failure(dataDir, cause)),
   );
 
-  const { meta, hasCover } = yield* extractMetadataAndCover(filePath, dataDir).pipe(
-    Effect.catchTag("ExtractionFailed", (error) =>
+  const extraction = yield* extractMetadataAndCover(filePath, dataDir).pipe(
+    Effect.catchTag("ExtractionFailed", (_error) =>
       ownedPromise(
         () => fs.exists(join(dataDir, ENTRY_FILE)),
         (cause) => new BookStatFailed(failure(filePath, cause)),
-      ).pipe(Effect.flatMap((published) => (published ? Effect.fail(error) : Effect.succeed(NO_METADATA)))),
+      ).pipe(Effect.flatMap((published) => (published ? Effect.succeed(undefined) : Effect.succeed({ ...NO_METADATA, fallback: true })))),
     ),
   );
 
-  return { filePath, relativePath, dataDir, hasCover, entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size) };
+  if (extraction === undefined) return { filePath, relativePath, dataDir, hasCover: false, entryXml: undefined };
+
+  const { meta, hasCover } = extraction;
+
+  return {
+    filePath,
+    relativePath,
+    dataDir,
+    hasCover,
+    fallback: "fallback" in extraction,
+    entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size),
+  };
 });
 
 const extractMetadataAndCover = Effect.fnUntraced(function* (filePath: string, bookDataDir: string) {
