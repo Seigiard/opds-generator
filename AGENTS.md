@@ -15,7 +15,7 @@ src/
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
-├── lifecycle/       # Legacy lifecycle/scanner; initial-engine-catalogue.ts + live-engine-catalogue.ts + live-engine-lifecycle.ts (scoped engine + freshness seams)
+├── lifecycle/       # Legacy lifecycle/scanner; scoped initial/live engine compositions + engine-source-work.ts + engine-policy.ts
 ├── processing/      # Effect 4 event pipeline
 │   ├── catalogue-processor.ts # Shared processor contract, event path/id helpers, memory snapshots
 │   ├── catalogue-processor-effect.ts, effect-handler.ts # Effect consumer, fixed handler registry, busy/empty edges

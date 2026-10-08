@@ -6,6 +6,6 @@ The dev-only previous-release alias is an independent upgrade fixture for the
 freshness integration test. These artifacts are not npm publications.
 
 Runtime 0.3.1 is packed from merged engine commit
-`2aef9fbc810430db65205852e8e848574c61b19f`, including freshness and live scheduling.
+`5f841e4` on `spec/49-ticket-52`, including recovery, state ownership, freshness, live scheduling and shutdown.
 The separate packed 0.3.0 archive is immutable. Keep it and its lock integrity
 when replacing the runtime archive.

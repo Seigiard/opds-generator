@@ -1,6 +1,7 @@
 import { log } from "../logging/index.ts";
 import { acquireOutputTree } from "@seigiard/sync-engine";
 import { Effect } from "effect";
+import { catalogueStatePath } from "./engine-policy.ts";
 import type { CatalogueProcessor, ProcessorStatus } from "../processing/catalogue-processor.ts";
 import type { EventType } from "../processing/types.ts";
 import {
@@ -194,7 +195,7 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
       };
 
       starting ??= scanner.outputPath
-        ? Effect.runPromise(acquireOutputTree(scanner.outputPath)).then((release) => {
+        ? Effect.runPromise(acquireOutputTree(scanner.outputPath, catalogueStatePath(scanner.outputPath))).then((release) => {
             releaseOutput = release;
 
             return begin();

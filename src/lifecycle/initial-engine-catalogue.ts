@@ -11,6 +11,8 @@ import { folderSyncEffect } from "../processing/handlers/folder-sync-effect.ts";
 import { ownedPromise } from "../utils/owned-promise.ts";
 import type { EventType } from "../processing/types.ts";
 import type { CatalogueScanner } from "./lifecycle.ts";
+import { engineSourceWork } from "./engine-source-work.ts";
+import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
 
 /** Temporary selection at createLifecycle's scanner seam; only an initial pass is supported. */
 export function createInitialEngineScanner(deps: HandlerDeps): CatalogueScanner {
@@ -89,11 +91,15 @@ export function engineOptions(
   return {
     sourcePath: deps.config.filesPath,
     outputPath: deps.config.dataPath,
+    statePath: catalogueStatePath(deps.config.dataPath),
+    includeSource: includeCatalogueSource,
     freshness: {
       check: options.check,
       describe: (event) => {
         if (Predicate.isTagged(event, "BookCreated")) {
           const source = relative(deps.config.filesPath, join(event.parent, event.name));
+
+          if (!includeCatalogueSource(source)) return undefined;
 
           return {
             sourcePaths: [source],
@@ -105,6 +111,8 @@ export function engineOptions(
 
         if (Predicate.isTagged(event, "FolderMetaSyncRequested")) {
           const source = relative(deps.config.dataPath, event.path);
+
+          if (!includeCatalogueSource(source)) return undefined;
 
           return {
             sourcePaths: [source],
@@ -119,10 +127,16 @@ export function engineOptions(
     },
     declare,
     key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${event.path}` : undefined),
+    failureKey: (event) =>
+      Predicate.isTagged(event, "FolderMetaSyncRequested")
+        ? `folder:${event.path}`
+        : Predicate.isTagged(event, "Ignored")
+          ? undefined
+          : `source:${join(event.parent, event.name)}`,
     handle: (event) => {
       const handler = handlers[event._tag];
 
-      return handler ? handler(event).pipe(Effect.uninterruptible) : Effect.fail(new Error(`Unsupported engine work: ${event._tag}`));
+      return engineSourceWork(deps, event, handler);
     },
   };
 }

@@ -133,7 +133,7 @@ test("a resync during legacy lease acquisition cannot publish into another owner
   const outputPath = join(root, "output");
   await mkdir(sourcePath);
   await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
-  const release = await Effect.runPromise(acquireOutputTree(outputPath));
+  const release = await Effect.runPromise(acquireOutputTree(outputPath, join(outputPath, ".sync-engine")));
   const ctx = await buildContext();
   const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
 

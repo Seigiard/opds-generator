@@ -109,7 +109,7 @@ test("stop awaits started book publication, closes HTTP admission and startup re
           warmKeptEntry: (await stat(entry)).mtimeMs === ancient.getTime(),
         }).toEqual({
           during: { stopped: false, accepting: false, resync: 503, watcher: 503 },
-          state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", active: null, pending: 0 } },
+          state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", active: null, pending: 0, errors: [] } },
           bookPublished: true,
           target: join(filesPath, "Book.fb2"),
           oldFeed: ["Test Book"],
@@ -270,7 +270,7 @@ test("stop awaits a non-cancellable preparation read without starting publicatio
     }).toEqual({
       awaitedRead: true,
       failures: [],
-      state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", pending: 0, active: null } },
+      state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", pending: 0, active: null, errors: [] } },
       entry: before,
       target: join(filesPath, "Book.fb2"),
     });

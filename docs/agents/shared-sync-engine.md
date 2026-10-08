@@ -1,4 +1,4 @@
-# Shared synchronization engine: live catalogue, freshness and shutdown (#50–#55)
+# Shared synchronization engine: live catalogue, freshness, recovery and shutdown (#50–#55)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
 `@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
@@ -9,15 +9,19 @@ Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 ```sh
 bun install --frozen-lockfile
 git submodule update --init
-COMPOSE_PROJECT_NAME=opds49-merge53 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-merge53 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts test/integration/lifecycle/engine-freshness.test.ts test/integration/lifecycle/live-engine-catalogue.test.ts test/integration/lifecycle/live-engine-freshness.test.ts
-COMPOSE_PROJECT_NAME=opds49-merge53 docker compose -f docker-compose.test.yml down
+COMPOSE_PROJECT_NAME=opds49-52 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle
+COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml run --rm --user 65534 test bun test test/integration/lifecycle/engine-recovery.test.ts --test-name-pattern 'OPDS ignores'
+COMPOSE_PROJECT_NAME=opds49-52 docker compose -f docker-compose.test.yml down
 ```
 
 The tests use temporary trees, production filesystem services and all existing
 format registrations. They verify metadata, covers, browser and feed output,
 unchanged source bytes, download targets, nested cascades and completion while
-required downstream publication is held.
+required downstream publication is held. Recovery tests verify retained artifacts,
+independent work, source-read errors, confirmed removal, stale hints, moves,
+state-safe cleanup and the existing non-dot source contract. The non-root command
+confirms that excluded unreadable subtrees are skipped before traversal.
 
 ## Temporary selection seam
 
@@ -37,15 +41,20 @@ completes the same initial publication before returning a `WorkScheduler`.
 Keep the scope open while calling `submit([CatalogueEvent...])`,
 `awaitCompletion`, and `status`. Closing the scope joins the owned consumer
 before releasing its output lease. Book and new-folder events use existing
-Effect handlers. Other event kinds remain outside this temporary composition.
+Effect handlers. BookDeleted and FolderDeleted use engine-owned associated-output
+cleanup and explicit parent refreshes. `engine-source-work.ts` supplies source
+authority; `engine-policy.ts` declares source selection and state placement.
 
 The engine combines pending work only for OPDS-declared folder-refresh keys.
 A repeated pending refresh moves behind intervening work. A refresh requested
 while equivalent work is active schedules one pending follow-up. Handler-returned
 cascades enter pending work before active clears. `status.state` stays `working`
 until required cascades publish; `complete` means work completion, not freshness.
-A handler failure currently ends the scheduler and fails the completion wait.
-Failure recovery is a later slice.
+Typed failures retain their previous results while independent work continues.
+`awaitCompletion` resolves after required work drains. `complete-with-errors`
+retains public `{ work, cause }` records after that drain. A successful retry
+clears the matching OPDS source/folder identity. Defects and interruption still
+stop the consumer. Initial failures prevent the final minimum publication.
 
 OPDS owns the propagation rule: a book refreshes its folder, and folder summaries
 propagate to the parent only when `_entry.xml` changes without its timestamp.
@@ -132,22 +141,21 @@ pre-publication failure. Engine metadata belongs outside projected source paths.
 The dev-only `sync-engine-previous` package alias tests a real packed 0.3.0 to
 0.3.1 upgrade against real handlers and dated publications.
 
-### Temporary state bridge pending #52
+### Persistent state composition (#52)
 
-This integration retains the external-default bridge: the canonical output path's
-full SHA256 selects the sibling `.sync-engine-state-<digest>`. The existing lease
-still uses `.sync-engine.lock` in the output. #52 owns the configurable `statePath`
-composition and the persistent OPDS `DATA/.sync-engine` namespace. Its integration
-must replace the manual path with `engineStatePath`, pass it to `openFreshness`,
-and select the same state namespace in legacy, initial and live compositions.
-OPDS then selects its legacy non-dot source policy through `includeSource` before
-traversal; the current engine already forwards that option through all live scans.
-Cleanup must retain the owned namespace and stable lock inode.
+Every OPDS composition selects `DATA/.sync-engine`. The engine canonicalizes the
+configured `statePath` through `engineStatePath` and supplies it to both lease and
+freshness ownership. The existing DATA mount retains that state across container
+recreation. `includeSource` preserves OPDS's non-dot source contract before
+traversal and metadata checks. Cleanup protects the state directory and lock inode.
+Generic consumers keep the SHA256-keyed external default or configure another
+persistent area shared by all owners. Source, state and output layouts are
+validated before source writes or output preparation.
 
 Keep the immutable packed 0.3.0 upgrade fixture and its shared configuration
 `{ ...engineOptions(deps), statePath: undefined }`. That test verifies the generic
-external-default upgrade independently of OPDS's later configured state selection.
-Ordinary freshness tests must use the configured OPDS state after #52 adoption.
+external-default upgrade independently of OPDS's configured state selection.
+Ordinary freshness tests use the configured OPDS state.
 
 ## Output ownership
 
@@ -202,12 +210,28 @@ the lock while its stdin remains open. A handshake confirms acquisition before
 work starts. Release closes stdin and waits for exit. Bun's death closes the
 pipe and releases the lock. Contention waits at most one second, then fails
 with `OutputOwnershipFailed`. Canonical output paths share one persistent
-`.sync-engine.lock` inode. Keep that inode in the dedicated output area;
-unlinking it while an owner runs permits a second lock identity.
+`DATA/.sync-engine/lock` inode. Both legacy lifecycle acquisition and scoped
+engine compositions explicitly use this state area. The existing DATA Docker
+mount therefore shares the lease and persistent engine state across containers.
+Keep the inode stable while owners may acquire it. All compositions sharing DATA
+must select this same canonical state area, including aliases of DATA.
+
+OPDS excludes every dot-name source component. The engine checks this application
+policy before descending into excluded subtrees; submitted hidden-source hints
+also do nothing. Bookkeeping uses that excluded namespace. Non-dot source/output
+URLs stay unchanged. Generic engine consumers have unrestricted source projections
+and can choose an external persistent state area shared with their output owners.
+
+Cleanup requires a fresh source observation. A missing/unreadable root or a failed
+file/folder read is an error, never authority for deleting prior results. OPDS
+associates each source path with its mirrored output directory. Engine cleanup
+rechecks absence, ignores stale hints, confines removal to DATA and protects the
+configured state area. A move is old-path removal plus new-path creation.
 
 The engine requires disjoint source/output trees and excludes source symlinks.
 Read errors fail the initial pass instead of publishing an empty replacement.
-Handler failures prevent initial final publication and release ownership.
+Initial handler failures drain independent work, prevent final publication and
+release ownership.
 
 ## Interface fit
 

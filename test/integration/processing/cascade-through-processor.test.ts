@@ -260,30 +260,34 @@ describe("Cascades through the catalogue processor", () => {
   test("a book whose title changed refreshes its folder only, and the ancestor feeds keep their mtime", async () => {
     // #given
     await makeSourceFolders("Fiction/SciFi");
-    await addBook("Fiction/SciFi");
+    const name = "Book.fb2";
+    const content = await Bun.file(join(import.meta.dir, "../../../files/test/Test Book - Test Author.fb2")).text();
+    await Bun.write(join(FILES_DIR, "Fiction", "SciFi", name), content);
     const first = run();
     let done = first.idle();
     first.processor.submit({ _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" });
     first.processor.submit({ _tag: "FolderCreated", parent: join(FILES_DIR, "Fiction"), name: "SciFi" });
-    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name: EPUB });
+    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name });
     await done;
     const longAgo = new Date("2020-01-01T00:00:00Z");
     const ancestors = [join(DATA_DIR, "feed.xml"), join(DATA_DIR, "Fiction", "feed.xml")];
 
     for (const path of ancestors) await utimes(path, longAgo, longAgo);
-    // An unreadable epub falls back to the filename as title, so the book's title changes without a new file.
-    await Bun.write(join(FILES_DIR, "Fiction", "SciFi", EPUB), "not an epub");
-    await unlink(join(DATA_DIR, "Fiction", "SciFi", EPUB, EPUB));
+    await Bun.write(
+      join(FILES_DIR, "Fiction", "SciFi", name),
+      content.replace("<book-title>Test Book</book-title>", "<book-title>Changed Book</book-title>"),
+    );
+    await unlink(join(DATA_DIR, "Fiction", "SciFi", name, name));
     done = first.idle();
     // #when
-    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name: EPUB });
+    first.processor.submit({ _tag: "BookCreated", parent: join(FILES_DIR, "Fiction", "SciFi"), name });
     await done;
     await first.stop();
     const mtimes = await Promise.all(ancestors.map(async (path) => (await stat(path)).mtimeMs));
     const sciFi = await feed("Fiction", "SciFi");
     // #then
     expect({
-      sciFiHasNewTitle: sciFi.includes("<title>Test Book Test Author</title>"),
+      sciFiHasNewTitle: sciFi.includes("<title>Changed Book</title>"),
       sciFiKeepsOldTitle: sciFi.includes("<title>Test Book</title>"),
       mtimes,
     }).toEqual({

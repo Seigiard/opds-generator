@@ -19,21 +19,11 @@ interface EntryWithTitle {
   readonly dirName: string;
 }
 
-interface FolderEntries {
-  readonly folderEntries: EntryWithTitle[];
-  readonly bookEntries: EntryWithTitle[];
-}
-
 interface FailureProps {
   readonly path: string;
   readonly cause: unknown;
   readonly message: string;
 }
-
-const EMPTY_ENTRIES: FolderEntries = {
-  folderEntries: [],
-  bookEntries: [],
-};
 
 class FolderFeedPublishFailed extends Data.TaggedError("FolderFeedPublishFailed")<FailureProps> {}
 
@@ -54,7 +44,7 @@ export const folderMetaSyncEffect = Effect.fn("folderMetaSync")(function* (event
 
     const sourceExists = yield* fs.stat(sourceFolder).pipe(
       Effect.map((s) => s.isDirectory()),
-      Effect.catch(() => Effect.succeed(false)),
+      Effect.catchTag("FileSystemNotFound", () => Effect.succeed(false)),
     );
 
     if (!sourceExists) {
@@ -74,13 +64,7 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
 
   logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
-  const { folderEntries, bookEntries } = yield* readFolderEntries(normalizedDir).pipe(
-    Effect.catch((error) => {
-      logger.warn("FolderMetaSync", "Error reading folder", { path: relativePath, error: String(error) });
-
-      return Effect.succeed(EMPTY_ENTRIES);
-    }),
-  );
+  const { folderEntries, bookEntries } = yield* readFolderEntries(normalizedDir);
 
   folderEntries.sort(sortByTitle);
   bookEntries.sort(sortByAuthorTitle);
@@ -160,7 +144,14 @@ const readFolderEntries = Effect.fnUntraced(function* (normalizedDir: string) {
   const fs = yield* EffectFileSystem;
   const folderEntries: EntryWithTitle[] = [];
   const bookEntries: EntryWithTitle[] = [];
-  const items = yield* fs.readdir(normalizedDir);
+
+  const items = yield* fs
+    .readdir(normalizedDir)
+    .pipe(
+      Effect.catchTag("FileSystemNotFound", () =>
+        fs.mkdir(normalizedDir, { recursive: true }).pipe(Effect.flatMap(() => fs.readdir(normalizedDir))),
+      ),
+    );
 
   for (const item of items) {
     if (item.startsWith("_") || item === FEED_FILE || item.endsWith(".tmp")) continue;

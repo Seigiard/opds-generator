@@ -69,7 +69,12 @@ const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
   );
 
   const { meta, hasCover } = yield* extractMetadataAndCover(filePath, dataDir).pipe(
-    Effect.catchTag("ExtractionFailed", () => Effect.succeed(NO_METADATA)),
+    Effect.catchTag("ExtractionFailed", (error) =>
+      ownedPromise(
+        () => fs.exists(join(dataDir, ENTRY_FILE)),
+        (cause) => new BookStatFailed(failure(filePath, cause)),
+      ).pipe(Effect.flatMap((published) => (published ? Effect.fail(error) : Effect.succeed(NO_METADATA)))),
+    ),
   );
 
   return { filePath, relativePath, dataDir, hasCover, entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size) };
