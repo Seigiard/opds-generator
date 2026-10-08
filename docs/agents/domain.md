@@ -23,6 +23,10 @@ hypotheses, code, and tests.
 If a term is missing, check whether an existing term fits.
 Record a real vocabulary gap for `/domain-modeling`.
 
+## Shared engine target
+
+For shared-engine extraction or migration, read [ADR 0004](../adr/0004-shared-synchronization-engine.md) and the [target contract](../plans/shared-synchronization-engine.md). They record the agreed cross-application design, not current runtime behavior. In particular, keep current `Settled` semantics distinct from the target's separate work-completion and error reporting.
+
 ## Surface ADR conflicts
 
 If a proposal contradicts an existing ADR, name that ADR and explain
