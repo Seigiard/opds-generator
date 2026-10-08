@@ -10,6 +10,8 @@ Code: `src/lifecycle/`, `src/server.ts`.
 - It returns the next state plus effects: `start-scan`, `arm-reconcile-timer`, `skip-reconcile`, `abort-work`, `fail-startup`.
 - `createLifecycle` in `lifecycle.ts` runs the effects with plain async. It takes a `CatalogueScanner`, the processor, and a `Clock`. It owns the consumer, scan tasks and reconcile timer, and logs a `Lifecycle` entry (from, to, input) per transition.
 - `server.ts` only wires HTTP to the lifecycle.
+- A disk scanner declares `outputPath`. The lifecycle acquires the shared engine package's output lease before consumer/scan startup and releases it after stop joins owned work. The explicit initial-engine selection is documented in `shared-sync-engine.md`; production stays on the legacy disk scanner.
+- While the lease is pending, watcher admission is closed and resync requests coalesce into a follow-up. A failed acquisition performs no scan or publication.
 - The lifecycle stays plain async. See `docs/lifecycle-execution-prototype.md` before you reopen the Effect-scope variant.
 
 ## Initial scan

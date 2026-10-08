@@ -1,4 +1,6 @@
 import { log } from "../logging/index.ts";
+import { acquireOutputTree } from "@seigiard/sync-engine";
+import { Effect } from "effect";
 import type { CatalogueProcessor, ProcessorStatus } from "../processing/catalogue-processor.ts";
 import type { EventType } from "../processing/types.ts";
 import {
@@ -12,6 +14,7 @@ import {
 
 /** Compares the books directory with the catalogue and returns the catalogue work that closes the gap. */
 export interface CatalogueScanner {
+  readonly outputPath?: string;
   scan(request: ScanRequest, signal: AbortSignal): Promise<readonly EventType[]>;
 }
 
@@ -79,6 +82,10 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
   let state = INITIAL_STATE;
   let initialError: unknown;
   const initialScan = Promise.withResolvers<void>();
+  let releaseOutput: (() => Promise<void>) | undefined;
+  let starting: Promise<void> | undefined;
+  let stopping: Promise<void> | undefined;
+  let beforeOwnership: ScanRequest | null = null;
 
   const own = (task: Promise<unknown>, options: { readonly fatal?: boolean } = {}): void => {
     const observed = task.catch((cause) => {
@@ -171,30 +178,62 @@ export function createLifecycle({ scanner, processor, clock, reconcileIntervalSe
 
   return {
     start() {
-      own(processor.start(signal), { fatal: true });
-      processor.onBusy(() => dispatch({ type: "processor-busy" }));
-      processor.onEmpty(() => dispatch({ type: "processor-empty" }));
-      dispatch({ type: "scan-requested", request: { kind: "initial", force: false } });
+      const begin = async () => {
+        if (signal.aborted) return;
+        own(processor.start(signal), { fatal: true });
+        processor.onBusy(() => dispatch({ type: "processor-busy" }));
+        processor.onEmpty(() => dispatch({ type: "processor-empty" }));
+        dispatch({ type: "scan-requested", request: { kind: "initial", force: false } });
 
-      return initialScan.promise;
+        if (beforeOwnership) {
+          dispatch({ type: "scan-requested", request: beforeOwnership });
+          beforeOwnership = null;
+        }
+
+        await initialScan.promise;
+      };
+
+      starting ??= scanner.outputPath
+        ? Effect.runPromise(acquireOutputTree(scanner.outputPath)).then((release) => {
+            releaseOutput = release;
+
+            return begin();
+          })
+        : begin();
+
+      return starting;
     },
 
     requestScan(request) {
       const before = state.phase;
-      dispatch({ type: "scan-requested", request });
 
       if (before === "stopping") return "rejected";
+
+      if (scanner.outputPath && !releaseOutput) {
+        beforeOwnership = { kind: "resync", force: request.force || beforeOwnership?.force === true };
+
+        return "queued";
+      }
+
+      dispatch({ type: "scan-requested", request });
 
       return before === "scanning" ? "queued" : "started";
     },
 
-    accepting: () => state.phase !== "stopping",
+    accepting: () => state.phase !== "stopping" && (!scanner.outputPath || releaseOutput !== undefined),
 
     status,
 
-    async stop() {
-      dispatch({ type: "shutdown-requested" });
-      await Promise.allSettled(tasks);
+    stop() {
+      stopping ??= (async () => {
+        dispatch({ type: "shutdown-requested" });
+        await starting?.catch(() => {});
+        await Promise.allSettled(tasks);
+        await releaseOutput?.();
+        releaseOutput = undefined;
+      })();
+
+      return stopping;
     },
   };
 }

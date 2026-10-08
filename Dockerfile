@@ -1,14 +1,16 @@
 FROM oven/bun:1-alpine AS base
-RUN apk add --no-cache unzip 7zip poppler-utils djvulibre inotify-tools nginx openssl \
+RUN apk add --no-cache unzip 7zip poppler-utils djvulibre inotify-tools nginx openssl util-linux \
     && addgroup nginx bun
 WORKDIR /app
 
 FROM base AS development
 COPY package.json bun.lock* ./
+COPY vendor ./vendor
 RUN bun install
 
 FROM base AS production
 COPY package.json bun.lock* ./
+COPY vendor ./vendor
 RUN bun install --frozen-lockfile --production
 COPY src ./src
 COPY static ./static

@@ -14,7 +14,7 @@ src/
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
-├── lifecycle/       # transition.ts (pure rules), lifecycle.ts (executes them), disk-scanner.ts
+├── lifecycle/       # transition.ts, lifecycle.ts, disk-scanner.ts; initial-engine-catalogue.ts (#50 seam)
 ├── processing/      # Effect 4 event pipeline
 │   ├── catalogue-processor.ts # Shared processor contract, event path/id helpers, memory snapshots
 │   ├── catalogue-processor-effect.ts, effect-handler.ts # Effect consumer, fixed handler registry, busy/empty edges
@@ -113,6 +113,7 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 <important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
 
 Read `docs/agents/lifecycle.md` first.
+When selecting or updating the packaged engine composition, also read `docs/agents/shared-sync-engine.md`.
 
 </important>
 

@@ -41,6 +41,7 @@ async function removeHeapSnapshotLeftovers(dataPath: string): Promise<void> {
 /** The nginx 503 gate reads `/data/feed.xml`: it is absent until the seed below writes it after a successful scan, and no scan ever removes it. */
 export function createDiskScanner({ filesPath, dataPath }: { readonly filesPath: string; readonly dataPath: string }): CatalogueScanner {
   return {
+    outputPath: dataPath,
     async scan(request, signal) {
       if (request.kind === "initial") await removeHeapSnapshotLeftovers(dataPath);
 
