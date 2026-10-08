@@ -2,6 +2,14 @@
 
 Builds an OPDS catalogue and a browser view from a directory of locally stored ebooks, and keeps both in step with that directory.
 
+## Source and representation
+
+**Source tree**:
+The files and folders from which the catalogue is built. The service has read-only access; changes can occur while it processes them.
+
+**Derived representation**:
+The catalogue and browser view produced from the source tree, including their supporting metadata and images.
+
 ## Sync lifecycle
 
 **Accepting**:

@@ -110,6 +110,12 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 </important>
 
+<important if="you are extracting the shared synchronization engine or migrating an application to it">
+
+Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. They define the accepted target; the current implementation has not migrated.
+
+</important>
+
 <important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
 
 Read `docs/agents/lifecycle.md` first.
