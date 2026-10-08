@@ -106,10 +106,12 @@ COMPOSE_PROJECT_NAME=opds49-57 docker compose -f docker-compose.e2e.yml down
 `startLiveEngineCatalogue(deps, options)`, `openLiveEngineCatalogue(deps, options)` and
 `createLiveEngineLifecycle(deps, options)`
 accept `check: "metadata" | "content"` and
-`processingVersions: { book?: string, folder?: string }`. Each version defaults
-to `"1"`. Change `book` for extractor/book-entry changes; change `folder` for
-feed/browser renderer changes. The engine package version is not a processing
-version. All compositions use the exported `engineOptions` declaration.
+`processingVersions: { book?: string, folder?: string }`. OPDS defaults come
+from `PROCESSING_VERSIONS` in `src/processing-versions.ts`; bump that constant,
+not call-site options, when existing output must rebuild. Change `book` for
+extractor/book-entry changes; change `folder` for feed/browser renderer changes.
+The engine package version is not a processing version. All compositions use the
+exported `engineOptions` declaration.
 
 The package records successful work by application-declared result kind and
 source-relative paths. An ordinary initial or live check reuses existing results when
@@ -324,7 +326,7 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 
 OPDS currently pins `@seigiard/sync-engine@0.5.1`, published from engine commit
 `e1c6d2641f231d55ee7fd9ba687ec9542571d6e7` with registry integrity
-`sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. The OPDS review result file records the consumer gates and package equality checks.
+`sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

@@ -11,7 +11,7 @@ import { ownedPromise } from "../utils/owned-promise.ts";
 /**
  * Output entries whose source is no longer in the scan: a book folder (`entry.xml`) or a catalogue folder
  * (`_entry.xml`) in DATA. They are candidates only. The engine's source work re-observes each path and removes it
- * on confirmed absence; an unreadable source never authorizes removal. Dot names are bookkeeping.
+ * on confirmed absence or a confirmed source-kind change; an unreadable source never authorizes removal. Dot names are bookkeeping.
  */
 export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry[]): Effect.Effect<readonly EventType[]> {
   const books = new Set<string>();

@@ -14,11 +14,12 @@ src/
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
+├── processing-versions.ts # Book/folder processing versions; bump to rebuild existing output
 ├── lifecycle/       # live-engine-lifecycle.ts (Promise adapter), live-engine-catalogue.ts, initial-engine-catalogue.ts (engineOptions + test compositions), engine-source-work.ts, engine-policy.ts, orphans.ts, handler-logging.ts, legacy-data.ts
 ├── processing/      # Event types, adapters and Effect handlers (no queue or consumer: the engine schedules)
 │   ├── effect-handler.ts # CatalogueDeps, CatalogueEvent, handler types
 │   ├── adapters/    # Raw → typed events: books-adapter
-│   └── handlers/    # Effect handlers: book/folder sync, folder meta sync, cleanup, OPDS book entry helper
+│   └── handlers/    # Effect handlers: production book/folder meta sync plus compatibility cleanup/folder-sync seams
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml

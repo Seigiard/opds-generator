@@ -3,7 +3,7 @@ import { dirname, join, relative } from "node:path";
 import { EffectFileSystem } from "../../effect-file-system.ts";
 import { ENTRY_FILE } from "../../constants.ts";
 import { BOOK_EXTENSIONS } from "../../types.ts";
-import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
+import { CatalogueDeps, CatalogueEvent, type EffectHandler } from "../effect-handler.ts";
 import type { EventType } from "../types.ts";
 import { publishFolderFeed } from "./folder-meta-sync-effect.ts";
 
@@ -15,7 +15,7 @@ interface FailureProps {
 
 class FolderSyncFailed extends Data.TaggedError("FolderSyncFailed")<FailureProps> {}
 
-export const folderSyncEffect = Effect.fn("folderSync")(function* (event: EventType) {
+export const folderSyncEffect: EffectHandler = Effect.fn("folderSync")(function* (event: EventType) {
   if (!Predicate.isTagged(event, "FolderCreated")) return [];
 
   const { config, logger } = yield* CatalogueDeps;

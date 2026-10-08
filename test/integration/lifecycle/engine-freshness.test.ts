@@ -43,6 +43,10 @@ async function tree() {
   };
 }
 
+function nextVersion(version: string): string {
+  return `${version}-next`;
+}
+
 test("a released engine package update alone keeps OPDS publications fresh", async () => {
   // #given OPDS output and freshness state created by the released 0.4.0 package
   const { root, outputPath, deps } = await tree();
@@ -54,7 +58,7 @@ test("a released engine package update alone keeps OPDS publications fresh", asy
     logger: {
       ...deps.logger,
       info: (component: string, message: string, fields?: LogContext) => {
-        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_tag));
         deps.logger.info(component, message, fields);
       },
     },
@@ -132,14 +136,14 @@ test("the application default processing versions rebuild results from an older 
     logger: {
       ...deps.logger,
       info: (component: string, message: string, fields?: LogContext) => {
-        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_tag));
         deps.logger.info(component, message, fields);
       },
     },
   };
 
   try {
-    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "1", folder: "1" } }));
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "0", folder: "0" } }));
 
     for (const path of artifacts) await utimes(join(outputPath, path), ancient, ancient);
 
@@ -153,13 +157,13 @@ test("the application default processing versions rebuild results from an older 
 
       // #then stale release outputs are rebuilt without a force resync or source change
       expect({
-        versions: PROCESSING_VERSIONS,
         status: await facts(url),
+        completedHandlers: completedHandlers.length > 0,
         rewritten: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs !== ancient.getTime())),
         titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
       }).toEqual({
-        versions: { book: "2", folder: "2" },
         status: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
+        completedHandlers: true,
         rewritten: [true, true, true, true, true],
         titles: ["Test Book"],
       });
@@ -267,7 +271,7 @@ test("failed real book publication retains its old entry and is replayed by a fr
   const source = join(sourcePath, "Fiction", "Book.fb2");
   const entry = join(outputPath, "Fiction", "Book.fb2", "entry.xml");
   await utimes(source, ancient, ancient);
-  const versions = { processingVersions: { book: "3" } };
+  const versions = { processingVersions: { book: nextVersion(PROCESSING_VERSIONS.book) } };
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
@@ -324,7 +328,7 @@ test("interrupted real book preparation is not considered current by a fresh ins
     release = resolve;
   });
 
-  const versions = { processingVersions: { book: "3" } };
+  const versions = { processingVersions: { book: nextVersion(PROCESSING_VERSIONS.book) } };
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
@@ -383,11 +387,14 @@ test("book and folder processing versions rebuild their own kinds and required d
 
     for (const path of paths) await utimes(path, ancient, ancient);
     // #when only the book processing version changes, then only the folder version changes
-    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "3" } }));
+    const nextBook = nextVersion(PROCESSING_VERSIONS.book);
+    const nextFolder = nextVersion(PROCESSING_VERSIONS.folder);
+
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: nextBook } }));
     const bookVersion = await Promise.all(paths.map(async (path) => (await stat(path)).mtimeMs !== ancient.getTime()));
 
     for (const path of paths) await utimes(path, ancient, ancient);
-    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "3", folder: "3" } }));
+    await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: nextBook, folder: nextFolder } }));
     const folderVersion = await Promise.all(paths.map(async (path) => (await stat(path)).mtimeMs !== ancient.getTime()));
     // #then the selected kinds are rebuilt in place and acquisition results remain usable
     expect({

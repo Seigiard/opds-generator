@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { Effect, Cause } from "effect";
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, utimes } from "node:fs/promises";
+import { Effect, Cause, Exit } from "effect";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes } from "node:fs/promises";
 import { engineStatePath, acquireOutputTree } from "@seigiard/sync-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +28,18 @@ async function tree() {
     outputPath,
     deps: { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } },
   };
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+
+    throw error;
+  }
 }
 
 test("a failed book update retains successful artifacts while an independent book publishes", async () => {
@@ -207,7 +219,7 @@ test("a stable broken book with a previous entry converges after one pass", asyn
     logger: {
       ...deps.logger,
       info: (component: string, message: string, fields?: LogContext) => {
-        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_tag));
         deps.logger.info(component, message, fields);
       },
     },
@@ -216,6 +228,7 @@ test("a stable broken book with a previous entry converges after one pass", asyn
   try {
     // #when a fresh engine sees the stable broken source twice
     await Effect.runPromise(initialEngineCatalogue(countedDeps));
+    const first = [...completedHandlers];
     await utimes(goodEntry, ancient, ancient);
     completedHandlers.length = 0;
     await Effect.runPromise(initialEngineCatalogue(countedDeps));
@@ -223,10 +236,12 @@ test("a stable broken book with a previous entry converges after one pass", asyn
     // #then the failure is recorded as current and the second pass reuses both books
     expect({
       second: completedHandlers,
+      firstHasBroken: first.includes("BookCreated"),
       goodMtime: (await stat(goodEntry)).mtimeMs,
       brokenTitle: parseFeed(`<feed>${await readFile(brokenEntry, "utf8")}</feed>`).entries.map((entry) => entry.title),
     }).toEqual({
       second: [],
+      firstHasBroken: true,
       goodMtime: ancient.getTime(),
       brokenTitle: ["Broken"],
     });
@@ -425,14 +440,48 @@ test("underscore-prefixed source deletions are cleaned from DATA", async () => {
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
-    const before = await Bun.file(join(outputPath, "_Archive", "Book.fb2", "entry.xml")).exists();
+    const entry = join(outputPath, "_Archive", "Book.fb2", "entry.xml");
+    const before = await pathExists(entry);
 
     // #when that source disappears while the service is down
     await rm(join(sourcePath, "_Archive"), { recursive: true });
     await Effect.runPromise(initialEngineCatalogue(deps));
 
     // #then orphan cleanup removes the direct URL artifacts too
-    expect({ before, after: await Bun.file(join(outputPath, "_Archive")).exists() }).toEqual({ before: true, after: false });
+    expect({ before, afterEntry: await pathExists(entry), afterArchive: await pathExists(join(outputPath, "_Archive")) }).toEqual({
+      before: true,
+      afterEntry: false,
+      afterArchive: false,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("cleanup refuses a symlinked DATA ancestor instead of deleting through it", async () => {
+  // #given a published folder whose DATA ancestor is replaced by an operator-created symlink
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Fiction"));
+  await copyFile(fixture, join(sourcePath, "Fiction", "Book.fb2"));
+  await Effect.runPromise(initialEngineCatalogue(deps));
+  const external = join(root, "external");
+  await rename(join(outputPath, "Fiction"), external);
+  await symlink(external, join(outputPath, "Fiction"));
+  await rm(join(sourcePath, "Fiction", "Book.fb2"));
+
+  try {
+    // #when startup cleanup observes the book as absent through that symlinked DATA ancestor
+    const completion = await Effect.runPromiseExit(initialEngineCatalogue(deps));
+
+    const observation = {
+      completion: completion._tag,
+      failedSafely: Exit.isFailure(completion) && Cause.pretty(completion.cause).includes("Output ancestor is not an owned directory"),
+      externalEntry: await pathExists(join(external, "Book.fb2", "entry.xml")),
+      sourceGone: !(await pathExists(join(sourcePath, "Fiction", "Book.fb2"))),
+    };
+
+    // #then the external target survives and the failed cleanup is public
+    expect(observation).toEqual({ completion: "Failure", failedSafely: true, externalEntry: true, sourceGone: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -527,6 +576,7 @@ test("ordinary folder cleanup preserves configured state and its held lease inod
                 removed: !(await Bun.file(join(outputPath, "Fiction", "feed.xml")).exists()),
                 sameInode: (await stat(lock)).ino === before,
                 saved: await readFile(join(statePath, "saved-state"), "utf8"),
+                stateFiles: (await readdir(statePath)).sort(),
                 owned: contender._tag,
                 references: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((item) => item.href),
               };
@@ -542,6 +592,7 @@ test("ordinary folder cleanup preserves configured state and its held lease inod
       removed: true,
       sameInode: true,
       saved: "Persistent state bytes",
+      stateFiles: ["freshness.json", "lock", "saved-state"],
       owned: "Failure",
       references: [],
     });

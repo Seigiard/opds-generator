@@ -1,7 +1,6 @@
 import { Cause, Effect, Exit } from "effect";
 import { join } from "node:path";
 import type { HandlerDeps } from "../context.ts";
-import { log } from "../logging/index.ts";
 import type { EventType } from "../processing/types.ts";
 
 function eventPath(event: EventType): string | undefined {
@@ -23,7 +22,7 @@ export function withHandlerLogs<E, R>(
     const eventId = `${event._tag}:${path ?? "unknown"}:${Date.now()}:${Math.random().toString(36).substring(2, 7)}`;
     const startTime = Date.now();
 
-    log.info("Consumer", "Handler started", { event_type: "handler_start", event_id: eventId, event_tag: event._tag, path });
+    deps.logger.info("Consumer", "Handler started", { event_type: "handler_start", event_id: eventId, event_tag: event._tag, path });
 
     return work.pipe(
       Effect.onExit((exit) =>
@@ -33,7 +32,7 @@ export function withHandlerLogs<E, R>(
           if (Exit.isSuccess(exit)) {
             const cascades = exit.value;
 
-            log.info("Consumer", "Handler completed", {
+            deps.logger.info("Consumer", "Handler completed", {
               event_type: "handler_complete",
               event_id: eventId,
               event_tag: event._tag,
@@ -43,7 +42,7 @@ export function withHandlerLogs<E, R>(
             });
 
             if (cascades.length > 0) {
-              log.info("Consumer", "Cascades generated", {
+              deps.logger.info("Consumer", "Cascades generated", {
                 event_type: "cascades_generated",
                 event_id: eventId,
                 event_tag: event._tag,
@@ -64,7 +63,7 @@ export function withHandlerLogs<E, R>(
             return;
           }
 
-          log.error("Consumer", "Handler failed", Cause.squash(exit.cause), {
+          deps.logger.error("Consumer", "Handler failed", Cause.squash(exit.cause), {
             event_type: "handler_error",
             event_id: eventId,
             event_tag: event._tag,
