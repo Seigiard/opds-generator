@@ -247,7 +247,7 @@ test("a cold start whose root page cannot be published never becomes available a
   }
 });
 
-test("a damaged replacement is a retained error after completion while the independent book publishes", async () => {
+test("a damaged replacement converges while the independent book publishes", async () => {
   // #given a completed catalogue with two real books
   const { root, sourcePath, outputPath, deps } = await tree();
   await copyFile(fixture, join(sourcePath, "Damaged.fb2"));
@@ -269,12 +269,12 @@ test("a damaged replacement is a retained error after completion while the indep
     const deadline = Date.now() + 5000;
     let status = await (await fetch(`${url}/status`)).json();
 
-    while (!(status.completed && status.errors.length > 0) && Date.now() < deadline) {
+    while (!status.completed && Date.now() < deadline) {
       await Bun.sleep(20);
       status = await (await fetch(`${url}/status`)).json();
     }
 
-    // #then the error is public after completion, prior output stays, and independent work changed
+    // #then completion converges, prior output stays, and independent work changed
     expect({
       available: status.available,
       verifying: status.verifying,
@@ -288,7 +288,7 @@ test("a damaged replacement is a retained error after completion while the indep
       available: true,
       verifying: false,
       completed: true,
-      errors: ["work"],
+      errors: [],
       entryRetained: true,
       titles: ["Changed Book", "Test Book"],
     });

@@ -320,11 +320,14 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 | `unit/processing/events.test.ts` dedup case                                                                                                       | Watcher dedup window                                                                                                                                                 | Removed by design: repeated notices pass through; `live-engine-catalogue.test.ts` pins a second replacement during active work                   |
 | `initial-engine-catalogue.test.ts` lease-acquisition cases                                                                                        | Lease contention during startup                                                                                                                                      | Same file, on the production lifecycle                                                                                                           |
 
-## Final release evidence (#64)
+## Final release evidence (#64 and OPDS review update)
+
+OPDS currently pins `@seigiard/sync-engine@0.5.1`, published from engine commit
+`e1c6d2641f231d55ee7fd9ba687ec9542571d6e7` with registry integrity
+`sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. The OPDS review result file records the consumer gates and package equality checks.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity
-`sha512-XN5GY9M3ueBBeaWWRENPCLIwh3Dl0GGPwF06KfgGvpn+WJ/zU0PNXAtfI7PxPk2mpGXJocEw9zKyeMSPXEolRw==`. OPDS,
-TTRPG Map Viewer and OPML Generator all pin that release through normal registry dependencies. The scenario matrix,
+`sha512-XN5GY9M3ueBBeaWWRENPCLIwh3Dl0GGPwF06KfgGvpn+WJ/zU0PNXAtfI7PxPk2mpGXJocEw9zKyeMSPXEolRw==`. The #64 scenario matrix,
 consumer revisions, commands, installed-package equality checks and delegation audit are in
 `docs/agents/shared-sync-evidence.md`.

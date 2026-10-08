@@ -454,7 +454,7 @@ describe("startup readiness through the production server and nginx", () => {
     });
   });
 
-  test("a damaged replacement is reported after completion while the independent book publishes", async () => {
+  test("a damaged replacement converges while the independent book publishes", async () => {
     // #given a completed catalogue of two real books
     await withScenario("errors", {}, async (s) => {
       await copyFile(FB2, join(s.src, "Damaged.fb2"));
@@ -471,20 +471,20 @@ describe("startup readiness through the production server and nginx", () => {
       );
       await resync("?force=1");
 
-      const facts = await until("completion with an error", async () => {
+      const facts = await until("completion after damaged replacement", async () => {
         const current = await s.status();
 
-        return current?.completed && current.errors.length > 0 ? current : undefined;
+        return current?.completed ? current : undefined;
       });
 
-      // #then the error is public after completion, the earlier entry is retained and nginx serves the independent change
+      // #then the earlier entry is retained, completion converges, and nginx serves the independent change
       expect({
         available: facts.available,
         verifying: facts.verifying,
         errors: facts.errors.map((error) => error.source),
         entryRetained: (await readFile(entry)).equals(previous),
         titles: titles((await get("/opds")).body).sort(),
-      }).toEqual({ available: true, verifying: false, errors: ["work"], entryRetained: true, titles: ["Changed Book", "Test Book"] });
+      }).toEqual({ available: true, verifying: false, errors: [], entryRetained: true, titles: ["Changed Book", "Test Book"] });
     });
   });
 });

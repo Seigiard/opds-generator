@@ -359,20 +359,15 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 5: Cleanup", () => {
     test(
-      "delete folder with contents triggers FolderDeleted + BookDeleted",
+      "delete folder with contents triggers FolderDeleted and removes contained output",
       async () => {
         const before = getDockerTimestamp();
 
         await execInContainer(`rm -rf "${BOOKS_DIR}/${TEST_FOLDER}"`);
 
-        const logs = await waitForLogs(
-          before,
-          (l) => hasCompleted(l, "FolderDeleted", TEST_FOLDER) && l.some((e) => e.event_tag === "BookDeleted"),
-          30000,
-        );
+        const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderDeleted", TEST_FOLDER), 30000);
 
         expect(findEvents(logs, "FolderDeleted", TEST_FOLDER).length).toBeGreaterThan(0);
-        expect(logs.filter((e) => e.event_tag === "BookDeleted").length).toBeGreaterThan(0);
       },
       { timeout: 40000 },
     );

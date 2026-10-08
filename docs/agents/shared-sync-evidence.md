@@ -2,6 +2,8 @@
 
 This is the final cross-application evidence for the accepted shared synchronization contract in ADR 0004 and issue #49.
 
+OPDS review follow-up supersedes only OPDS's consumed package version: OPDS now pins `@seigiard/sync-engine@0.5.1` with registry integrity `sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. TTRPG Map Viewer and OPML Generator remain covered by the #64 `0.5.0` evidence below until their own update.
+
 ## Release identity
 
 | Field                   | Value                                                                                             |
@@ -17,11 +19,11 @@ The release was made from a clean engine checkout with `bun scripts/verify-pack.
 
 ## Consumers
 
-| Application      | Branch revision                            | Dependency evidence                                                            | Installed package equality                                                                                                            |
-| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| OPDS Generator   | `14481c7a93befe7fecb3a1c522035c3b8a1c1966` | `package.json` pins `0.5.0`; `bun.lock` records the registry integrity above.  | Current worktree `node_modules/@seigiard/sync-engine` diffed cleanly against `npm pack @seigiard/sync-engine@0.5.0`.                  |
-| TTRPG Map Viewer | `0578de20523115a393127704150658bf1c2e55e6` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above. | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
-| OPML Generator   | `704d3056b0126012b4199ea057f1bc4210e4f908` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above. | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
+| Application      | Branch revision                            | Dependency evidence                                                                                                                                | Installed package equality                                                                                                            |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| OPDS Generator   | `945ccf2` plus review follow-up            | `package.json` pins `0.5.1`; `bun.lock` records `sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. | Review result file records installed package equality against `npm pack @seigiard/sync-engine@0.5.1`.                                 |
+| TTRPG Map Viewer | `0578de20523115a393127704150658bf1c2e55e6` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                                                                     | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
+| OPML Generator   | `704d3056b0126012b4199ea057f1bc4210e4f908` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                                                                     | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
 
 Verification commands used for the equality checks:
 
