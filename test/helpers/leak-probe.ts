@@ -12,9 +12,10 @@
  * LEAK_PROBE_RETAIN_KB keeps that many KiB live per measured operation. It is the
  * calibration control: the gate must go red with it at its limit and green without it.
  */
-import { spawnWithTimeoutText } from "../../src/utils/process.ts";
+import { runCommandText } from "../../src/utils/process.ts";
 import { saveBufferAsImage, saveCoverAndThumbnail } from "../../src/utils/image.ts";
-import { listEntries, readEntry } from "../../src/utils/archive.ts";
+import { listArchiveEntries, readArchiveEntry } from "../../src/utils/archive.ts";
+import { Effect } from "effect";
 import type { CatalogueProcessor } from "../../src/processing/catalogue-processor.ts";
 import { createEffectCatalogueProcessor } from "../../src/processing/catalogue-processor-effect.ts";
 import { runAsPromiseHandler } from "./effect-test-handlers.ts";
@@ -127,16 +128,24 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       };
 
     case "spawn-echo":
-      return () => spawnWithTimeoutText({ command: ["echo", "hello"] }).then(() => {});
+      return () => runWorkload(runCommandText({ command: ["echo", "hello"] }), ({ exitCode }) => exitCode === 0, "echo");
     case "spawn-zipinfo":
-      return () => spawnWithTimeoutText({ command: ["zipinfo", "-1", EPUB_PATH] }).then(() => {});
+      return () => runWorkload(runCommandText({ command: ["zipinfo", "-1", EPUB_PATH] }), ({ exitCode }) => exitCode === 0, "zipinfo");
     case "list-entries":
-      return () => listEntries(CBZ_PATH).then(() => {});
+      return () => runWorkload(listArchiveEntries(CBZ_PATH), (entries) => entries.length > 0, "CBZ listing");
     case "read-entry": {
       const image = await findCbzImage();
 
-      return () => readEntry(CBZ_PATH, image).then(() => {});
+      return () => runWorkload(readArchiveEntry(CBZ_PATH, image), (page) => page !== null && page.byteLength > 0, "CBZ page read");
     }
+
+    // The same page images in each archive type: RAR runs native WASM extraction, 7z and TAR run commands.
+    case "archive-rar":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cbr"));
+    case "archive-7z":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cb7"));
+    case "archive-tar":
+      return buildArchiveReads(join(FIXTURES_DIR, "bobby_make_believe_sample.cbt"));
 
     case "save-buffer-as-image":
       return async (i) => {
@@ -152,11 +161,10 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
       const image = await findCbzImage();
 
       return async (i) => {
-        const buf = await readEntry(CBZ_PATH, image);
+        const buf = await Effect.runPromise(readArchiveEntry(CBZ_PATH, image));
 
-        if (buf) {
-          await saveCoverAndThumbnail(buf, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
-        }
+        if (!buf) throw new Error("No page read from the CBZ");
+        await saveCoverAndThumbnail(buf, join(tmpDir, `cover-${i}.jpg`), 600, join(tmpDir, `thumb-${i}.jpg`), 200);
       };
     }
 
@@ -172,6 +180,23 @@ async function buildScenario(name: string, tmpDir: string): Promise<Op> {
     default:
       throw new Error(`Unknown scenario: ${name}`);
   }
+}
+
+// A scenario whose operation silently does nothing must not pass the gate by avoiding the workload.
+async function runWorkload<A>(effect: Effect.Effect<A, unknown>, didWork: (result: A) => boolean, label: string): Promise<void> {
+  if (!didWork(await Effect.runPromise(effect))) throw new Error(`${label} did no work`);
+}
+
+// One listing and one page read per operation through the Effect archive dispatch. A dispatch that silently
+// returns nothing must not pass the gate by avoiding the workload.
+function buildArchiveReads(archive: string): Op {
+  return async () => {
+    const page = await Effect.runPromise(
+      listArchiveEntries(archive).pipe(Effect.flatMap((entries) => readArchiveEntry(archive, entries.at(-1) ?? ""))),
+    );
+
+    if (!page || page.byteLength === 0) throw new Error(`No page read from ${archive}`);
+  };
 }
 
 // One book per operation through the Effect event handlers (PDF, CBZ, EPUB in turn).
@@ -235,8 +260,9 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
       (await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
       (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
       (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
-      // A handler that silently skips the book must not pass the gate by avoiding the workload.
+      // A handler that silently skips the book or its cover must not pass the gate by avoiding the workload.
       await stat(join(folderDataPath, bookFile, "entry.xml"));
+      await stat(join(folderDataPath, bookFile, "cover.jpg"));
     } finally {
       await rm(folderDataPath, { recursive: true, force: true });
       await rm(folderPath, { recursive: true, force: true });
@@ -351,7 +377,7 @@ function buildContext(): AppContext {
 }
 
 async function findCbzImage(): Promise<string> {
-  const entries = await listEntries(CBZ_PATH);
+  const entries = await Effect.runPromise(listArchiveEntries(CBZ_PATH));
   const image = entries.find((e) => /\.(jpg|jpeg|png)$/i.test(e));
 
   if (!image) throw new Error("No image in test CBZ");

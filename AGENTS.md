@@ -25,9 +25,9 @@ src/
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
 │   ├── feed-html.ts  # renderHtml(model) → index.html
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (cassettes + playground)
-├── formats/         # FormatHandler per format; index.ts is the registry
+├── formats/         # Effect extractor per format; index.ts is the registry
 ├── logging/         # Flat JSON logger to stdout
-└── utils/           # archive, image, process, processor, opds, owned-promise (Effect↔Promise bridge)
+└── utils/           # archive (Effect dispatch over all archive types), zip, archive-type, image, process (Effect commands + temporary directories), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
 ├── styles/          # CSS sources + four fixed cover variants → static/style.css
@@ -49,6 +49,7 @@ tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never ad
 ## Always-on rules
 
 - `static/` and `test/golden/*` are generated. Change their sources, run `bun run build:ui` / `bun run render:golden`, and commit the output.
+- Run `build:ui` and `build:ui:check` with the Bun version that `.github/workflows/docker.yml` pins (`bun-version`). Minified output changes between Bun versions, so another version fails the freshness check.
 - `src/render/*` and `src/types.ts` stay browser-importable: no node builtins, no `Bun` globals. `render:pure` and an oxlint override enforce it.
 - The app and tests run in Docker. Shut containers down gracefully when you finish.
 
@@ -167,12 +168,12 @@ Read `docs/agents/reader.md` first.
 
 <important if="you are adding a format handler or changing format extraction or cancellation in src/formats/">
 
-- Add `src/formats/<format>.ts` exporting `registration: FormatHandlerRegistration`, then add it to the array in `src/formats/index.ts`. The interface is in `src/formats/types.ts`; follow `epub.ts`.
-- Format factories accept an optional shutdown signal. Cancellation is not an extraction failure: rethrow it through fallback catches, and check it before catalogue publication.
+- A format exports a `FormatExtractorRegistration` whose `extract(filePath)` returns `Effect<ExtractedBook, ExtractionFailed>` (`src/formats/types.ts`), and is listed in `src/formats/index.ts`. Follow `pdf.ts` (commands), `djvu.ts` (concurrent commands, native work on a temporary file) or `epub.ts` / `fb2.ts` (entries through the archive dispatch in `src/utils/archive.ts`): yield `runCommand` / `useTemporaryDirectory` from `src/utils/process.ts`, recover a cover failure as `cover: null` with the metadata kept, and fail with `ExtractionFailed` only when no usable result exists. Interruption is not a failure; recover with `Effect.catchTag`, which leaves it alone.
+- A format that runs no command (`mobi.ts`, `txt.ts`, plain `fb2.ts`) crosses its file read with `Effect.tryPromise(...).pipe(Effect.uninterruptible)`: a stop waits for the read, then takes effect before parsing. Parsing stays synchronous; a parser throw becomes `ExtractionFailed`.
 - If cancelled before publication, the existing `entry.xml` stays untouched (images may already be refreshed). Once entry/link publication starts, finish both writes so an entry never lacks its download link.
 - `valibot` validates watcher events, parsed XML values, and reader event details at input boundaries. `src/formats/xml-value.ts` owns the recursive XML value contract.
 - Build feed objects with `opds-ts/v1.2` (`Entry`, `Feed`); see `src/utils/opds.ts`.
-- Format dependencies: EPUB/FBZ need `unzip`, PDF `poppler-utils`, DJVU `djvulibre`, comics `node-7z` + `unrar-js`. They exist in the Docker image only.
+- Format dependencies: EPUB/FBZ need `unzip`, PDF `poppler-utils`, DJVU `djvulibre`, comics `7zip` (`7zz`) and `tar`; RAR uses the bundled `node-unrar-js` WASM. The system tools exist in the Docker image only.
 
 </important>
 

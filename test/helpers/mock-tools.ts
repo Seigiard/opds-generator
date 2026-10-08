@@ -1,5 +1,5 @@
 import { spyOn, type Mock } from "bun:test";
-import { writeSync } from "node:fs";
+import { writeFileSync, writeSync } from "node:fs";
 
 type SpawnResult = {
   stdout: ReadableStream<Uint8Array>;
@@ -10,9 +10,15 @@ type SpawnResult = {
   pid: number;
 };
 
+type CommandOutcome = Error | { readonly exitCode: number; readonly stdout?: string };
+
+type DjvusedScript = "print-meta" | "n";
+
 interface MockConfig {
+  djvused?: Partial<Record<DjvusedScript, CommandOutcome>>;
+  ddjvu?: Error | { readonly exitCode: number; readonly tiff?: string };
   pdfinfo?: string;
-  pdftoppm?: Buffer | Error | "hang";
+  pdftoppm?: Buffer | Error | "hang" | { readonly exitCode: number };
   magick?: boolean;
 }
 
@@ -88,8 +94,24 @@ export function mockPdfToPpmSpawnFailure(error: Error): void {
   setupSpawnSpy();
 }
 
+export function mockPdfToPpmExit(exitCode: number): void {
+  mockConfig.pdftoppm = { exitCode };
+  setupSpawnSpy();
+}
+
 export function mockPdfToPpmHangUntilKilled(): void {
   mockConfig.pdftoppm = "hang";
+  setupSpawnSpy();
+}
+
+export function mockDjvused(script: DjvusedScript, outcome: CommandOutcome): void {
+  mockConfig.djvused = { ...mockConfig.djvused, [script]: outcome };
+  setupSpawnSpy();
+}
+
+/** `tiff` is written to the output path ddjvu was given, so a later reader sees that content. */
+export function mockDdjvu(outcome: Error | { readonly exitCode: number; readonly tiff?: string }): void {
+  mockConfig.ddjvu = outcome;
   setupSpawnSpy();
 }
 
@@ -107,6 +129,27 @@ function setupSpawnSpy(): void {
     const cmdArray = Array.isArray(cmd) ? cmd : [cmd];
     const command = cmdArray[0];
 
+    // SAFETY: an unknown djvused script reads as undefined in the outcome map and falls through to the real command.
+    const djvusedOutcome = command === "djvused" ? mockConfig.djvused?.[cmdArray[3] as DjvusedScript] : undefined;
+
+    if (djvusedOutcome !== undefined) {
+      if (djvusedOutcome instanceof Error) throw djvusedOutcome;
+
+      writeStdoutOption(options, djvusedOutcome.stdout ?? "");
+
+      // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
+      return createMockSpawnResult(djvusedOutcome.stdout ?? "", djvusedOutcome.exitCode) as any;
+    }
+
+    if (command === "ddjvu" && mockConfig.ddjvu !== undefined) {
+      if (mockConfig.ddjvu instanceof Error) throw mockConfig.ddjvu;
+
+      if (mockConfig.ddjvu.tiff !== undefined) writeFileSync(cmdArray[4], mockConfig.ddjvu.tiff);
+
+      // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
+      return createMockSpawnResult("", mockConfig.ddjvu.exitCode) as any;
+    }
+
     if (command === "pdfinfo" && mockConfig.pdfinfo !== undefined) {
       writeStdoutOption(options, mockConfig.pdfinfo);
 
@@ -120,6 +163,11 @@ function setupSpawnSpy(): void {
       if (mockConfig.pdftoppm === "hang") {
         // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
         return createHangingSpawnResult() as any;
+      }
+
+      if (!Buffer.isBuffer(mockConfig.pdftoppm)) {
+        // SAFETY: this fake supplies the stdout/exited/kill fields consumed by process tests only.
+        return createMockSpawnResult("", mockConfig.pdftoppm.exitCode) as any;
       }
 
       writeStdoutOption(options, mockConfig.pdftoppm);

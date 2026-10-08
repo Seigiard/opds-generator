@@ -1,49 +1,72 @@
 import { describe, test, expect } from "bun:test";
-import { pdfHandlerRegistration } from "../../../src/formats/pdf.ts";
+import { Effect } from "effect";
+import { pdfExtractorRegistration } from "../../../src/formats/pdf.ts";
 import { assertCoverMatchesReference } from "../../helpers/image-compare.ts";
 import { join } from "node:path";
 
 const FIXTURES_DIR = join(import.meta.dir, "../../../files/test");
 
-describe("PDF Handler Integration", () => {
+const extract = (path: string) => Effect.runPromise(pdfExtractorRegistration.extract(path));
+
+const failureTag = (path: string) => Effect.runPromise(Effect.flip(pdfExtractorRegistration.extract(path))).then((error) => error._tag);
+
+// Longer than Linux PATH_MAX (4096), so the existence check itself fails with ENAMETOOLONG.
+const PATH_TOO_LONG = `/books/${"a/".repeat(3000)}book.pdf`;
+
+const errnoCode = (cause: unknown) => (cause instanceof Error && "code" in cause ? cause.code : undefined);
+
+describe("PDF extractor integration", () => {
   describe("with Test Book - Test Author.pdf", () => {
     const pdfPath = join(FIXTURES_DIR, "Test Book - Test Author.pdf");
 
-    test("creates handler successfully", async () => {
-      const handler = await pdfHandlerRegistration.create(pdfPath);
-      expect(handler).not.toBeNull();
-    });
-
     test("extracts all metadata fields", async () => {
-      const handler = await pdfHandlerRegistration.create(pdfPath);
-      const metadata = handler!.getMetadata();
-
-      expect(metadata.title).toBe("Test Book");
-      expect(metadata.author).toBe("Test Author");
-      expect(metadata.issued).toBe("2025");
-      expect(metadata.subjects).toEqual(["test"]);
-      expect(metadata.pageCount).toBe(3);
+      // #given a known source book
+      // #when
+      const { meta } = await extract(pdfPath);
+      // #then
+      expect(meta).toEqual({
+        title: "Test Book",
+        author: "Test Author",
+        description: undefined,
+        issued: "2025",
+        subjects: ["test"],
+        pageCount: 3,
+      });
     });
 
-    test("extracts cover matching reference", async () => {
-      const handler = await pdfHandlerRegistration.create(pdfPath);
-      const cover = await handler!.getCover();
-
-      expect(cover).not.toBeNull();
+    test("extracts the first page as a cover matching the reference", async () => {
+      // #given a known source book
+      // #when
+      const { cover } = await extract(pdfPath);
+      // #then
       await assertCoverMatchesReference(cover!);
     });
   });
 
   describe("edge cases", () => {
-    test("returns null for non-existent file", async () => {
-      const handler = await pdfHandlerRegistration.create("/non/existent/file.pdf");
-      expect(handler).toBeNull();
+    test("fails extraction for a non-existent file", async () => {
+      // #given / #when
+      const tag = await failureTag("/non/existent/file.pdf");
+      // #then
+      expect(tag).toBe("ExtractionFailed");
     });
 
-    test("returns null for non-pdf file", async () => {
-      const epubPath = join(FIXTURES_DIR, "Test Book - Test Author.epub");
-      const handler = await pdfHandlerRegistration.create(epubPath);
-      expect(handler).toBeNull();
+    test("fails extraction for a non-pdf file", async () => {
+      // #given / #when
+      const tag = await failureTag(join(FIXTURES_DIR, "Test Book - Test Author.epub"));
+      // #then
+      expect(tag).toBe("ExtractionFailed");
+    });
+
+    test("fails extraction with the path and cause when the existence check fails", async () => {
+      // #given / #when
+      const error = await Effect.runPromise(Effect.flip(pdfExtractorRegistration.extract(PATH_TOO_LONG)));
+      // #then
+      expect({ tag: error._tag, path: error.path, code: errnoCode(error.cause) }).toEqual({
+        tag: "ExtractionFailed",
+        path: PATH_TOO_LONG,
+        code: "ENAMETOOLONG",
+      });
     });
   });
 });

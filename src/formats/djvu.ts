@@ -1,9 +1,10 @@
 import sharp from "sharp";
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
+import { Data, Effect } from "effect";
+import { join } from "node:path";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
 import { logHandlerError } from "../logging/index.ts";
 import { COVER_MAX_SIZE } from "../constants.ts";
-import { join } from "node:path";
-import { spawnWithTimeout, spawnWithTimeoutText, withTemporaryDirectory } from "../utils/process.ts";
+import { runCommand, runCommandText, useTemporaryDirectory } from "../utils/process.ts";
 
 interface DjvuMeta {
   title?: string;
@@ -13,30 +14,121 @@ interface DjvuMeta {
   pages?: number;
 }
 
-function parseMetaValue(value: string): string {
-  return value.replace(/^"(.*)"$/, "$1").trim();
+interface CommandText {
+  readonly stdout: string;
+  readonly exitCode: number;
 }
 
-async function parseDjvuMeta(filePath: string, signal?: AbortSignal): Promise<DjvuMeta | null> {
-  const results = await Promise.allSettled([
-    spawnWithTimeoutText({ command: ["djvused", filePath, "-e", "print-meta"], signal }),
-    spawnWithTimeoutText({ command: ["djvused", filePath, "-e", "n"], signal }),
-  ]);
+// `message` carries the cause's text: the logger writes an error's message and stack, never its `cause`.
+class CoverConversionFailed extends Data.TaggedError("CoverConversionFailed")<{ readonly cause: unknown; readonly message: string }> {}
 
-  signal?.throwIfAborted();
-  const [metaResult, pagesResult] = results;
+const extractDjvu = Effect.fn("extractDjvu")(function* (filePath: string) {
+  const exists = yield* Effect.tryPromise({
+    try: () => Bun.file(filePath).exists(),
+    catch: (cause) => ExtractionFailed.of(filePath, cause),
+  }).pipe(
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("DJVU", filePath, error.cause))),
+    Effect.uninterruptible,
+  );
 
-  if (metaResult.status === "rejected") throw metaResult.reason;
+  if (!exists) return yield* ExtractionFailed.of(filePath, "file does not exist");
 
-  if (pagesResult.status === "rejected") throw pagesResult.reason;
-  const { stdout: metaOutput, exitCode: metaExitCode } = metaResult.value;
-  const { stdout: pagesOutput, exitCode: pagesExitCode } = pagesResult.value;
+  const info = yield* readDjvuMeta(filePath);
 
-  if (metaExitCode !== 0 && pagesExitCode !== 0) return null;
+  const meta: BookMetadata = {
+    title: info.title || "",
+    author: info.author,
+    issued: parseCreationDate(info.creationDate),
+    subjects: parseKeywords(info.keywords),
+    pageCount: info.pages,
+  };
 
+  const book: ExtractedBook = { meta, cover: yield* readCover(filePath) };
+
+  return book;
+});
+
+export const djvuExtractorRegistration: FormatExtractorRegistration = {
+  extensions: ["djvu"],
+  extract: extractDjvu,
+};
+
+/**
+ * Metadata and page count come from two concurrent `djvused` commands. If one fails to run, the other is
+ * interrupted and awaited. One nonzero exit keeps what the other command read; two nonzero exits fail.
+ */
+function readDjvuMeta(filePath: string): Effect.Effect<DjvuMeta, ExtractionFailed> {
+  return Effect.all([djvused(filePath, "print-meta"), djvused(filePath, "n")], { concurrency: 2 }).pipe(
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("DJVU", filePath, error.cause))),
+    Effect.mapError((error) => ExtractionFailed.of(filePath, error)),
+    Effect.flatMap(([metaResult, pagesResult]) => {
+      const info = parseDjvuOutputs(metaResult, pagesResult);
+
+      return info ? Effect.succeed(info) : Effect.fail(ExtractionFailed.of(filePath, "djvused read neither metadata nor page count"));
+    }),
+  );
+}
+
+function djvused(filePath: string, script: string) {
+  return runCommandText({ command: ["djvused", filePath, "-e", script] });
+}
+
+/** The first page as JPEG. A cover that cannot be rendered is `null`, so the metadata already read survives. */
+function readCover(filePath: string): Effect.Effect<Buffer | null> {
+  return useTemporaryDirectory("djvu-", (directory) => renderFirstPage(filePath, join(directory, "page.tiff"))).pipe(
+    Effect.catchTags({
+      CommandFailed: (error) => recoverCover(filePath, error.cause),
+      TemporaryDirectoryFailed: (error) => recoverCover(filePath, error.cause),
+      CoverConversionFailed: (error) => recoverCover(filePath, error.cause),
+    }),
+  );
+}
+
+const renderFirstPage = Effect.fnUntraced(function* (filePath: string, tiffPath: string) {
+  const { exitCode } = yield* runCommand({ command: ["ddjvu", "-format=tiff", "-page=1", filePath, tiffPath] });
+
+  if (exitCode !== 0) return null;
+
+  const data = yield* convertToCover(tiffPath);
+
+  return data.byteLength === 0 ? null : data;
+});
+
+// sharp cannot be cancelled. Uninterruptible, so removal of the temporary TIFF waits until sharp stops reading it.
+function convertToCover(tiffPath: string): Effect.Effect<Buffer, CoverConversionFailed> {
+  return Effect.tryPromise({
+    try: () =>
+      sharp(tiffPath).resize(COVER_MAX_SIZE, COVER_MAX_SIZE, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer(),
+    catch: (cause) => new CoverConversionFailed({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
+  }).pipe(Effect.uninterruptible);
+}
+
+function recoverCover(filePath: string, cause: unknown): Effect.Effect<null> {
+  return Effect.sync(() => {
+    logHandlerError("DJVU", filePath, cause);
+
+    return null;
+  });
+}
+
+function parseDjvuOutputs(metaResult: CommandText, pagesResult: CommandText): DjvuMeta | null {
+  if (metaResult.exitCode !== 0 && pagesResult.exitCode !== 0) return null;
+
+  const meta = parseMetaOutput(metaResult.stdout);
+
+  if (pagesResult.exitCode === 0) {
+    const pages = parseInt(pagesResult.stdout.trim(), 10);
+
+    if (!isNaN(pages)) meta.pages = pages;
+  }
+
+  return meta;
+}
+
+function parseMetaOutput(output: string): DjvuMeta {
   const meta: DjvuMeta = {};
 
-  for (const line of metaOutput.split("\n")) {
+  for (const line of output.split("\n")) {
     const tabIndex = line.indexOf("\t");
 
     if (tabIndex === -1) continue;
@@ -62,13 +154,11 @@ async function parseDjvuMeta(filePath: string, signal?: AbortSignal): Promise<Dj
     }
   }
 
-  if (pagesExitCode === 0) {
-    const pages = parseInt(pagesOutput.trim(), 10);
-
-    if (!isNaN(pages)) meta.pages = pages;
-  }
-
   return meta;
+}
+
+function parseMetaValue(value: string): string {
+  return value.replace(/^"(.*)"$/, "$1").trim();
 }
 
 function parseKeywords(keywords: string | undefined): string[] | undefined {
@@ -89,79 +179,3 @@ function parseCreationDate(dateStr: string | undefined): string | undefined {
 
   return yearMatch ? yearMatch[0] : undefined;
 }
-
-async function extractCover(filePath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  try {
-    return await withTemporaryDirectory(
-      "djvu-",
-      async (tempDir) => {
-        signal?.throwIfAborted();
-        const tiffPath = join(tempDir, "page.tiff");
-
-        const { exitCode: ddjvuExitCode } = await spawnWithTimeout({
-          command: ["ddjvu", "-format=tiff", "-page=1", filePath, tiffPath],
-          signal,
-        });
-
-        if (ddjvuExitCode !== 0) return null;
-
-        const data = await sharp(tiffPath)
-          .resize(COVER_MAX_SIZE, COVER_MAX_SIZE, { fit: "inside", withoutEnlargement: true })
-          .jpeg({ quality: 90 })
-          .toBuffer();
-
-        signal?.throwIfAborted();
-
-        if (data.byteLength === 0) return null;
-
-        return data;
-      },
-      signal,
-    );
-  } catch {
-    signal?.throwIfAborted();
-
-    return null;
-  }
-}
-
-async function createDjvuHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
-  try {
-    signal?.throwIfAborted();
-    const file = Bun.file(filePath);
-
-    if (!(await file.exists())) return null;
-
-    const meta = await parseDjvuMeta(filePath, signal);
-
-    if (!meta) return null;
-
-    const metadata: BookMetadata = {
-      title: meta.title || "",
-      author: meta.author,
-      issued: parseCreationDate(meta.creationDate),
-      subjects: parseKeywords(meta.keywords),
-      pageCount: meta.pages,
-    };
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-
-      async getCover() {
-        return extractCover(filePath, signal);
-      },
-    };
-  } catch (error) {
-    signal?.throwIfAborted();
-    logHandlerError("DJVU", filePath, error);
-
-    return null;
-  }
-}
-
-export const djvuHandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["djvu"],
-  create: createDjvuHandler,
-};

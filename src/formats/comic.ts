@@ -1,7 +1,8 @@
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
-import { listEntries, readEntry, readEntryText } from "../utils/archive.ts";
+import { Effect } from "effect";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
+import { listArchiveEntries, readArchiveEntry, readArchiveEntryText } from "../utils/archive.ts";
 import { createXmlParser, getFirstString, getStringArray, cleanDescription, parseDate } from "./utils.ts";
-import { log, logHandlerError } from "../logging/index.ts";
+import { log } from "../logging/index.ts";
 import * as v from "valibot";
 import { xmlFields, xmlFieldsSchema, xmlStringSchema, xmlNumberSchema } from "./xml-value.ts";
 import type { XmlValue } from "./xml-value.ts";
@@ -62,19 +63,26 @@ function seriesPart(val: XmlValue) {
   return v.is(v.union([xmlStringSchema, xmlNumberSchema]), val) ? val : undefined;
 }
 
-async function parseComicInfo(
+interface ComicInfo {
+  readonly metadata: BookMetadata;
+  readonly pages: ComicInfoPage[];
+}
+
+/** Reads an optional metadata entry; a missing or empty entry yields `null` without parsing. */
+function readOptionalXml<A>(
   filePath: string,
   entries: string[],
-  signal?: AbortSignal,
-): Promise<{ metadata: BookMetadata; pages?: ComicInfoPage[] } | null> {
-  const comicInfoPath = entries.find((e) => e.toLowerCase() === "comicinfo.xml");
+  name: string,
+  parse: (content: string) => A | null,
+): Effect.Effect<A | null> {
+  const entryPath = entries.find((e) => e.toLowerCase() === name);
 
-  if (!comicInfoPath) return null;
+  if (!entryPath) return Effect.succeed(null);
 
-  const content = await readEntryText(filePath, comicInfoPath, signal);
+  return readArchiveEntryText(filePath, entryPath).pipe(Effect.map((content) => (content ? parse(content) : null)));
+}
 
-  if (!content) return null;
-
+function parseComicInfo(filePath: string, content: string): ComicInfo | null {
   try {
     const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
     const info = xmlFields(doc.ComicInfo);
@@ -114,15 +122,7 @@ async function parseComicInfo(
   }
 }
 
-async function parseCoMet(filePath: string, entries: string[], signal?: AbortSignal): Promise<BookMetadata | null> {
-  const cometPath = entries.find((e) => e.toLowerCase() === "comet.xml");
-
-  if (!cometPath) return null;
-
-  const content = await readEntryText(filePath, cometPath, signal);
-
-  if (!content) return null;
-
+function parseCoMet(filePath: string, content: string): BookMetadata | null {
   try {
     const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
     const comet = xmlFields(doc.comet);
@@ -224,50 +224,32 @@ function selectCoverImage(images: string[], pages?: ComicInfoPage[]): string | u
   return sorted[0];
 }
 
-async function createComicHandler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
-  try {
-    const entries = await listEntries(filePath, signal);
+const extractComic = Effect.fn("extractComic")(function* (filePath: string) {
+  const entries = yield* listArchiveEntries(filePath);
 
-    if (entries.length === 0) return null;
+  if (entries.length === 0) return yield* ExtractionFailed.of(filePath, "no archive entries");
 
-    const images = entries.filter((e) => IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)));
+  const images = entries.filter((e) => IMAGE_EXTENSIONS.some((ext) => e.toLowerCase().endsWith(ext)));
 
-    const [comicInfoResult, cometMetadata] = await Promise.allSettled([
-      parseComicInfo(filePath, entries, signal),
-      parseCoMet(filePath, entries, signal),
-    ]);
+  const [comicInfo, comet] = yield* Effect.all(
+    [
+      readOptionalXml(filePath, entries, "comicinfo.xml", (content) => parseComicInfo(filePath, content)),
+      readOptionalXml(filePath, entries, "comet.xml", (content) => parseCoMet(filePath, content)),
+    ],
+    { concurrency: 2 },
+  );
 
-    signal?.throwIfAborted();
+  const coverPath = selectCoverImage(images, comicInfo?.pages);
 
-    if (comicInfoResult.status === "rejected") throw comicInfoResult.reason;
+  const book: ExtractedBook = {
+    meta: mergeMetadata(comicInfo?.metadata ?? null, comet),
+    cover: coverPath ? yield* readArchiveEntry(filePath, coverPath) : null,
+  };
 
-    if (cometMetadata.status === "rejected") throw cometMetadata.reason;
+  return book;
+});
 
-    const metadata = mergeMetadata(comicInfoResult.value?.metadata ?? null, cometMetadata.value);
-    const pages = comicInfoResult.value?.pages;
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-
-      async getCover() {
-        const coverPath = selectCoverImage(images, pages);
-
-        if (!coverPath) return null;
-
-        return readEntry(filePath, coverPath, signal);
-      },
-    };
-  } catch (error) {
-    signal?.throwIfAborted();
-    logHandlerError("Comic", filePath, error);
-
-    return null;
-  }
-}
-
-export const comicHandlerRegistration: FormatHandlerRegistration = {
+export const comicExtractorRegistration: FormatExtractorRegistration = {
   extensions: ["cbz", "cbr", "cb7", "cbt", "zip"],
-  create: createComicHandler,
+  extract: extractComic,
 };

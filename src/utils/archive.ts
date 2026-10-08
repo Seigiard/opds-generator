@@ -1,197 +1,128 @@
+import { Effect, Semaphore } from "effect";
 import { createExtractorFromFile } from "node-unrar-js";
-import { readFile, open } from "node:fs/promises";
 import { join } from "node:path";
-import { spawnWithTimeout, spawnWithTimeoutText, withTemporaryDirectory } from "./process.ts";
+import { detectArchiveType } from "./archive-type.ts";
+import { runCommand, runCommandText, useTemporaryDirectory } from "./process.ts";
+import { listZipEntries, readZipEntry } from "./zip.ts";
 
-type ArchiveType = "zip" | "rar" | "7z" | "tar";
-
-const MAGIC_BYTES: Record<Exclude<ArchiveType, "tar">, number[]> = {
-  zip: [0x50, 0x4b, 0x03, 0x04],
-  rar: [0x52, 0x61, 0x72, 0x21],
-  "7z": [0x37, 0x7a, 0xbc, 0xaf],
-};
-
-const USTAR_MAGIC = [0x75, 0x73, 0x74, 0x61, 0x72]; // "ustar"
-
-async function detectArchiveType(filePath: string): Promise<ArchiveType | null> {
-  let fh;
-
-  try {
-    fh = await open(filePath, "r");
-    const header = new Uint8Array(8);
-    await fh.read(header, 0, 8, 0);
-
-    // SAFETY: MAGIC_BYTES declares exactly the three non-tar archive keys above.
-    for (const [type, magic] of Object.entries(MAGIC_BYTES) as [Exclude<ArchiveType, "tar">, number[]][]) {
-      if (magic.every((byte, i) => header[i] === byte)) {
-        return type;
+/**
+ * Entries of any supported archive, dispatched by magic bytes. ZIP and TAR listings drop directories;
+ * 7z and RAR listings keep them. Unknown input yields `[]`.
+ * An unreadable archive, a command that cannot run, times out or exits nonzero also yield `[]`.
+ * Interruption stops running commands and stays interruption.
+ */
+export function listArchiveEntries(filePath: string): Effect.Effect<string[]> {
+  return detectArchiveType(filePath).pipe(
+    Effect.flatMap((type) => {
+      switch (type) {
+        case null:
+          return Effect.succeed([]);
+        case "zip":
+          return listZipEntries(filePath);
+        case "rar":
+          return listRarEntries(filePath);
+        case "7z":
+          return listCommandEntries(["7zz", "l", "-ba", "-slt", filePath], parse7zListing);
+        case "tar":
+          return listCommandEntries(["tar", "-tf", filePath], parseTarListing);
       }
-    }
-
-    const tarHeader = new Uint8Array(5);
-    await fh.read(tarHeader, 0, 5, 257);
-
-    if (USTAR_MAGIC.every((byte, i) => tarHeader[i] === byte)) {
-      return "tar";
-    }
-
-    return null;
-  } catch {
-    return null;
-  } finally {
-    await fh?.close();
-  }
+    }),
+  );
 }
 
-async function listEntriesRar(filePath: string, signal?: AbortSignal): Promise<string[]> {
-  try {
+/**
+ * One entry's bytes from any supported archive, or `null`; dispatched and recovered like `listArchiveEntries`.
+ * In the command-backed variants (ZIP, 7z, TAR) an option-like (`-…`) entry path reads as missing.
+ */
+export function readArchiveEntry(filePath: string, entryPath: string): Effect.Effect<Buffer | null> {
+  return detectArchiveType(filePath).pipe(
+    Effect.flatMap((type) => {
+      switch (type) {
+        case null:
+          return Effect.succeed(null);
+        case "zip":
+          return readZipEntry(filePath, entryPath);
+        case "rar":
+          return readRarEntry(filePath, entryPath);
+        case "7z":
+          return readCommandEntry(["7zz", "e", "-so", filePath], entryPath);
+        case "tar":
+          return readCommandEntry(["tar", "-xOf", filePath], entryPath);
+      }
+    }),
+  );
+}
+
+export function readArchiveEntryText(filePath: string, entryPath: string): Effect.Effect<string | null> {
+  return readArchiveEntry(filePath, entryPath).pipe(Effect.map((buffer) => (buffer ? buffer.toString("utf-8") : null)));
+}
+
+function listCommandEntries(command: string[], parse: (stdout: string) => string[]): Effect.Effect<string[]> {
+  return runCommandText({ command }).pipe(
+    Effect.map(({ stdout, exitCode, timedOut }) => (timedOut || exitCode !== 0 ? [] : parse(stdout))),
+    Effect.catchTag("CommandFailed", () => Effect.succeed([])),
+  );
+}
+
+function readCommandEntry(command: string[], entryPath: string): Effect.Effect<Buffer | null> {
+  // Entry paths come from book contents; one starting with "-" would reach the command as an option.
+  if (entryPath.startsWith("-")) return Effect.succeed(null);
+
+  return runCommand({ command: [...command, entryPath] }).pipe(
+    Effect.map(({ stdout, exitCode, timedOut }) => (timedOut || exitCode !== 0 || stdout.byteLength === 0 ? null : Buffer.from(stdout))),
+    Effect.catchTag("CommandFailed", () => Effect.succeed(null)),
+  );
+}
+
+// `-ba` omits the archive's own block, so every `Path = ` line names an entry.
+function parse7zListing(stdout: string): string[] {
+  return stdout
+    .split("\n")
+    .filter((line) => line.startsWith("Path = "))
+    .map((line) => line.slice(7));
+}
+
+function parseTarListing(stdout: string): string[] {
+  return stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0 && !line.endsWith("/"));
+}
+
+// node-unrar-js routes every extractor's file callbacks through one shared WASM instance (`unrar.extractor`),
+// so overlapping RAR operations could write into each other's directories. They run one at a time.
+const rarLock = Semaphore.makeUnsafe(1);
+
+/** WASM extraction and file reads cannot be stopped midway: they finish, then interruption takes effect. */
+function runNative<A>(work: () => Promise<A>): Effect.Effect<A, unknown> {
+  return Effect.tryPromise({ try: work, catch: (cause) => cause }).pipe(Effect.uninterruptible);
+}
+
+function listRarEntries(filePath: string): Effect.Effect<string[]> {
+  return runNative(async () => {
     const extractor = await createExtractorFromFile({ filepath: filePath });
-    signal?.throwIfAborted();
-    const list = extractor.getFileList();
 
-    return [...list.fileHeaders].map((h) => h.name);
-  } catch {
-    signal?.throwIfAborted();
-
-    return [];
-  }
+    return Array.from(extractor.getFileList().fileHeaders, (header) => header.name);
+  }).pipe(
+    Semaphore.withPermit(rarLock),
+    Effect.orElseSucceed((): string[] => []),
+  );
 }
 
-async function listEntriesShell(filePath: string, type: "zip" | "7z" | "tar", signal?: AbortSignal): Promise<string[]> {
-  const commands: Record<"zip" | "7z" | "tar", string[]> = {
-    zip: ["zipinfo", "-1", filePath],
-    "7z": ["7zz", "l", "-ba", "-slt", filePath],
-    tar: ["tar", "-tf", filePath],
-  };
+/** Extracts the entry into a temporary directory and reads it there; the directory is removed after both finish. */
+function readRarEntry(filePath: string, entryPath: string): Effect.Effect<Buffer | null> {
+  return useTemporaryDirectory("rar-", (directory) =>
+    runNative(async () => {
+      const extractor = await createExtractorFromFile({ filepath: filePath, targetPath: directory });
+      const { files } = extractor.extract({ files: [entryPath] });
+      const found = Array.from(files).find((file) => file.fileHeader.name === entryPath);
 
-  try {
-    const { stdout, exitCode, timedOut } = await spawnWithTimeoutText({ command: commands[type], signal });
-
-    if (timedOut || exitCode !== 0) return [];
-
-    if (type === "7z") {
-      return stdout
-        .split("\n")
-        .filter((line) => line.startsWith("Path = "))
-        .map((line) => line.slice(7))
-        .slice(1);
-    }
-
-    return stdout
-      .trim()
-      .split("\n")
-      .filter((line) => line.length > 0 && !line.endsWith("/"));
-  } catch {
-    signal?.throwIfAborted();
-
-    return [];
-  }
-}
-
-export async function listEntries(filePath: string, signal?: AbortSignal): Promise<string[]> {
-  signal?.throwIfAborted();
-  const type = await detectArchiveType(filePath);
-  signal?.throwIfAborted();
-
-  if (!type) return [];
-
-  if (type === "rar") {
-    return listEntriesRar(filePath, signal);
-  }
-
-  return listEntriesShell(filePath, type, signal);
-}
-
-async function readEntryTar(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  try {
-    const { stdout, exitCode, timedOut } = await spawnWithTimeout({
-      command: ["tar", "-xOf", filePath, entryPath],
-      signal,
-    });
-
-    if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
-
-    return Buffer.from(stdout);
-  } catch {
-    signal?.throwIfAborted();
-
-    return null;
-  }
-}
-
-async function readEntryRar(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  try {
-    return await withTemporaryDirectory(
-      "rar-",
-      async (tempDir) => {
-        signal?.throwIfAborted();
-
-        const extractor = await createExtractorFromFile({
-          filepath: filePath,
-          targetPath: tempDir,
-        });
-
-        signal?.throwIfAborted();
-
-        const { files } = extractor.extract({ files: [entryPath] });
-        const results = [...files];
-        const found = results.find((r) => r.fileHeader.name === entryPath);
-
-        if (!found || found.fileHeader.flags.directory) return null;
-
-        const data = Buffer.from(await readFile(join(tempDir, entryPath)));
-        signal?.throwIfAborted();
-
-        return data;
-      },
-      signal,
-    );
-  } catch {
-    signal?.throwIfAborted();
-
-    return null;
-  }
-}
-
-async function readEntryShell(filePath: string, entryPath: string, type: "zip" | "7z", signal?: AbortSignal): Promise<Buffer | null> {
-  const commands: Record<"zip" | "7z", string[]> = {
-    zip: ["unzip", "-p", filePath, entryPath],
-    "7z": ["7zz", "e", "-so", filePath, entryPath],
-  };
-
-  try {
-    const { stdout, exitCode, timedOut } = await spawnWithTimeout({ command: commands[type], signal });
-
-    if (timedOut || exitCode !== 0 || stdout.byteLength === 0) return null;
-
-    return Buffer.from(stdout);
-  } catch {
-    signal?.throwIfAborted();
-
-    return null;
-  }
-}
-
-export async function readEntry(filePath: string, entryPath: string, signal?: AbortSignal): Promise<Buffer | null> {
-  signal?.throwIfAborted();
-  const type = await detectArchiveType(filePath);
-  signal?.throwIfAborted();
-
-  if (!type) return null;
-
-  if (type === "rar") {
-    return readEntryRar(filePath, entryPath, signal);
-  }
-
-  if (type === "tar") {
-    return readEntryTar(filePath, entryPath, signal);
-  }
-
-  return readEntryShell(filePath, entryPath, type, signal);
-}
-
-export async function readEntryText(filePath: string, entryPath: string, signal?: AbortSignal): Promise<string | null> {
-  const buffer = await readEntry(filePath, entryPath, signal);
-
-  return buffer ? buffer.toString("utf-8") : null;
+      return found !== undefined && !found.fileHeader.flags.directory;
+    }).pipe(
+      Semaphore.withPermit(rarLock),
+      Effect.flatMap((extracted) =>
+        extracted ? runNative(async () => Buffer.from(await Bun.file(join(directory, entryPath)).arrayBuffer())) : Effect.succeed(null),
+      ),
+    ),
+  ).pipe(Effect.orElseSucceed(() => null));
 }

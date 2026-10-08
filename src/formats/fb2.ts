@@ -1,7 +1,8 @@
-import type { FormatHandler, FormatHandlerRegistration, BookMetadata } from "./types.ts";
+import { Effect } from "effect";
+import { ExtractionFailed, type BookMetadata, type ExtractedBook, type FormatExtractorRegistration } from "./types.ts";
 import { createXmlParser, getString, getStringArray, cleanDescription } from "./utils.ts";
 import { logHandlerError } from "../logging/index.ts";
-import { listEntries, readEntryText } from "../utils/archive.ts";
+import { listArchiveEntries, readArchiveEntryText } from "../utils/archive.ts";
 import * as v from "valibot";
 import { xmlFields, xmlFieldsSchema, xmlStringSchema, xmlNumberSchema, xmlBooleanSchema } from "./xml-value.ts";
 import type { XmlValue, XmlFields } from "./xml-value.ts";
@@ -93,58 +94,73 @@ function getCoverBuffer(book: XmlFields, coverId: string): Buffer | null {
   }
 }
 
-async function readFb2Content(filePath: string, signal?: AbortSignal): Promise<string | null> {
-  const ext = filePath.split(".").pop()?.toLowerCase();
+const extractFb2 = Effect.fn("extractFb2")(function* (filePath: string) {
+  const content = yield* readFb2Content(filePath);
 
-  if (ext === "fbz" || filePath.toLowerCase().endsWith(".fb2.zip")) {
-    const entries = await listEntries(filePath, signal);
-    const fb2Entry = entries.find((e) => e.toLowerCase().endsWith(".fb2"));
+  if (!content) return yield* ExtractionFailed.of(filePath, "no FB2 content");
 
-    if (!fb2Entry) return null;
+  const book = parseBook(filePath, content);
 
-    return readEntryText(filePath, fb2Entry, signal);
-  }
+  if (!book) return yield* ExtractionFailed.of(filePath, "not a readable FictionBook");
 
-  return Bun.file(filePath).text();
+  return book;
+});
+
+export const fb2ExtractorRegistration: FormatExtractorRegistration = {
+  extensions: ["fb2", "fbz"],
+  extract: extractFb2,
+};
+
+function isArchived(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+
+  return lower.endsWith(".fbz") || lower.endsWith(".fb2.zip");
 }
 
-async function createFb2Handler(filePath: string, signal?: AbortSignal): Promise<FormatHandler | null> {
+/** An archived book reads its first `.fb2` entry through the common archive dispatch, whatever the container. */
+function readFb2Content(filePath: string): Effect.Effect<string | null, ExtractionFailed> {
+  if (!isArchived(filePath)) return readPlainText(filePath);
+
+  return listArchiveEntries(filePath).pipe(
+    Effect.flatMap((entries) => {
+      const fb2Entry = entries.find((e) => e.toLowerCase().endsWith(".fb2"));
+
+      return fb2Entry ? readArchiveEntryText(filePath, fb2Entry) : Effect.succeed(null);
+    }),
+  );
+}
+
+/** The read runs to completion: a stop waits for it rather than abandoning it, and is observed after it settles. */
+function readPlainText(filePath: string): Effect.Effect<string, ExtractionFailed> {
+  return Effect.tryPromise({
+    try: () => Bun.file(filePath).text(),
+    catch: (cause) => ExtractionFailed.of(filePath, cause),
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.tapError((error) => Effect.sync(() => logHandlerError("FB2", filePath, error.cause))),
+  );
+}
+
+/** Synchronous and not preemptible. Unparseable XML is logged and reads as no book. */
+function parseBook(filePath: string, content: string): ExtractedBook | null {
   try {
-    signal?.throwIfAborted();
-    const content = await readFb2Content(filePath, signal);
-    signal?.throwIfAborted();
-
-    if (!content) return null;
-
-    const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
-    const book = xmlFields(doc.FictionBook);
-
-    if (!book) return null;
-
-    const metadata = extractMetadata(book);
-    const info = xmlFields(xmlFields(book.description)?.["title-info"]);
-    const coverHref = xmlFields(xmlFields(info?.coverpage)?.image)?.["@_href"];
-    const coverId = extractCoverId(v.is(xmlStringSchema, coverHref) ? coverHref : undefined);
-
-    return {
-      getMetadata() {
-        return metadata;
-      },
-      async getCover() {
-        if (!coverId) return null;
-
-        return getCoverBuffer(book, coverId);
-      },
-    };
+    return parseFictionBook(content);
   } catch (error) {
-    signal?.throwIfAborted();
     logHandlerError("FB2", filePath, error);
 
     return null;
   }
 }
 
-export const fb2HandlerRegistration: FormatHandlerRegistration = {
-  extensions: ["fb2", "fbz"],
-  create: createFb2Handler,
-};
+function parseFictionBook(content: string): ExtractedBook | null {
+  const doc = v.parse(xmlFieldsSchema, xmlParser.parse(content));
+  const book = xmlFields(doc.FictionBook);
+
+  if (!book) return null;
+
+  const info = xmlFields(xmlFields(book.description)?.["title-info"]);
+  const coverHref = xmlFields(xmlFields(info?.coverpage)?.image)?.["@_href"];
+  const coverId = extractCoverId(v.is(xmlStringSchema, coverHref) ? coverHref : undefined);
+
+  return { meta: extractMetadata(book), cover: coverId ? getCoverBuffer(book, coverId) : null };
+}

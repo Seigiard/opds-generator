@@ -1,7 +1,6 @@
 import { Data, Effect, Predicate } from "effect";
 import { join, relative, dirname } from "node:path";
-import { getHandlerFactory } from "../../formats/index.ts";
-import type { BookMetadata, FormatHandlerFactory } from "../../formats/types.ts";
+import { getExtractor } from "../../formats/index.ts";
 import { saveCoverAndThumbnail, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
 import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
 import { ownedPromise } from "../../utils/owned-promise.ts";
@@ -22,15 +21,15 @@ class BookDataDirFailed extends Data.TaggedError("BookDataDirFailed")<FailurePro
 
 class EntryPublishFailed extends Data.TaggedError("EntryPublishFailed")<FailureProps> {}
 
-/** Recovered inside `bookSync`: the book falls back to its filename title and no cover. */
-class ExtractionFailed extends Data.TaggedError("ExtractionFailed")<FailureProps> {}
+/** Recovered inside `bookSync`: the book keeps its metadata and gets no cover. */
+class CoverSaveFailed extends Data.TaggedError("CoverSaveFailed")<FailureProps> {}
 
 const NO_METADATA = { meta: { title: "" }, hasCover: false };
 
 /**
  * `bookSync` shutdown may interrupt only the preparation:
- * every Promise boundary in it is owned, so an interrupted book waits for its extraction to settle
- * and leaves the previous `entry.xml` untouched. Publication runs in the uninterruptible handler
+ * extraction runs in this fiber and every Promise boundary in it is owned, so an interrupted book waits for its
+ * commands and native work to settle and leaves the previous `entry.xml` untouched. Publication runs in the uninterruptible handler
  * context, so both writes always finish.
  */
 export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType) {
@@ -77,42 +76,21 @@ const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
 });
 
 const extractMetadataAndCover = Effect.fnUntraced(function* (filePath: string, bookDataDir: string) {
-  const createHandler = getHandlerFactory(filePath.split(".").pop() ?? "");
+  const extract = getExtractor(filePath.split(".").pop() ?? "");
 
-  if (!createHandler) return NO_METADATA;
+  if (!extract) return NO_METADATA;
 
-  const failed = (cause: unknown) => new ExtractionFailed(failure(filePath, cause));
-  // One owned Promise for the format handler's whole life: handlers keep the factory's signal for getCover(),
-  // so shutdown must abort that same signal to kill a running cover command.
-  const book = yield* ownedPromise((signal) => readBook(createHandler, filePath, signal), failed);
-
-  if (!book) return NO_METADATA;
-
-  const { meta, cover } = book;
+  const { meta, cover } = yield* extract(filePath);
 
   if (!cover) return { meta, hasCover: false };
 
   const hasCover = yield* ownedPromise(
     () => saveCoverAndThumbnail(cover, join(bookDataDir, COVER_FILE), COVER_MAX_SIZE, join(bookDataDir, THUMB_FILE), THUMBNAIL_MAX_SIZE),
-    failed,
-  ).pipe(Effect.catchTag("ExtractionFailed", () => Effect.succeed(false)));
+    (cause) => new CoverSaveFailed(failure(bookDataDir, cause)),
+  ).pipe(Effect.catchTag("CoverSaveFailed", () => Effect.succeed(false)));
 
   return { meta, hasCover };
 });
-
-async function readBook(
-  createHandler: FormatHandlerFactory,
-  filePath: string,
-  signal: AbortSignal,
-): Promise<{ meta: BookMetadata; cover: Buffer | null } | null> {
-  const handler = await createHandler(filePath, signal);
-
-  if (!handler) return null;
-
-  const meta = handler.getMetadata();
-
-  return { meta, cover: await handler.getCover() };
-}
 
 function failure(path: string, cause: unknown): FailureProps {
   return { path, cause, message: cause instanceof Error ? cause.message : String(cause) };
