@@ -1,12 +1,11 @@
 import { Data, Effect, Predicate } from "effect";
-import { basename, dirname, join, relative } from "node:path";
-import { Entry } from "opds-ts/v1.2";
+import { dirname, join, relative } from "node:path";
 import { EffectFileSystem } from "../../effect-file-system.ts";
-import { ENTRY_FILE, FEED_FILE, FOLDER_ENTRY_FILE } from "../../constants.ts";
+import { ENTRY_FILE } from "../../constants.ts";
 import { BOOK_EXTENSIONS } from "../../types.ts";
-import { encodeUrlPath, normalizeFilenameTitle } from "../../utils/processor.ts";
 import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
 import type { EventType } from "../types.ts";
+import { publishFolderFeed } from "./folder-meta-sync-effect.ts";
 
 interface FailureProps {
   readonly path: string;
@@ -36,19 +35,15 @@ export const folderSyncEffect = Effect.fn("folderSync")(function* (event: EventT
     return [CatalogueEvent.FolderMetaSyncRequested({ path: folderDataDir })];
   }
 
-  const folderName = normalizeFilenameTitle(basename(relativePath));
-  const selfHref = `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
-  const entry = new Entry(`urn:opds:catalog:${relativePath}`, folderName).addSubsection(selfHref, "navigation");
+  // A successful directory read confirms this source and discovers files copied before its watch was installed.
+  const discovered = yield* Effect.interruptible(discoverContents(folderPath, folderDataDir));
 
-  yield* fs
-    .atomicWrite(join(folderDataDir, FOLDER_ENTRY_FILE), entry.toXml({ prettyPrint: true }))
-    .pipe(Effect.mapError((cause) => new FolderSyncFailed(failure(folderDataDir, cause))));
+  // Publish the required child feed before its _entry.xml can be consumed by a parent.
+  yield* publishFolderFeed(folderDataDir, relativePath);
 
   logger.info("FolderSync", "Done", { path: relativePath });
 
-  const discovered = yield* Effect.interruptible(discoverContents(folderPath, folderDataDir));
-
-  // folderMetaSync rewrites this _entry.xml unchanged for an empty folder and would not refresh the parent.
+  // A new empty folder still needs its parent refreshed even when its summary stays unchanged.
   return [
     CatalogueEvent.FolderMetaSyncRequested({ path: folderDataDir }),
     CatalogueEvent.FolderMetaSyncRequested({ path: dirname(folderDataDir) }),

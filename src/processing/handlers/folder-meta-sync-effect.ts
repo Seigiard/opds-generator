@@ -64,10 +64,11 @@ export const folderMetaSyncEffect = Effect.fn("folderMetaSync")(function* (event
     }
   }
 
-  return yield* generateFeed(normalizedDir, relativePath);
+  return yield* publishFolderFeed(normalizedDir, relativePath);
 });
 
-const generateFeed = Effect.fnUntraced(function* (normalizedDir: string, relativePath: string) {
+/** Shared safe publication after the caller confirms the source folder. */
+export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: string, relativePath: string) {
   const { logger } = yield* CatalogueDeps;
   const fs = yield* EffectFileSystem;
 

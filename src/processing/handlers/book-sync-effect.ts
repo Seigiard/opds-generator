@@ -40,8 +40,8 @@ export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType)
 
   yield* ownedPromise(
     async () => {
-      await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
       await fs.symlink(book.filePath, join(book.dataDir, event.name));
+      await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
     },
     (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
   );
@@ -76,7 +76,8 @@ const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
 });
 
 const extractMetadataAndCover = Effect.fnUntraced(function* (filePath: string, bookDataDir: string) {
-  const extract = getExtractor(filePath.split(".").pop() ?? "");
+  const extension = filePath.toLowerCase().endsWith(".fb2.zip") ? "fb2" : (filePath.split(".").pop() ?? "");
+  const extract = getExtractor(extension);
 
   if (!extract) return NO_METADATA;
 

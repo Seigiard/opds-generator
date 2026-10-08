@@ -14,6 +14,62 @@ import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effec
 import { folderSyncEffect } from "../../../src/processing/handlers/folder-sync-effect.ts";
 import { folderMetaSyncEffect } from "../../../src/processing/handlers/folder-meta-sync-effect.ts";
 
+function gate() {
+  let open = () => {};
+
+  const promise = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+
+  return { promise, open };
+}
+
+test("initial book publication waits for its required download target", async () => {
+  // #given a real TXT source and a held download-link filesystem operation
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-target-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
+  const ctx = await buildContext();
+  const entered = gate();
+  const release = gate();
+
+  const deps = {
+    ...ctx,
+    config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath },
+    fs: {
+      ...ctx.fs,
+      symlink: async (target: string, path: string) => {
+        entered.open();
+        await release.promise;
+        await ctx.fs.symlink(target, path);
+      },
+    },
+  };
+
+  const task = Effect.runPromise(initialEngineCatalogue(deps));
+
+  try {
+    // #when publication has reached the required-target boundary
+    await entered.promise;
+    const prematureEntry = await Bun.file(join(outputPath, "First Book.txt", "entry.xml")).exists();
+    const prematureFeed = await Bun.file(join(outputPath, "feed.xml")).exists();
+    release.open();
+    await task;
+    // #then no new reference preceded its target and the final download is readable
+    expect({
+      prematureEntry,
+      prematureFeed,
+      download: await readFile(join(outputPath, "First Book.txt", "First Book.txt"), "utf8"),
+    }).toEqual({ prematureEntry: false, prematureFeed: false, download: "Independent source bytes.\n" });
+  } finally {
+    release.open();
+    await task;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("packaged engine publishes a TXT book, its root catalogue and a working download", async () => {
   // #given a real source and the production handler dependencies
   const root = await mkdtemp(join(tmpdir(), "opds-engine-"));

@@ -15,6 +15,7 @@ Adapters (raw inotify → typed `EventType`) → `CatalogueProcessor.submit` →
 
 - A handler returns `Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`. The returned events are the cascade. See `src/processing/handlers/book-sync-effect.ts`.
 - Handlers read `CatalogueDeps = Pick<AppContext, "config" | "logger" | "fs">` and, where ported to typed filesystem calls, `EffectFileSystem`.
+- The scoped packaged-engine composition is in `src/lifecycle/initial-engine-catalogue.ts`; its scheduler owns pending refresh coalescing and cascade completion. See `shared-sync-engine.md` for selection and public state.
 - Cancellation is fiber interruption. Handlers run uninterruptibly and mark the phases shutdown may cancel with `Effect.interruptible`.
 - An `index.html` render failure is logged and does not block `feed.xml`.
 
@@ -25,6 +26,7 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - Folder refreshes travel as cascades. `bookSync`, `bookCleanup`, `folderCleanup` and `folderSync` return a refresh of their folder or parent. `folderSync` returns both its own and its parent's.
 - `folderMetaSync` returns a refresh of its parent only when its `_entry.xml` summary changed (ADR 0002). The comparison ignores the `<updated>` timestamp that opds-ts stamps on every Entry. The climb stops at the first folder whose count did not change. The folder's own `feed.xml` is always rewritten.
 - A handler that writes or removes `entry.xml` or `_entry.xml` returns the refresh itself. Nothing observes `/data`.
+- `bookSync` creates its download symlink before publishing `entry.xml`. After reading the source directory, `folderSync` uses `folderMetaSync`'s shared `publishFolderFeed` to publish the required child feed before its `_entry.xml`; an empty new folder still refreshes its parent explicitly.
 - `folderSync` lists the new folder and cascades `BookCreated` / `FolderCreated` for what is already inside. It skips the root and any book whose `entry.xml` exists. `inotifywait -r` adds its watch to a new folder only after the create event, so files copied in meanwhile raise no event of their own. Without the listing they wait for reconciliation.
 
 ## Busy and empty edges
@@ -40,5 +42,6 @@ Cascades are the only propagation. Only `/books` is watched. The processor never
 - In Effect handlers, cross a Promise boundary only through `ownedPromise`. `Effect.tryPromise` abandons the Promise on interruption, and the handler outlives `stop()`.
 - `src/effect-file-system.ts` is the Effect `FileSystemService`. It exposes tagged errno failures and wraps the current Promise filesystem for the processor/test boundary. The adapter keeps the Promise service's unlink-first `symlink` behavior.
 - `bookSync` yields the registry's `extract(filePath)` inside its interruptible preparation and recovers `ExtractionFailed` with the filename fallback. Interruption leaves the previous entry and link untouched.
+- Compound `.fb2.zip` sources select the existing FB2 registration; other extensions use the registry directly.
 - Extraction memory and stopping values, and how to compare them: `docs/effect-extraction-baseline.md`.
 - Effect handlers run uninterruptibly. Mark the phases shutdown may cancel with `Effect.interruptible`; interruption discards a result, so a phase that must finish stays outside.

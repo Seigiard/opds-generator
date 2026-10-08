@@ -1,7 +1,7 @@
-# Shared synchronization engine: first slice (#50)
+# Shared synchronization engine: catalogue dependencies (#50–#51)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
-`@seigiard/sync-engine@0.1.0` artifact in `vendor/`. It is not published to npm.
+`@seigiard/sync-engine@0.2.0` artifact in `vendor/`. It is not published to npm.
 Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 
 ## Reproduce
@@ -9,14 +9,15 @@ Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 ```sh
 bun install --frozen-lockfile
 git submodule update --init
-COMPOSE_PROJECT_NAME=opds49-50 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-50 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts
-COMPOSE_PROJECT_NAME=opds49-50 docker compose -f docker-compose.test.yml down
+COMPOSE_PROJECT_NAME=opds49-51 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts
+COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml down
 ```
 
-The test uses temporary trees, production filesystem services and real TXT,
-book and folder handlers. It verifies the feed, browser download, entry,
-source bytes and symlink target.
+The tests use temporary trees, production filesystem services and all existing
+format registrations. They verify metadata, covers, browser and feed output,
+unchanged source bytes, download targets, nested cascades and completion while
+required downstream publication is held.
 
 ## Temporary selection seam
 
@@ -30,12 +31,35 @@ execution. OPDS declares book events and root publication, provides handler
 services, and retains extraction and rendering. The scan returns no legacy
 work because the engine finished the work before returning.
 
+For incremental catalogue work, select `openEngineCatalogue(deps)` inside
+`Effect.scoped`. It composes the public `openSynchronization` package API and
+completes the same initial publication before returning a `WorkScheduler`.
+Keep the scope open while calling `submit([CatalogueEvent...])`,
+`awaitCompletion`, and `status`. Closing the scope joins the owned consumer
+before releasing its output lease. Book and new-folder events use existing
+Effect handlers. Other event kinds remain outside this temporary composition.
+
+The engine combines pending work only for OPDS-declared folder-refresh keys.
+A repeated pending refresh moves behind intervening work. A refresh requested
+while equivalent work is active schedules one pending follow-up. Handler-returned
+cascades enter pending work before active clears. `status.state` stays `working`
+until required cascades publish; `complete` means work completion, not freshness.
+A handler failure currently ends the scheduler and fails the completion wait.
+Failure recovery is a later slice.
+
+OPDS owns the propagation rule: a book refreshes its folder, and folder summaries
+propagate to the parent only when `_entry.xml` changes without its timestamp.
+Each folder still writes its own feed. A book's symlink exists before its entry
+is published. A new folder publishes its child feed before `_entry.xml`, so a
+parent cannot publish a reference to a missing child feed. Publication is gradual.
+
 ## Output ownership
 
 Both selections use the package's `acquireOutputTree` lease. The legacy disk
 scanner declares its output path. `createLifecycle.start()` acquires that lease
 before starting the consumer or scan, and keeps it until `stop()` joins owned
-work. The engine acquires and releases its lease in an Effect scope. Existing
+work. The engine acquires and releases its lease in an Effect scope. An open catalogue
+session retains that lease even when its work is complete. Existing
 handlers keep interruptible preparation and uninterruptible publication.
 While legacy acquisition is pending, watcher admission stays closed and resync
 requests combine into a follow-up after initial scan admission. A failed
