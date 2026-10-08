@@ -1,6 +1,6 @@
 import { openSynchronization, runInitialPass, type InitialPass, type SourceEntry } from "@seigiard/sync-engine";
 import { Effect, Predicate } from "effect";
-import { dirname, basename, join, extname } from "node:path";
+import { dirname, basename, join, extname, relative } from "node:path";
 import type { HandlerDeps } from "../context.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../effect-file-system.ts";
 import { BOOK_EXTENSIONS } from "../types.ts";
@@ -26,22 +26,30 @@ export function createInitialEngineScanner(deps: HandlerDeps): CatalogueScanner 
 }
 
 /** Explicit initial-pass selection seam. Production keeps its legacy lifecycle. */
-export function initialEngineCatalogue(deps: HandlerDeps) {
-  return runInitialPass(engineOptions(deps)).pipe(
+export function initialEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueOptions = {}) {
+  return runInitialPass(engineOptions(deps, options)).pipe(
     Effect.provideService(CatalogueDeps, deps),
     Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
   );
 }
 
 /** The caller's Effect scope owns the initial publication, later work and output lease. */
-export function openEngineCatalogue(deps: HandlerDeps) {
-  return openSynchronization(engineOptions(deps)).pipe(
+export function openEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueOptions = {}) {
+  return openSynchronization(engineOptions(deps, options)).pipe(
     Effect.provideService(CatalogueDeps, deps),
     Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
   );
 }
 
-export function engineOptions(deps: HandlerDeps): InitialPass<EventType, Error, CatalogueDeps | EffectFileSystem> {
+export interface EngineCatalogueOptions {
+  readonly check?: "metadata" | "content";
+  readonly processingVersions?: { readonly book?: string; readonly folder?: string };
+}
+
+export function engineOptions(
+  deps: HandlerDeps,
+  options: EngineCatalogueOptions = {},
+): InitialPass<EventType, Error, CatalogueDeps | EffectFileSystem> {
   const handlers: EffectHandlers = {
     BookCreated: bookSyncEffect,
     FolderCreated: folderSyncEffect,
@@ -72,17 +80,43 @@ export function engineOptions(deps: HandlerDeps): InitialPass<EventType, Error, 
         work: [
           ...books,
           ...folders.map((folder) => CatalogueEvent.FolderMetaSyncRequested({ path: join(deps.config.dataPath, folder.path) })),
+          CatalogueEvent.FolderMetaSyncRequested({ path: deps.config.dataPath }),
         ],
-        publish: folderMetaSyncEffect(CatalogueEvent.FolderMetaSyncRequested({ path: deps.config.dataPath })).pipe(
-          Effect.uninterruptible,
-          Effect.asVoid,
-        ),
+        publish: Effect.void,
       };
     });
 
   return {
     sourcePath: deps.config.filesPath,
     outputPath: deps.config.dataPath,
+    freshness: {
+      check: options.check,
+      describe: (event) => {
+        if (Predicate.isTagged(event, "BookCreated")) {
+          const source = relative(deps.config.filesPath, join(event.parent, event.name));
+
+          return {
+            sourcePaths: [source],
+            resultKind: "book",
+            processingVersion: options.processingVersions?.book ?? "1",
+            outputPaths: [join(source, "entry.xml"), join(source, event.name)],
+          };
+        }
+
+        if (Predicate.isTagged(event, "FolderMetaSyncRequested")) {
+          const source = relative(deps.config.dataPath, event.path);
+
+          return {
+            sourcePaths: [source],
+            resultKind: "folder",
+            processingVersion: options.processingVersions?.folder ?? "1",
+            outputPaths: [join(source, "feed.xml"), join(source, "index.html"), ...(source ? [join(source, "_entry.xml")] : [])],
+          };
+        }
+
+        return undefined;
+      },
+    },
     declare,
     key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${event.path}` : undefined),
     handle: (event) => {

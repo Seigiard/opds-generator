@@ -4,11 +4,12 @@ import { join, relative } from "node:path";
 import type { HandlerDeps } from "../context.ts";
 import type { EventType } from "../processing/types.ts";
 import { openLiveEngineCatalogue } from "./live-engine-catalogue.ts";
+import type { EngineCatalogueOptions } from "./initial-engine-catalogue.ts";
 
 /** Promise-facing transport adapter; pass scheduling and the timer stay in the engine. */
 export function createLiveEngineLifecycle(
   deps: HandlerDeps,
-  options: { readonly onFatal?: (cause: unknown) => void; readonly reconcileIntervalMs?: number } = {},
+  options: EngineCatalogueOptions & { readonly onFatal?: (cause: unknown) => void; readonly reconcileIntervalMs?: number } = {},
 ) {
   const controller = new AbortController();
   const started = Promise.withResolvers<void>();

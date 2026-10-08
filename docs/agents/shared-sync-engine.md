@@ -1,7 +1,7 @@
-# Shared synchronization engine: selectable live catalogue (#50–#54)
+# Shared synchronization engine: live catalogue and freshness (#50–#54)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
-`@seigiard/sync-engine@0.2.0` artifact in `vendor/`. It is not published to npm.
+`@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
 Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 
 ## Reproduce
@@ -9,9 +9,9 @@ Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled.
 ```sh
 bun install --frozen-lockfile
 git submodule update --init
-COMPOSE_PROJECT_NAME=opds49-51 bun run rebuild:test
-COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts
-COMPOSE_PROJECT_NAME=opds49-51 docker compose -f docker-compose.test.yml down
+COMPOSE_PROJECT_NAME=opds49-merge53 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-merge53 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/initial-engine-catalogue.test.ts test/integration/lifecycle/engine-catalogue.test.ts test/integration/lifecycle/engine-freshness.test.ts test/integration/lifecycle/live-engine-catalogue.test.ts test/integration/lifecycle/live-engine-freshness.test.ts
+COMPOSE_PROJECT_NAME=opds49-merge53 docker compose -f docker-compose.test.yml down
 ```
 
 The tests use temporary trees, production filesystem services and all existing
@@ -72,11 +72,13 @@ Each pass reads current source paths. A post-processing traversal detects size,
 mtime, kind, addition and removal changes during execution, and requests another
 pass before reporting completion. After detectable changes stop, successful work
 converges to the current tree. This traversal is not a snapshot. Same-metadata
-changes without a watcher hint need the selectable freshness policy from #53.
+changes without a watcher hint are detected when `check: "content"` is selected.
 
 OPDS supplies domain work and final publication through the shared engine options.
 Resync writes in place. Existing feeds, HTML and entries remain available while
-preparation runs. Forced requests declare every applicable source. Watcher hints
+preparation runs. Every pass declares every applicable book to freshness, including
+ordinary resync and reconciliation. The engine receives `force` and `changedPaths`
+for each pass; freshness selects actual rebuilding. Watcher hints
 use engine coalescing instead of the legacy half-second dedup window, so a second
 replacement during active work remains actionable. While the initial scoped
 session opens, the HTTP adapter retains dirty hints and ORs resync force requests
@@ -94,6 +96,58 @@ COMPOSE_PROJECT_NAME=opds49-54 SYNC_ENGINE=shared TEST_PORT=18554 docker compose
 COMPOSE_PROJECT_NAME=opds49-54 TEST_BASE_URL=http://localhost:18554 bun test test/e2e/nginx.test.ts
 COMPOSE_PROJECT_NAME=opds49-54 docker compose -f docker-compose.e2e.yml down
 ```
+
+## Freshness
+
+`initialEngineCatalogue(deps, options)`, `openEngineCatalogue(deps, options)`,
+`openLiveEngineCatalogue(deps, options)` and `createLiveEngineLifecycle(deps, options)`
+accept `check: "metadata" | "content"` and
+`processingVersions: { book?: string, folder?: string }`. Each version defaults
+to `"1"`. Change `book` for extractor/book-entry changes; change `folder` for
+feed/browser renderer changes. The engine package version is not a processing
+version. All compositions use the exported `engineOptions` declaration.
+
+The package records successful work by application-declared result kind and
+source-relative paths. An ordinary initial or live check reuses existing results when
+source size, mtime and the relevant processing version match. Required output
+paths must exist. A changed book invalidates its required folder publication;
+the existing summary comparison still stops unchanged ancestor propagation.
+Root publication is declared folder work, so warm checks also reuse root files.
+
+`submit(work)` explicitly reprocesses the submitted results. Pass declarations
+use `submit(work, { force: false, changedPaths: [] })` for ordinary checks.
+`changedPaths` contains source-relative watcher hints; matching work is
+reconsidered even when size and mtime match. A hint during active work prevents
+its earlier source read from being recorded as current. `force: true` bypasses saved
+freshness. These inputs do not install watcher transport or resync scheduling.
+
+Known limit: without a watcher hint, equal size and mtime can hide replaced
+content. Select `check: "content"` to additionally hash regular-file contents.
+This reads each declared file and costs more than the default metadata check.
+
+Dirty freshness is invalidated before processing. New successful information
+is retained after required work completes. Failed or interrupted batches are
+replayed by a fresh instance. Book publication keeps its previous entry on a
+pre-publication failure. Engine metadata belongs outside projected source paths.
+The dev-only `sync-engine-previous` package alias tests a real packed 0.3.0 to
+0.3.1 upgrade against real handlers and dated publications.
+
+### Temporary state bridge pending #52
+
+This integration retains the external-default bridge: the canonical output path's
+full SHA256 selects the sibling `.sync-engine-state-<digest>`. The existing lease
+still uses `.sync-engine.lock` in the output. #52 owns the configurable `statePath`
+composition and the persistent OPDS `DATA/.sync-engine` namespace. Its integration
+must replace the manual path with `engineStatePath`, pass it to `openFreshness`,
+and select the same state namespace in legacy, initial and live compositions.
+OPDS then selects its legacy non-dot source policy through `includeSource` before
+traversal; the current engine already forwards that option through all live scans.
+Cleanup must retain the owned namespace and stable lock inode.
+
+Keep the immutable packed 0.3.0 upgrade fixture and its shared configuration
+`{ ...engineOptions(deps), statePath: undefined }`. That test verifies the generic
+external-default upgrade independently of OPDS's later configured state selection.
+Ordinary freshness tests must use the configured OPDS state after #52 adoption.
 
 ## Output ownership
 

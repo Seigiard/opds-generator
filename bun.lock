@@ -5,7 +5,7 @@
     "": {
       "name": "opds-generator",
       "dependencies": {
-        "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.2.0-e3373b33.tgz",
+        "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.3.1-2aef9fbc810430db65205852e8e848574c61b19f.tgz",
         "effect": "4.0.1",
         "fast-xml-parser": "^5.11.2",
         "hono": "^4.13.13",
@@ -17,6 +17,7 @@
       },
       "devDependencies": {
         "@oxlint/plugins": "1.87.0",
+        "@seigiard/sync-engine-previous": "file:vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz",
         "@types/bun": "latest",
         "autoprefixer": "^10.6.1",
         "cssnano": "^9.3.2",
@@ -318,7 +319,9 @@
 
     "@rollup/rollup-linux-x64-gnu": ["@rollup/rollup-linux-x64-gnu@4.59.0", "", { "os": "linux", "cpu": "x64" }, "sha512-3AHmtQq/ppNuUspKAlvA8HtLybkDflkMuLK4DPo77DfthRb71V84/c4MlWJXixZz4uruIH4uaa07IqoAkG64fg=="],
 
-    "@seigiard/sync-engine": ["@seigiard/sync-engine@vendor/seigiard-sync-engine-0.2.0-e3373b33.tgz", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-2cVne0p5teboPzMsnCdU09mjxHK47XzYRWJzoNcFyNe8s+owRevw78ScFyFdy5vY6zoVXF9iGrZIl8tqlgSr6Q=="],
+    "@seigiard/sync-engine": ["@seigiard/sync-engine@vendor/seigiard-sync-engine-0.3.1-2aef9fbc810430db65205852e8e848574c61b19f.tgz", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-hwkgGrSGPDiKUSh//JOV7XlvpggTO1uRQJHKIWSNPROxF/sCHfwpyuMo1u8e9bKYImHrdX5d7odjcVE2Apa1iw=="],
+
+    "@seigiard/sync-engine-previous": ["@seigiard/sync-engine@vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-DZ+DnkF+k9eB2fYfEN97yH29gQLAJIWn2LX32aHDNKh8xNC5nuExjKoOeAP2SE3BOcHzeppyApIc1MZIRXMBMA=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 
