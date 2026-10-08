@@ -3,10 +3,14 @@ import { Effect, Exit } from "effect";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createCatalogueHttpHandler } from "../../../src/catalogue-http.ts";
 import { buildContext } from "../../../src/context.ts";
 import { engineOptions, initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
 import { CatalogueDeps, CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../../../src/effect-file-system.ts";
+import type { LogContext } from "../../../src/logging/types.ts";
+import { runInitialPass as runReleasedEngine040 } from "@seigiard/sync-engine-0-4";
 import { runInitialPass as runPreviousEngine } from "@seigiard/sync-engine-previous";
 import { runInitialPass as runCurrentEngine } from "@seigiard/sync-engine";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
@@ -14,6 +18,13 @@ import { parseFeed } from "../../../src/render/parse-feed.ts";
 const ancient = new Date("2020-01-01T00:00:00Z");
 
 const fixture = join(import.meta.dir, "../../../files/test/Test Book - Test Author.fb2");
+
+async function facts(url: string) {
+  const body = await (await fetch(`${url}/status`)).json();
+  const { available, availableFrom, verifying, completed, errors } = body;
+
+  return { available, availableFrom, verifying, completed, errors: errors?.length };
+}
 
 async function tree() {
   const root = await mkdtemp(join(tmpdir(), "opds-engine-freshness-"));
@@ -30,6 +41,62 @@ async function tree() {
     deps: { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } },
   };
 }
+
+test("a released engine package update alone keeps OPDS publications fresh", async () => {
+  // #given OPDS output and freshness state created by the released 0.4.0 package
+  const { root, outputPath, deps } = await tree();
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const completedHandlers: string[] = [];
+
+  const countedDeps = {
+    ...deps,
+    logger: {
+      ...deps.logger,
+      info: (component: string, message: string, fields?: LogContext) => {
+        if (message === "Handler completed") completedHandlers.push(String(fields?.event_type));
+        deps.logger.info(component, message, fields);
+      },
+    },
+  };
+
+  try {
+    await Effect.runPromise(
+      runReleasedEngine040(engineOptions(deps, { processingVersions: { book: "1", folder: "1" } })).pipe(
+        Effect.provideService(CatalogueDeps, deps),
+        Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+      ),
+    );
+
+    for (const path of artifacts) await utimes(join(outputPath, path), ancient, ancient);
+
+    const runtime = createLiveEngineLifecycle(countedDeps);
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+    const url = server.url.href.slice(0, -1);
+
+    try {
+      // #when the current released package verifies the same DATA tree through the production lifecycle
+      await runtime.start();
+
+      // #then public status completes and unchanged reader-visible outputs are not reprocessed
+      expect({
+        status: await facts(url),
+        mtimes: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs)),
+        completedHandlers,
+        titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+      }).toEqual({
+        status: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
+        mtimes: artifacts.map(() => ancient.getTime()),
+        completedHandlers: [],
+        titles: ["Test Book"],
+      });
+    } finally {
+      await runtime.stop();
+      server.stop(true);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("a fresh packaged engine instance reuses real book and folder publications", async () => {
   // #given the existing independent FB2 fixture and deliberately dated successful artifacts
