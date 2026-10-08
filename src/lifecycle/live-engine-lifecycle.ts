@@ -37,8 +37,9 @@ export function createLiveEngineLifecycle(
         ),
         { signal: controller.signal },
       ).catch((cause: unknown) => {
+        started.reject(cause);
+
         if (!controller.signal.aborted) {
-          started.reject(cause);
           options.onFatal?.(cause);
         }
       });
@@ -62,7 +63,9 @@ export function createLiveEngineLifecycle(
       return "queued";
     },
     status: () =>
-      session ? Effect.runPromise(session.status) : { state: controller.signal.aborted ? "stopped" : "working", pass: "initial" },
+      session
+        ? Effect.runPromise(session.status)
+        : { state: controller.signal.aborted ? "stopped" : "working", pass: controller.signal.aborted ? null : "initial" },
     async stop() {
       controller.abort();
       await running;

@@ -56,7 +56,11 @@ async function main(): Promise<void> {
 
     log.info("Server", "Listening", { port: server.port });
 
+    let stopping = false;
+
     const exitAfterStop = async (code: number) => {
+      if (stopping) return;
+      stopping = true;
       server.stop();
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -74,24 +78,25 @@ async function main(): Promise<void> {
       process.exit(code);
     };
 
-    const initialScan = lifecycle.start();
-    log.info("Server", "Lifecycle started");
-
     const shutdown = () => {
       log.info("Server", "Shutting down");
 
       return exitAfterStop(0);
     };
 
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+
+    const initialScan = lifecycle.start();
+    log.info("Server", "Lifecycle started");
+
     // The lifecycle already logged the scan error; exiting non-zero lets Docker restart instead of serving an empty catalogue.
     initialScan.catch(() => {
+      if (stopping) return;
       log.error("Server", "Initial scan failed; exiting");
 
       return exitAfterStop(1);
     });
-
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
   } catch (error) {
     log.error("Server", "Startup failed", error);
     process.exit(1);

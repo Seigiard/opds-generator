@@ -8,7 +8,7 @@ import type { createLifecycle } from "./lifecycle/lifecycle.ts";
 type CatalogueHttpStatus =
   | ReturnType<ReturnType<typeof createLifecycle>["status"]>
   | LiveStatus<EventType>
-  | { readonly state: string; readonly pass: string };
+  | { readonly state: string; readonly pass: string | null };
 
 export interface CatalogueHttpRuntime {
   accepting(): boolean;

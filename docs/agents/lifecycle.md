@@ -43,6 +43,7 @@ Code: `src/lifecycle/`, `src/server.ts`.
 - `stop()` enters `stopping`, aborts the active handler and scans, drops pending work and the follow-up scan, and awaits owned tasks.
 - If `processor.start()` rejects before shutdown, lifecycle logs the failure once and calls `onFatal`; `server.ts` stops and exits 1 so Docker restarts the dead consumer. A rejection after shutdown is only observed and logged.
 - `server.ts` races `stop()` against the 8 s deadline and exits 0.
+- Shared-engine stop joins command/resource cleanup and started handler publication. Interrupted startup settles its start promise without a fatal callback; the server observes it as shutdown. Public active work/pass clear after the join. The full cooperative guarantee and restart evidence are in `shared-sync-engine.md`.
 
 ## Status endpoint
 

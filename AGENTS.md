@@ -121,6 +121,7 @@ Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-syn
 
 Read `docs/agents/lifecycle.md` first.
 When selecting or updating the packaged engine composition, also read `docs/agents/shared-sync-engine.md`.
+Shared-engine stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
 
 </important>
 

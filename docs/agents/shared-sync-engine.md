@@ -1,4 +1,4 @@
-# Shared synchronization engine: live catalogue and freshness (#50–#54)
+# Shared synchronization engine: live catalogue, freshness and shutdown (#50–#55)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
 `@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
@@ -150,6 +150,42 @@ external-default upgrade independently of OPDS's later configured state selectio
 Ordinary freshness tests must use the configured OPDS state after #52 adoption.
 
 ## Output ownership
+
+### Cooperative shutdown (#55)
+
+`createLiveEngineLifecycle.stop()` closes HTTP admission immediately and interrupts
+the session's Effect scope. The engine discards pending work and pass requests,
+stops traversal and its timer, and joins owned consumer work before releasing the
+lease. An in-flight filesystem/native Promise is awaited. Extraction commands
+receive SIGTERM, then SIGKILL after their grace period if needed; stop awaits exit
+and temporary-resource cleanup. Cancellation stays interruption, not an ordinary
+extraction or handler failure.
+
+Book preparation is interruptible. Once publication starts, the real handler
+finishes its download symlink and entry as one owned uninterruptible boundary.
+Folder handlers retain their declared publication boundaries too. The public
+state becomes `stopped` while cleanup may still expose active work; after stop
+resolves, active work and pass are null. Interrupted initial startup rejects its
+pending start promise without calling `onFatal`. Server shutdown observes that
+rejection without logging an initial-scan failure or changing its exit code.
+
+A new instance scans current sources. Successful-only freshness repeats work
+stopped after an output write but before success recording, including unfinished
+folder cascades. No durable queue is restored. Handlers tolerate repeated writes
+and keep actual download targets valid. This is a cooperative guarantee; SIGKILL,
+the server's 8 s hard deadline and power loss can interrupt intermediate writes.
+
+`engine-shutdown.test.ts` holds real publication and native-read boundaries through
+the public lifecycle. `engine-signal.test.ts` starts the actual shared server,
+delivers SIGTERM during initial and resync extraction, observes Linux child PIDs
+and command directories, then starts a new process against the same real trees.
+Existing format extraction-stop and memory/resource suites remain applicable.
+
+```sh
+COMPOSE_PROJECT_NAME=opds49-55 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/engine-shutdown.test.ts test/integration/lifecycle/engine-signal.test.ts
+```
+
+### Lease lifetime
 
 Both selections use the package's `acquireOutputTree` lease. The legacy disk
 scanner declares its output path. `createLifecycle.start()` acquires that lease
