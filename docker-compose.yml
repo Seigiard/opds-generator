@@ -12,6 +12,7 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
+      - SYNC_ENGINE=${SYNC_ENGINE:-legacy}
       # Uncomment to enable /resync endpoint with Basic Auth:
       # - ADMIN_USER=admin
       # - ADMIN_TOKEN=secret

@@ -41,7 +41,7 @@ export function openEngineCatalogue(deps: HandlerDeps) {
   );
 }
 
-function engineOptions(deps: HandlerDeps): InitialPass<EventType, Error, CatalogueDeps | EffectFileSystem> {
+export function engineOptions(deps: HandlerDeps): InitialPass<EventType, Error, CatalogueDeps | EffectFileSystem> {
   const handlers: EffectHandlers = {
     BookCreated: bookSyncEffect,
     FolderCreated: folderSyncEffect,

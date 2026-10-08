@@ -4,7 +4,7 @@ services:
       context: .
       target: production
     ports:
-      - "8080:80"
+      - "${TEST_PORT:-8080}:80"
     volumes:
       - ./files:/books
       - opds-data:/data
@@ -12,6 +12,7 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
+      - SYNC_ENGINE=${SYNC_ENGINE:-legacy}
       - ADMIN_USER=admin
       - ADMIN_TOKEN=secret
     healthcheck:

@@ -12,6 +12,7 @@ Code: `src/lifecycle/`, `src/server.ts`.
 - `server.ts` only wires HTTP to the lifecycle.
 - A disk scanner declares `outputPath`. The lifecycle acquires the shared engine package's output lease before consumer/scan startup and releases it after stop joins owned work. The explicit initial-engine selection is documented in `shared-sync-engine.md`; production stays on the legacy disk scanner.
 - `openEngineCatalogue` is the separate scoped engine selection for initial publication plus submitted catalogue work. Its scope retains output ownership and its public completion includes handler cascades. See `shared-sync-engine.md`.
+- `SYNC_ENGINE=shared` selects `createLiveEngineLifecycle` and `openLiveEngineCatalogue`. The Promise-facing adapter routes HTTP input to engine-owned scans, pass coalescing and reconciliation. The default remains legacy until #57. See `shared-sync-engine.md` for the live seam.
 - While the lease is pending, watcher admission is closed and resync requests coalesce into a follow-up. A failed acquisition performs no scan or publication.
 - The lifecycle stays plain async. See `docs/lifecycle-execution-prototype.md` before you reopen the Effect-scope variant.
 
@@ -26,7 +27,7 @@ Code: `src/lifecycle/`, `src/server.ts`.
 ## Scans and reconciliation
 
 - Reconciliation starts only in `settled`.
-- A scan request during `scanning` sets one coalesced follow-up. Force flags are OR'd.
+- A legacy scan request during `scanning` sets one coalesced follow-up. Force flags are OR'd. Shared-engine requests coalesce throughout scanning, processing and required publication.
 - `scanFiles` and `createSyncPlan` take an `AbortSignal`. They throw its reason per directory, per book and before returning.
 - `BookDeleted` and `FolderDeleted` handlers do nothing when the source exists in `/books` at processing time (stale delete).
 

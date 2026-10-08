@@ -16,6 +16,7 @@ services:
       - FILES=/books
       - DATA=/data
       - PORT=3000
+      - SYNC_ENGINE=${SYNC_ENGINE:-legacy}
       - DEV_MODE=true
       # Uncomment to test /resync endpoint:
       # - ADMIN_USER=admin

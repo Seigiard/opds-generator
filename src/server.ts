@@ -1,7 +1,6 @@
 import { config } from "./config.ts";
 import { log } from "./logging/index.ts";
-import { isRawBooksEvent } from "./processing/types.ts";
-import { adaptBooksEvent } from "./processing/adapters/books-adapter.ts";
+import { createCatalogueHttpHandler } from "./catalogue-http.ts";
 import { createEffectCatalogueProcessor } from "./processing/catalogue-processor-effect.ts";
 import { bookSyncEffect } from "./processing/handlers/book-sync-effect.ts";
 import { bookCleanupEffect } from "./processing/handlers/book-cleanup-effect.ts";
@@ -11,6 +10,7 @@ import { folderMetaSyncEffect } from "./processing/handlers/folder-meta-sync-eff
 import { buildContext } from "./context.ts";
 import { createLifecycle, systemClock } from "./lifecycle/lifecycle.ts";
 import { diskScanner } from "./lifecycle/disk-scanner.ts";
+import { createLiveEngineLifecycle } from "./lifecycle/live-engine-lifecycle.ts";
 
 const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8_000;
 
@@ -29,62 +29,29 @@ async function main(): Promise<void> {
       },
     });
 
-    const lifecycle = createLifecycle({
+    const onFatal = (cause: unknown) => {
+      log.error("Server", "Processor failed; exiting", cause);
+
+      void exitAfterStop(1);
+    };
+
+    const legacy = createLifecycle({
       scanner: diskScanner,
       processor,
       clock: systemClock,
       reconcileIntervalSeconds: config.reconcileInterval,
-      onFatal: (error) => {
-        log.error("Server", "Processor failed; exiting", error);
-
-        void exitAfterStop(1);
-      },
+      onFatal,
     });
+
+    const shared = process.env.SYNC_ENGINE === "shared";
+    const lifecycle = shared ? createLiveEngineLifecycle(ctx, { onFatal }) : { ...legacy, submit: processor.submit };
+    // A live engine retains dirty hints itself. Time-window dedup could drop a replacement during processing.
+    const dedup = shared ? { shouldProcess: () => true } : ctx.dedup;
 
     const server = Bun.serve({
       port: config.port,
       hostname: "127.0.0.1",
-      async fetch(req) {
-        const url = new URL(req.url);
-
-        if (req.method === "POST" && url.pathname === "/events/books") {
-          if (!lifecycle.accepting()) return new Response("Queue not ready", { status: 503 });
-
-          try {
-            const body = await req.json();
-
-            if (!isRawBooksEvent(body)) {
-              log.warn("Server", "Invalid books event schema", { body });
-
-              return new Response("Invalid event", { status: 400 });
-            }
-
-            const event = adaptBooksEvent(body, ctx.dedup);
-
-            if (event === null) return new Response("Deduplicated", { status: 202 });
-            processor.submit(event);
-
-            return new Response("OK", { status: 202 });
-          } catch (error) {
-            log.error("Server", "Failed to process books event", error);
-
-            return new Response("Error", { status: 500 });
-          }
-        }
-
-        if (req.method === "POST" && url.pathname === "/resync") {
-          const force = url.searchParams.get("force") === "1";
-          const admission = lifecycle.requestScan({ kind: "resync", force });
-
-          if (admission === "rejected") return new Response("Queue not ready", { status: 503 });
-
-          return new Response(admission === "queued" ? "Resync queued" : "Resync started", { status: 202 });
-        }
-
-        if (req.method === "GET" && url.pathname === "/status") return Response.json(lifecycle.status());
-
-        return new Response("Not found", { status: 404 });
-      },
+      fetch: createCatalogueHttpHandler(lifecycle, dedup),
     });
 
     log.info("Server", "Listening", { port: server.port });

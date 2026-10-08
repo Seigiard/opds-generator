@@ -8,13 +8,14 @@ OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata 
 
 ```
 src/
-├── server.ts        # HTTP server + initial sync + DI setup
+├── server.ts        # HTTP server + initial sync + DI setup; legacy default, SYNC_ENGINE=shared selection
+├── catalogue-http.ts # Shared local watcher/resync/status routes; nginx owns external auth
 ├── scanner.ts       # File scanning, sync planning
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
-├── lifecycle/       # transition.ts, lifecycle.ts, disk-scanner.ts; initial-engine-catalogue.ts (scoped engine seam)
+├── lifecycle/       # Legacy lifecycle/scanner; initial-engine-catalogue.ts + live-engine-catalogue.ts + live-engine-lifecycle.ts (scoped engine seams)
 ├── processing/      # Effect 4 event pipeline
 │   ├── catalogue-processor.ts # Shared processor contract, event path/id helpers, memory snapshots
 │   ├── catalogue-processor-effect.ts, effect-handler.ts # Effect consumer, fixed handler registry, busy/empty edges
@@ -170,6 +171,7 @@ Read `docs/agents/reader.md` first.
 | `ADMIN_TOKEN`        | -        | /resync Basic Auth password                                                  |
 | `RATE_LIMIT_MB`      | `0`      | Download rate limit MB/s (0 = off); also throttles in-browser reader fetches |
 | `RECONCILE_INTERVAL` | `1800`   | Periodic reconciliation seconds (0 = off, min 60)                            |
+| `SYNC_ENGINE`        | `legacy` | Temporary selection: `shared` runs packaged live scheduling; adoption is #57 |
 
 </important>
 

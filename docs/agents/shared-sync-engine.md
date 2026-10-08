@@ -1,4 +1,4 @@
-# Shared synchronization engine: catalogue dependencies (#50–#51)
+# Shared synchronization engine: selectable live catalogue (#50–#54)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
 `@seigiard/sync-engine@0.2.0` artifact in `vendor/`. It is not published to npm.
@@ -53,6 +53,48 @@ Each folder still writes its own feed. A book's symlink exists before its entry
 is published. A new folder publishes its child feed before `_entry.xml`, so a
 parent cannot publish a reference to a missing child feed. Publication is gradual.
 
+## Live selection (#54)
+
+`SYNC_ENGINE=shared` selects `createLiveEngineLifecycle` in `server.ts`.
+Compose files forward this variable. The legacy composition remains the default.
+`src/catalogue-http.ts` owns the shared Bun-local watcher, resync and status routes.
+nginx continues to own external Basic Auth and audience routing.
+
+`openLiveEngineCatalogue(deps)` composes the public `openLiveSynchronization`
+inside the caller's Effect scope. The engine owns traversal, each pass, pending
+pass coalescing, required processing/publication, and the periodic timer.
+`requestPass({force})` returns `started`, `queued` or `rejected`. A pending request
+combines with later requests and preserves any forced mode. Requests stay pending
+through processing and required publication, rather than only through traversal.
+`notify(relativePaths)` retains watcher hints and schedules prompt reconsideration.
+
+Each pass reads current source paths. A post-processing traversal detects size,
+mtime, kind, addition and removal changes during execution, and requests another
+pass before reporting completion. After detectable changes stop, successful work
+converges to the current tree. This traversal is not a snapshot. Same-metadata
+changes without a watcher hint need the selectable freshness policy from #53.
+
+OPDS supplies domain work and final publication through the shared engine options.
+Resync writes in place. Existing feeds, HTML and entries remain available while
+preparation runs. Forced requests declare every applicable source. Watcher hints
+use engine coalescing instead of the legacy half-second dedup window, so a second
+replacement during active work remains actionable. While the initial scoped
+session opens, the HTTP adapter retains dirty hints and ORs resync force requests
+for admission immediately after initial publication.
+
+`status` separates the active pass, pending follow-up and work status.
+`awaitCompletion` includes all admitted passes and required cascades.
+`RECONCILE_INTERVAL` retains its production units and validation. Tests can set
+`reconcileIntervalMs` at the composition seam to observe the actual owned timer.
+
+```sh
+COMPOSE_PROJECT_NAME=opds49-54 bun run rebuild:test
+COMPOSE_PROJECT_NAME=opds49-54 docker compose -f docker-compose.test.yml run --rm test bun test test/integration/lifecycle/live-engine-catalogue.test.ts
+COMPOSE_PROJECT_NAME=opds49-54 SYNC_ENGINE=shared TEST_PORT=18554 docker compose -f docker-compose.e2e.yml up -d --build --wait
+COMPOSE_PROJECT_NAME=opds49-54 TEST_BASE_URL=http://localhost:18554 bun test test/e2e/nginx.test.ts
+COMPOSE_PROJECT_NAME=opds49-54 docker compose -f docker-compose.e2e.yml down
+```
+
 ## Output ownership
 
 Both selections use the package's `acquireOutputTree` lease. The legacy disk
@@ -75,8 +117,7 @@ unlinking it while an owner runs permits a second lock identity.
 
 The engine requires disjoint source/output trees and excludes source symlinks.
 Read errors fail the initial pass instead of publishing an empty replacement.
-Handler failures prevent final publication and release ownership. This slice
-has no engine watcher, freshness, resync or reconciliation.
+Handler failures prevent initial final publication and release ownership.
 
 ## Interface fit
 
