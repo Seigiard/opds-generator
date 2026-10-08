@@ -1,0 +1,27 @@
+# Test-only overlay for startup-readiness.test.ts: the production image and entrypoint with a gate directory.
+# STARTUP_ROOT is a host directory holding books/, data/ and gate/.
+services:
+  opds:
+    image: ${STARTUP_IMAGE:-opds-startup-test}
+    build:
+      context: ../../..
+      target: production
+    ports:
+      - "${STARTUP_PORT:-18557}:80"
+    volumes:
+      - ${STARTUP_ROOT}/books:/books
+      - ${STARTUP_ROOT}/data:/data
+      - ${STARTUP_ROOT}/gate:/gate
+      - ./bin:/gate-bin:ro
+      - ./preload.ts:/gate-preload.ts:ro
+      - ./bunfig.toml:/app/bunfig.toml:ro
+    environment:
+      - FILES=${STARTUP_FILES:-/books/src}
+      - DATA=/data
+      - PORT=3000
+      - SYNC_ENGINE=shared
+      - RECONCILE_INTERVAL=0
+      - ADMIN_USER=admin
+      - ADMIN_TOKEN=secret
+      - GATE_DIR=/gate
+      - PATH=/gate-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

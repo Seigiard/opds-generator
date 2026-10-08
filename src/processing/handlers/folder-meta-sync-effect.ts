@@ -27,6 +27,8 @@ interface FailureProps {
 
 class FolderFeedPublishFailed extends Data.TaggedError("FolderFeedPublishFailed")<FailureProps> {}
 
+class FolderBrowserPublishFailed extends Data.TaggedError("FolderBrowserPublishFailed")<FailureProps> {}
+
 class FolderEntryPublishFailed extends Data.TaggedError("FolderEntryPublishFailed")<FailureProps> {}
 
 class FolderEntryReadFailed extends Data.TaggedError("FolderEntryReadFailed")<FailureProps> {}
@@ -98,12 +100,13 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
     books: bookEntries.length,
   });
 
-  yield* fs.atomicWrite(join(normalizedDir, INDEX_FILE), renderHtml(model)).pipe(
-    Effect.tap(() => Effect.sync(() => logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" }))),
-    Effect.catch((htmlError) =>
-      Effect.sync(() => logger.error("FolderMetaSync", "Failed to render index.html", htmlError, { path: relativePath || "/" })),
-    ),
-  );
+  // The browser page is part of the usable publication: a parent must not reference a folder without it.
+  const browserOutputPath = join(normalizedDir, INDEX_FILE);
+
+  yield* fs
+    .atomicWrite(browserOutputPath, renderHtml(model))
+    .pipe(Effect.mapError((cause) => new FolderBrowserPublishFailed(failure(browserOutputPath, cause))));
+  logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
 
   if (relativePath === "") return [];
 

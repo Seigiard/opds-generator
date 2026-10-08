@@ -281,16 +281,14 @@ describe("Cascade Flow Integration", () => {
     expect(first.isFile()).toBe(true);
   });
 
-  test("index.html render failure is isolated: feed.xml still written, handler ok", async () => {
+  test("index.html failure fails the handler: feed.xml is written but the folder is not referenced to its parent", async () => {
     // #given a deps whose index.html write always fails
     await mkdir(join(FILES_DIR, "lib"), { recursive: true });
     const libData = join(DATA_DIR, "lib");
     await mkdir(libData, { recursive: true });
-    const errors: string[] = [];
 
     const failingDeps: HandlerDeps = {
       ...asyncDeps,
-      logger: { ...asyncDeps.logger, error: (_tag, msg) => errors.push(msg) },
       fs: {
         ...asyncDeps.fs,
         atomicWrite: async (path, content) => {
@@ -303,10 +301,18 @@ describe("Cascade Flow Integration", () => {
     // #when folderMetaSync runs
     const result = await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, failingDeps);
 
-    // #then the feed is written, the failure is logged, and the handler still succeeds
-    expect(result.isOk()).toBe(true);
-    expect(await stat(join(libData, "feed.xml")).then(() => true)).toBe(true);
-    expect(errors.some((m) => m.includes("index.html"))).toBe(true);
+    // #then the failure surfaces, the feed exists, and no _entry.xml lets the parent reference the folder
+    expect({
+      failed: result.isErr() && result.error.message.includes("disk full"),
+      feed: await stat(join(libData, "feed.xml")).then(
+        () => true,
+        () => false,
+      ),
+      entry: await stat(join(libData, "_entry.xml")).then(
+        () => true,
+        () => false,
+      ),
+    }).toEqual({ failed: true, feed: true, entry: false });
   });
 
   test("characterization: empty folder yields a valid navigation feed", async () => {

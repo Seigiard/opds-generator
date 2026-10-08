@@ -1,4 +1,4 @@
-# Shared synchronization engine: live catalogue, freshness, recovery and shutdown (#50–#55)
+# Shared synchronization engine: live catalogue, freshness, recovery, shutdown and readiness (#50–#56)
 
 The separate repository is `Seigiard/sync-engine`. OPDS locks a local packed
 `@seigiard/sync-engine@0.3.1` artifact in `vendor/`. It is not published to npm.
@@ -156,6 +156,40 @@ Keep the immutable packed 0.3.0 upgrade fixture and its shared configuration
 `{ ...engineOptions(deps), statePath: undefined }`. That test verifies the generic
 external-default upgrade independently of OPDS's configured state selection.
 Ordinary freshness tests use the configured OPDS state.
+
+## Startup readiness (#56)
+
+Minimum = the root `feed.xml` and `index.html`. `initialEngineCatalogue` declares it as
+`minimum: [root]` in the engine plan; book and folder work follow as remaining required work.
+Remaining work gates `completed`, not `available`. A root `index.html` write failure is a
+handler failure, so a feed alone never counts as the minimum. The root is declared again at the
+end of `work` so the final feed lists every book.
+
+`GET /status` (Bun-local) reports four independent facts beside the engine fields:
+
+| Fact                         | Meaning                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `available`, `availableFrom` | A usable minimum is in DATA. `prior-output`: both root files existed before verification. `minimum-publication`: this run published them. |
+| `verifying`                  | The first pass is opening, or a pass is active or pending.                                                                                |
+| `completed`                  | Required work drained and nothing is verifying.                                                                                           |
+| `errors`                     | `{ source: "work" \| "pass", message }` records. `work` entries are typed failures retained after completion; `pass` is a failed pass.    |
+
+Failure map for the first pass: without a usable minimum the start promise rejects and the server
+exits 1 (the entrypoint passes that status to the container). With a usable minimum the start
+promise resolves, nginx keeps serving the previous publication, `errors` holds the pass failure,
+and `POST /resync` (or the reconcile interval) opens the session again in the same process.
+Download links are symlinks to the source, so they cannot be served while the source itself is absent.
+
+`test/e2e/startup-readiness.test.ts` runs the production image (server, nginx, entrypoint) per
+scenario. `test/e2e/startup/` holds its Compose overlay: a PATH `unzip` wrapper that holds real
+extraction until `gate/hold-unzip` is removed, and a Bun preload that holds one named
+`Bun.write` listed in `gate/holds.json`. Both are test-only mounts; the image is unchanged.
+
+```sh
+COMPOSE_PROJECT_NAME=opds49-56 STARTUP_PORT=18557 STARTUP_IMAGE=opds49-56-startup bun test test/e2e/startup-readiness.test.ts
+```
+
+In-process counterpart: `test/integration/lifecycle/startup-readiness.test.ts`.
 
 ## Output ownership
 

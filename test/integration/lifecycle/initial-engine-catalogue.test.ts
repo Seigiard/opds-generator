@@ -54,15 +54,23 @@ test("initial book publication waits for its required download target", async ()
     // #when publication has reached the required-target boundary
     await entered.promise;
     const prematureEntry = await Bun.file(join(outputPath, "First Book.txt", "entry.xml")).exists();
-    const prematureFeed = await Bun.file(join(outputPath, "feed.xml")).exists();
+    // The root minimum may already exist, but it must not reference a book whose target is still held.
+    const minimumFeed = await Bun.file(join(outputPath, "feed.xml")).text();
+    const prematureReference = minimumFeed.includes("First Book");
     release.open();
     await task;
     // #then no new reference preceded its target and the final download is readable
     expect({
       prematureEntry,
-      prematureFeed,
+      minimumPublished: minimumFeed.includes("<feed"),
+      prematureReference,
       download: await readFile(join(outputPath, "First Book.txt", "First Book.txt"), "utf8"),
-    }).toEqual({ prematureEntry: false, prematureFeed: false, download: "Independent source bytes.\n" });
+    }).toEqual({
+      prematureEntry: false,
+      minimumPublished: true,
+      prematureReference: false,
+      download: "Independent source bytes.\n",
+    });
   } finally {
     release.open();
     await task;

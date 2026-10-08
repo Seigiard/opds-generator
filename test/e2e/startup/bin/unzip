@@ -1,0 +1,5 @@
+#!/bin/sh
+# Holds the real extraction until the test removes the hold file, then runs the real tool.
+printf '%s' "$$" > /gate/unzip-entered
+while [ -e /gate/hold-unzip ]; do sleep 0.1; done
+exec /usr/bin/unzip "$@"

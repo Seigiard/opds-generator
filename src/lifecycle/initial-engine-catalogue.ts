@@ -44,6 +44,8 @@ export function openEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueO
 }
 
 export interface EngineCatalogueOptions {
+  /** Runs once, after the root feed and browser page exist, before the remaining catalogue work. */
+  readonly onMinimum?: Effect.Effect<void>;
   readonly check?: "metadata" | "content";
   readonly processingVersions?: { readonly book?: string; readonly folder?: string };
 }
@@ -78,11 +80,15 @@ export function engineOptions(
         return [CatalogueEvent.BookCreated({ parent: dirname(path), name: basename(path) })];
       });
 
+      const root = CatalogueEvent.FolderMetaSyncRequested({ path: deps.config.dataPath });
+
       return {
+        // The root feed and page are the minimum a deployment is usable with. Book entries join it as work completes.
+        minimum: [root],
         work: [
           ...books,
           ...folders.map((folder) => CatalogueEvent.FolderMetaSyncRequested({ path: join(deps.config.dataPath, folder.path) })),
-          CatalogueEvent.FolderMetaSyncRequested({ path: deps.config.dataPath }),
+          root,
         ],
         publish: Effect.void,
       };
@@ -126,6 +132,7 @@ export function engineOptions(
       },
     },
     declare,
+    onMinimum: options.onMinimum,
     key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${event.path}` : undefined),
     failureKey: (event) =>
       Predicate.isTagged(event, "FolderMetaSyncRequested")

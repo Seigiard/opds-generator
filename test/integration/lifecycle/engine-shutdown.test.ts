@@ -109,7 +109,18 @@ test("stop awaits started book publication, closes HTTP admission and startup re
           warmKeptEntry: (await stat(entry)).mtimeMs === ancient.getTime(),
         }).toEqual({
           during: { stopped: false, accepting: false, resync: 503, watcher: 503 },
-          state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", active: null, pending: 0, errors: [] } },
+          state: {
+            state: "stopped",
+            pass: null,
+            followUp: null,
+            failure: null,
+            available: true,
+            availableFrom: "minimum-publication",
+            verifying: false,
+            completed: false,
+            errors: [],
+            work: { state: "stopped", active: null, pending: 0, errors: [] },
+          },
           bookPublished: true,
           target: join(filesPath, "Book.fb2"),
           oldFeed: ["Test Book"],
@@ -193,7 +204,7 @@ test("stop during initial preparation settles startup without a fatal failure an
         final: parseFeed(await readFile(join(dataPath, "feed.xml"), "utf8")).entries.map((book) => book.title),
       }).toEqual({
         startup: "cancelled",
-        stopped: { state: "stopped", pass: null },
+        stopped: { state: "stopped", pass: null, available: false, availableFrom: null, verifying: false, completed: false, errors: [] },
         fatal: [],
         entryExisted: false,
         final: ["Test Book"],
@@ -270,7 +281,18 @@ test("stop awaits a non-cancellable preparation read without starting publicatio
     }).toEqual({
       awaitedRead: true,
       failures: [],
-      state: { state: "stopped", pass: null, followUp: null, work: { state: "stopped", pending: 0, active: null, errors: [] } },
+      state: {
+        state: "stopped",
+        pass: null,
+        followUp: null,
+        failure: null,
+        available: true,
+        availableFrom: "prior-output",
+        verifying: false,
+        completed: false,
+        errors: [],
+        work: { state: "stopped", pending: 0, active: null, errors: [] },
+      },
       entry: before,
       target: join(filesPath, "Book.fb2"),
     });

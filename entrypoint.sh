@@ -53,6 +53,9 @@ echo "[entrypoint] Starting watcher..."
 sh /app/src/watcher.sh &
 WATCHER_PID=$!
 
+# Stays 0 for a requested shutdown. A server that dies on its own must fail the container.
+EXIT_CODE=0
+
 # Graceful shutdown handler
 cleanup() {
   echo "[entrypoint] Shutting down..."
@@ -60,7 +63,7 @@ cleanup() {
   kill "$BUN_PID" 2>/dev/null || true
   kill "$NGINX_PID" 2>/dev/null || true
   wait
-  exit 0
+  exit "$EXIT_CODE"
 }
 
 trap cleanup SIGTERM SIGINT
@@ -68,8 +71,13 @@ trap cleanup SIGTERM SIGINT
 echo "[entrypoint] All processes started. Monitoring..."
 
 while true; do
-  kill -0 "$BUN_PID" 2>/dev/null || { echo "[entrypoint] Bun process died"; break; }
-  kill -0 "$NGINX_PID" 2>/dev/null || { echo "[entrypoint] nginx process died"; break; }
+  kill -0 "$BUN_PID" 2>/dev/null || {
+    echo "[entrypoint] Bun process died"
+    wait "$BUN_PID" || EXIT_CODE=$?
+    [ "$EXIT_CODE" -ne 0 ] || EXIT_CODE=1
+    break
+  }
+  kill -0 "$NGINX_PID" 2>/dev/null || { echo "[entrypoint] nginx process died"; EXIT_CODE=1; break; }
   sleep 5
 done
 

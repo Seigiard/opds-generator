@@ -58,24 +58,25 @@ tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never ad
 
 Other scripts (`start`, `rebuild`, `lint`, `format`, `test:unit`, `test:integration`, `test:coverage`) are in `package.json`.
 
-| Command                                                                   | What it does                                                                  |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `git submodule update --init`                                             | Fetch foliate-js (first checkout; `build:ui` needs it)                        |
-| `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                    |
-| `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                               |
-| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)          |
-| `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                          |
-| `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors              |
-| `bun --bun tsc --noEmit`                                                  | Type check (host is fine)                                                     |
-| `bun run test`                                                            | Unit + integration tests in Docker                                            |
-| `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                             |
-| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)        |
-| `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                |
-| `npx knip`                                                                | Unused exports/deps (`knip.json`)                                             |
-| `bun run build:ui` / `bun run build:ui:check`                             | Regenerate `static/` / fail if `static/` differs from the commit              |
-| `bun run render:golden` / `bun run render:check`                          | Regenerate `test/golden/*.html` / fail on any golden diff or untracked golden |
-| `bun run dev:ui`                                                          | Vite HMR preview of renderer + reader, no Docker (http://localhost:5173)      |
-| `bun run fixtures:pull`                                                   | Refresh renderer cassettes                                                    |
+| Command                                                                   | What it does                                                                     |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `git submodule update --init`                                             | Fetch foliate-js (first checkout; `build:ui` needs it)                           |
+| `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                       |
+| `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                                  |
+| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)             |
+| `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                             |
+| `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors                 |
+| `bun --bun tsc --noEmit`                                                  | Type check (host is fine)                                                        |
+| `bun run test`                                                            | Unit + integration tests in Docker                                               |
+| `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                                |
+| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)           |
+| `STARTUP_PORT=<port> bun test test/e2e/startup-readiness.test.ts`         | Startup-readiness e2e; starts its own Compose projects (also part of `test:e2e`) |
+| `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                   |
+| `npx knip`                                                                | Unused exports/deps (`knip.json`)                                                |
+| `bun run build:ui` / `bun run build:ui:check`                             | Regenerate `static/` / fail if `static/` differs from the commit                 |
+| `bun run render:golden` / `bun run render:check`                          | Regenerate `test/golden/*.html` / fail on any golden diff or untracked golden    |
+| `bun run dev:ui`                                                          | Vite HMR preview of renderer + reader, no Docker (http://localhost:5173)         |
+| `bun run fixtures:pull`                                                   | Refresh renderer cassettes                                                       |
 
 ## Finishing a task
 
@@ -121,6 +122,7 @@ Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-syn
 
 Read `docs/agents/lifecycle.md` first.
 When selecting or updating the packaged engine composition, also read `docs/agents/shared-sync-engine.md`.
+Shared-engine startup separates `available`, `verifying`, `completed` and `errors` in `GET /status`; only a first pass without a usable root minimum is fatal.
 Shared-engine stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
 
 </important>

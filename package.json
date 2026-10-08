@@ -31,7 +31,7 @@
     "postinstall": "simple-git-hooks || true"
   },
   "dependencies": {
-    "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.3.1-8b2f605f.tgz",
+    "@seigiard/sync-engine": "file:vendor/seigiard-sync-engine-0.3.1-fac21409f54adc8b71e52f4d2df1028f8633a6d6.tgz",
     "effect": "4.0.1",
     "fast-xml-parser": "^5.11.2",
     "hono": "^4.13.13",

@@ -23,6 +23,7 @@ Code: `src/lifecycle/`, `src/server.ts`.
 - `start()` returns a promise that rejects with the scan's error. `server.ts` catches it, logs once, runs the shared stop path with the 8 s deadline, and exits 1. Docker then restarts the container.
 - A failed resync or reconcile scan is only logged. The phase ends `settled` or `accepting`.
 - `disk-scanner.ts` is the real scanner. `createDiskScanner({ filesPath, dataPath })` builds it for tests.
+- The shared composition (`SYNC_ENGINE=shared`) is fatal only without a usable minimum: the root `feed.xml` and `index.html`. With a usable minimum, a failed first pass keeps the process and nginx serving, reports the failure in `GET /status` and retries on `POST /resync` or after `RECONCILE_INTERVAL`. See `shared-sync-engine.md`.
 - nginx learns "initializing" from files, not from Bun. The seed `feed.xml` ends the 503s. The seed is written only after `/books` was read and planned, so a failed initial scan never reports healthy.
 
 ## Scans and reconciliation
@@ -48,4 +49,6 @@ Code: `src/lifecycle/`, `src/server.ts`.
 
 ## Status endpoint
 
-Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it. `test/e2e/nginx.test.ts` pins that.
+Bun serves `GET /status` (lifecycle phase, scan, follow-up, processor snapshot) on localhost:3000 only. nginx does not proxy it. `test/e2e/nginx.test.ts` pins that. The shared composition adds independent facts `available`, `availableFrom`, `verifying`, `completed` and `errors`; see `shared-sync-engine.md`.
+
+`entrypoint.sh` exits with the status of a Bun process that dies on its own (1 when Bun reports 0). A requested shutdown still exits 0. `test/e2e/startup-readiness.test.ts` pins the container exit code.
