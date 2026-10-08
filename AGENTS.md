@@ -122,6 +122,7 @@ Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-syn
 
 Read `docs/agents/lifecycle.md` first.
 When changing the engine composition, freshness, recovery or the package, also read `docs/agents/shared-sync-engine.md`.
+Final cross-application release evidence and the scenario matrix live in `docs/agents/shared-sync-evidence.md`.
 The engine owns scans, scheduling, reconciliation, retry and shutdown. Add no timer, queue or scan state to OPDS code.
 `GET /status` separates `available`, `verifying`, `completed` and `errors`; only a first pass without a usable root minimum is fatal.
 Stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.

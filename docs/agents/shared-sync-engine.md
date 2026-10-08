@@ -1,10 +1,11 @@
-# Shared synchronization engine: production adoption, live catalogue, freshness, recovery, shutdown and readiness (#50–#57)
+# Shared synchronization engine: production adoption, live catalogue, freshness, recovery, shutdown and readiness (#50–#64)
 
 The separate repository is `Seigiard/sync-engine`. OPDS depends on the released npm package
 `@seigiard/sync-engine` (exact version in `package.json`; the lock records the registry tarball and its integrity).
 Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled. The engine is the only synchronization
 path in production: `server.ts` starts `createLiveEngineLifecycle` and nothing else. TTRPG Map Viewer and
-OPML Generator still use their own synchronization (later tickets of the shared-engine plan).
+OPML Generator have also adopted the released engine. Final cross-application evidence lives in
+`docs/agents/shared-sync-evidence.md`.
 
 ## Reproduce
 
@@ -282,14 +283,22 @@ release ownership.
 ## Update the package
 
 Release path (engine repository, `README.md` "Verify, pack and release"): run its Docker checks, then
-`bun scripts/verify-pack.ts` from a clean checkout. It prints the archive hash and lock integrity. After the
-maintainer publishes the version to npm, compare `npm view @seigiard/sync-engine@<version> dist.integrity` with
-that integrity.
+`bun scripts/verify-pack.ts` from a clean checkout. It prints the archive hash and lock integrity. Publish that
+exact archive with `npm publish <archive> --access public --registry=https://registry.npmjs.org`. npm requires
+browser 2FA for the `seigiard` account; a non-TTY publish prints an auth URL and exits `EOTP`, so run the publish
+from a TTY pane and let the maintainer confirm in the browser. After publish, compare
+`npm view @seigiard/sync-engine@<version> dist.integrity dist.shasum dist.tarball --json --prefer-online` with
+the verified archive. The registry can return 404 briefly after a successful publish; retry the view, never
+republish the same version.
 
-Consumer update: set the exact version in `package.json`, run `bun install` to regenerate `bun.lock`, and rebuild the
-test and production images (`bun run rebuild:test`, `docker compose build`). Check that `bun.lock` records the
-registry tarball and that `node_modules/@seigiard/sync-engine/package.json` has the version. The production image
-installs with `--frozen-lockfile --production`.
+Consumer update: set the exact version in `package.json`, run the consumer's pinned Bun install to regenerate
+`bun.lock`, and rebuild the test and production images. Check that `bun.lock` records the registry tarball integrity,
+that `node_modules/@seigiard/sync-engine/package.json` has the version, and that installed package files diff cleanly
+against `npm pack @seigiard/sync-engine@<version>`. Run each consumer's gates: OPDS `bun run fix`,
+`bun --bun tsc --noEmit`, `bun run test`, `npx knip`, `bun run test:e2e`, and UI freshness checks when UI sources
+change; TTRPG host checks, Docker tests and production smoke; OPML lint/type/knip, Docker tests, e2e and
+`bun run smoke:engine`. Record counts, lock integrity, package equality, resource gates and limitations in the
+consumer evidence.
 
 While preparing an unpublished engine, a content-qualified `file:vendor/…tgz` dependency may stand in. Use a new
 basename each time: Bun caches file dependencies by path. Such a build is a candidate, never a release. The
@@ -310,3 +319,12 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 | `unit/scanner.test.ts`                                                                                                                            | Folder structure, hash, abort, plan, orphan detection, heap-snapshot housekeeping                                                                                    | Engine `source.test.ts`, `freshness.test.ts`; OPDS `resync-in-place.test.ts` (downtime removals), `legacy-data.test.ts`                          |
 | `unit/processing/events.test.ts` dedup case                                                                                                       | Watcher dedup window                                                                                                                                                 | Removed by design: repeated notices pass through; `live-engine-catalogue.test.ts` pins a second replacement during active work                   |
 | `initial-engine-catalogue.test.ts` lease-acquisition cases                                                                                        | Lease contention during startup                                                                                                                                      | Same file, on the production lifecycle                                                                                                           |
+
+## Final release evidence (#64)
+
+The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
+`63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity
+`sha512-XN5GY9M3ueBBeaWWRENPCLIwh3Dl0GGPwF06KfgGvpn+WJ/zU0PNXAtfI7PxPk2mpGXJocEw9zKyeMSPXEolRw==`. OPDS,
+TTRPG Map Viewer and OPML Generator all pin that release through normal registry dependencies. The scenario matrix,
+consumer revisions, commands, installed-package equality checks and delegation audit are in
+`docs/agents/shared-sync-evidence.md`.

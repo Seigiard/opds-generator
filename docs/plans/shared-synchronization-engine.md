@@ -1,6 +1,6 @@
 # Shared synchronization engine
 
-Status: agreed target contract; implementation has not started.
+Status: complete. OPDS Generator, TTRPG Map Viewer and OPML Generator use the released shared engine for the agreed synchronization responsibilities.
 
 Decision: [ADR 0004](../adr/0004-shared-synchronization-engine.md).
 
@@ -109,13 +109,14 @@ Extraction is complete only when all three applications use the engine for the a
 
 ### Status
 
-- **OPDS: adopted (#57).** The released package is the only synchronization path in the standard Docker startup. The legacy lifecycle, scanner, consumer and temporary selection are removed. The engine owns first-pass retry and reconciliation. Evidence and reproduction: `docs/agents/shared-sync-engine.md`.
-- **TTRPG Map Viewer: pending.**
-- **OPML Generator: pending.**
+- **OPDS: adopted (#57, updated to 0.5.0 in #64).** The released package is the only synchronization path in the standard Docker startup. The legacy lifecycle, scanner, consumer and temporary selection are removed.
+- **TTRPG Map Viewer: adopted (#60).** Production catalog synchronization uses the released engine package. The regeneration controller and temporary `SYNC_ENGINE` selection are removed.
+- **OPML Generator: adopted (#63).** Production podcast synchronization uses the released engine package. The legacy queue, scanner, lifecycle and `OPML_SYNC_ENGINE` selection are removed.
+- **Final evidence (#64):** release identity, consumer revisions, scenario matrix and delegation audit are recorded in `docs/agents/shared-sync-evidence.md`.
 
 ### Behavioral evidence for migration
 
-Use these agreed scenarios to verify the integrations when implementation begins:
+Use these agreed scenarios when verifying future engine releases:
 
 - Changes during processing are eventually reflected after the source stops changing.
 - A missed watcher event is repaired by reconciliation when the selected freshness check can detect it.
@@ -128,7 +129,7 @@ Use these agreed scenarios to verify the integrations when implementation begins
 - A warm startup serves existing results while verification runs; a first startup fails if its minimum publication cannot be prepared.
 - Completion with errors is visible even after all work has stopped.
 
-These are future verification obligations, not claims that the current applications already pass them.
+The #64 evidence maps each scenario to the test or smoke step that currently owns it.
 
 ## Relationship to existing decisions
 

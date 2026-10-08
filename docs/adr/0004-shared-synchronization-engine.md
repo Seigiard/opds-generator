@@ -8,7 +8,7 @@ OPDS Generator, OPML Generator and TTRPG Map Viewer each maintain a derived repr
 
 The engine and application handlers use Effect 4. The engine owns scanning, work scheduling, dependency completion, reconciliation and shutdown. Applications define source meaning, processing, rendering and publication requirements. Each application keeps its own process and Docker image. Bun on Linux/Docker is the supported runtime.
 
-The [shared synchronization contract](../plans/shared-synchronization-engine.md) defines the agreed behavior and migration order. This decision is accepted. OPDS Generator has adopted the released package (#57): the engine owns its synchronization, and the superseded OPDS lifecycle is removed. TTRPG Map Viewer and OPML Generator have not adopted it yet.
+The [shared synchronization contract](../plans/shared-synchronization-engine.md) defines the agreed behavior and migration order. This decision is accepted. OPDS Generator, TTRPG Map Viewer and OPML Generator have adopted the released package. The engine owns the shared synchronization responsibilities in all three applications; domain processing and publication remain application code.
 
 ## Considered options
 
@@ -18,8 +18,8 @@ The [shared synchronization contract](../plans/shared-synchronization-engine.md)
 
 ## Consequences
 
-- All three applications must adopt the engine before extraction is complete. The order is OPDS, TTRPG, then OPML. Scenarios from all three inform the interface from the start.
-- OPML handlers move to Effect 4. Its destructive resync changes to repair in place.
+- All three applications adopted the engine in the planned order: OPDS, TTRPG, then OPML. Scenarios from all three informed the interface.
+- OPML handlers moved to Effect 4. Its destructive resync changed to repair in place.
 - Fix delivery requires a package release and a verified dependency update in each application.
 - ADR 0001's repair-in-place decision and ADR 0002's explicit cascade completion remain constraints on the extraction.
 - Adoption in OPDS replaced ADR 0003's restriction that lifecycle execution stays plain async: an Effect scope owns the OPDS lifecycle, and a thin Promise adapter serves HTTP and the process. ADR 0003's Effect processing and resource-ownership decisions remain applicable to OPDS handlers.
