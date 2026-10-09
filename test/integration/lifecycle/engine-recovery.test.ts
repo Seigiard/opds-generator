@@ -532,14 +532,56 @@ test("source kind-change cleanup skips a symlinked DATA ancestor discovered as a
 
     const observation = {
       completion: completion._tag,
-      failedSafely:
-        Exit.isFailure(completion) && Cause.pretty(completion.cause).includes("OPDS cleanup ancestor is not an owned directory"),
       externalEntry: await pathExists(join(external, "Novel.fb2", "entry.xml")),
       sourceIsFolder: await pathExists(join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2")),
     };
 
     // #then orphan cleanup skips the DATA symlink, so no deletion is attempted through it
-    expect(observation).toEqual({ completion: "Success", failedSafely: false, externalEntry: true, sourceIsFolder: true });
+    expect(observation).toEqual({ completion: "Success", externalEntry: true, sourceIsFolder: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source kind-change cleanup refuses to delete through a symlinked DATA ancestor", async () => {
+  // #given a live catalogue whose DATA ancestor is replaced by an operator-created symlink
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Fiction"));
+  await copyFile(fixture, join(sourcePath, "Fiction", "Novel.fb2"));
+  const external = join(root, "external");
+
+  try {
+    await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(deps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              await Effect.runPromise(session.awaitCompletion);
+              await rename(join(outputPath, "Fiction"), external);
+              await symlink(external, join(outputPath, "Fiction"));
+
+              await rm(join(sourcePath, "Fiction", "Novel.fb2"));
+              await mkdir(join(sourcePath, "Fiction", "Novel.fb2"));
+              await copyFile(fixture, join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2"));
+
+              // #when a stale book deletion reaches OPDS source-kind cleanup directly
+              await Effect.runPromise(
+                session.submit([CatalogueEvent.BookDeleted({ parent: join(sourcePath, "Fiction"), name: "Novel.fb2" })]),
+              );
+              await Effect.runPromise(session.awaitCompletion);
+              const status = await Effect.runPromise(session.status);
+
+              // #then the cleanup is rejected before rm can traverse the DATA symlink
+              expect({
+                state: status.state,
+                errors: status.errors.map((error) => Cause.pretty(error.cause).includes("OPDS cleanup ancestor is not an owned directory")),
+                externalEntry: await pathExists(join(external, "Novel.fb2", "entry.xml")),
+              }).toEqual({ state: "complete-with-errors", errors: [true], externalEntry: true });
+            }),
+          ),
+        ),
+      ),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -629,8 +671,8 @@ test.each([
       // #then obsolete descendant output is absent and no retained deletion failure remains
       expect(observation).toEqual({
         before: true,
-        completed: !(replacement !== "symlink" && nested === "folder"),
-        errors: replacement !== "symlink" && nested === "folder" ? ["pass"] : [],
+        completed: true,
+        errors: [],
         staleOutput: false,
         ancestorOutput: replacement === "book file",
         rootReferences: replacement === "book file" ? [`/${ancestor}/${ancestor}`] : [],

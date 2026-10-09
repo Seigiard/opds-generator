@@ -79,8 +79,36 @@ test("stop waits for in-flight admission before resolving", async () => {
 });
 
 test("stop rejects new admission after abort", async () => {
-  // #given a started lifecycle
-  const lifecycle = createLiveEngineLifecycle(deps());
+  // #given a started lifecycle with observable engine admission calls
+  const requests: unknown[] = [];
+  const notifications: unknown[] = [];
+
+  const lifecycle = createLiveEngineLifecycle(deps(), {
+    startCatalogue: () =>
+      Effect.succeed({
+        ready: Effect.void,
+        awaitCompletion: Effect.void,
+        notify: (paths) => {
+          notifications.push(paths);
+
+          return Effect.succeed("started" as const);
+        },
+        requestPass: (request) => {
+          requests.push(request);
+
+          return Effect.succeed("started" as const);
+        },
+        status: Effect.succeed({
+          state: "complete",
+          pass: null,
+          followUp: null,
+          failure: null,
+          availability: null,
+          work: { state: "complete", pending: 0, active: null, errors: [] },
+        }),
+      }),
+  });
+
   await lifecycle.start();
 
   // #when stop closes admission
@@ -90,6 +118,10 @@ test("stop rejects new admission after abort", async () => {
   expect({
     accepting: lifecycle.accepting(),
     request: await lifecycle.requestScan({ kind: "resync", force: true }),
-    submit: await lifecycle.submit(CatalogueEvent.BookCreated({ parent: "/books", name: "Book.fb2" })),
-  }).toEqual({ accepting: false, request: "rejected", submit: undefined });
+    notifications,
+    requests,
+  }).toEqual({ accepting: false, request: "rejected", notifications: [], requests: [] });
+
+  await lifecycle.submit(CatalogueEvent.BookCreated({ parent: "/books", name: "Book.fb2" }));
+  expect({ notifications, requests }).toEqual({ notifications: [], requests: [] });
 });

@@ -89,8 +89,8 @@ entries (`_entry.xml`) whose source is not in the scan, and emits `BookDeleted` 
 covers sources removed while the service was down, deletions the watcher missed, and the deletion hints the
 adapter forwards. The source work removes only on confirmed absence, confirmed source-kind change, an unsupported
 source path, or a deletion whose source ancestor is now a non-directory such as a regular file, book file or symlink.
-That ancestor case removes the confined output, does not re-observe through the ancestor, and refreshes no
-non-directory parent. Orphan cleanup declares descendants before their folder. A directory that cannot be read yields
+Engine `0.5.5` reports descendants below a file ancestor as absent. OPDS removes the confined output and emits a
+parent refresh only when that parent is root or is observed as a present directory. Orphan cleanup declares descendants before their folder. A directory that cannot be read yields
 no candidates.
 
 `status` separates the active pass, pending follow-up and work status.
@@ -336,7 +336,7 @@ candidate with the unbounded failed-opening retry loop, so consumers must not re
 final reviewed engine as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary `vendor/` runtime pin.
 Record the published registry identity and package equality in `docs/agents/shared-sync-evidence.md`. Changes over
 `0.5.3`: a queued resync after a recoverable warm-start opening failure retries in the same live scope. Changes over
-the registry `0.5.4` candidate: persistent failed-opening retries are bounded to admitted requests.
+the registry `0.5.4` candidate: persistent failed-opening retries are bounded to admitted requests, and descendants below a file ancestor observe as absent instead of raising `Source ancestor is not a directory`.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

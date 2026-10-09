@@ -127,7 +127,7 @@ Final cross-application release evidence and the scenario matrix live in `docs/a
 The engine owns scans, scheduling, reconciliation, retry and shutdown. Add no timer, queue or scan state to OPDS code.
 `GET /status` separates `available`, `verifying`, `completed` and `errors`; only a first pass without a usable root minimum is fatal.
 Stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
-Cleanup treats a source path, or deletion source ancestor, that becomes a symlink, regular file, book file or other unsupported entry as obsolete output, not as a permanent source read failure. Orphan cleanup declares descendants before their folder and does not refresh through a non-directory parent.
+Cleanup treats a source path, or deletion source ancestor, that becomes a symlink, regular file, book file or other unsupported entry as obsolete output, not as a permanent source read failure. Engine `0.5.5` reports descendants below a file ancestor as absent; OPDS still refreshes a deletion parent only when that parent is root or a present directory. Orphan cleanup declares descendants before their folder and never refreshes through a non-directory or absent parent.
 Deployment health is `healthcheck.sh` (available + root feed + root page), never `feed.xml` alone.
 
 </important>

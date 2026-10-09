@@ -56,9 +56,9 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
 
       if (deleted) {
         const parent = dirname(path);
-        const unsupportedParent = parent !== "." && (yield* isNonDirectorySourcePath(filesPath, parent, sourceFs));
+        const refreshableParent = parent === "." || (yield* isDirectorySourcePath(filesPath, parent, sourceFs));
 
-        if (unsupportedParent) return [];
+        if (!refreshableParent) return [];
       }
 
       return removed ? [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(join(dataPath, path)) })] : [];
@@ -85,17 +85,17 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
   }).pipe(Effect.uninterruptible);
 }
 
-const OBSOLETE_SOURCE_REPLACEMENT_MESSAGES = new Set(["Unsupported source path", "Source ancestor is not a directory"]);
+const OBSOLETE_SOURCE_REPLACEMENT_MESSAGES = new Set(["Unsupported source path"]);
 
-export function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
+function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
   return OBSOLETE_SOURCE_REPLACEMENT_MESSAGES.has(error.message);
 }
 
-function isNonDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
+function isDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
   return observeSourcePath(sourcePath, path, sourceFs).pipe(
     Effect.match({
-      onFailure: (error) => isObsoleteSourceReplacement(error),
-      onSuccess: (observation) => observation.state === "present" && observation.entry.kind !== "directory",
+      onFailure: () => false,
+      onSuccess: (observation) => observation.state === "present" && observation.entry.kind === "directory",
     }),
   );
 }

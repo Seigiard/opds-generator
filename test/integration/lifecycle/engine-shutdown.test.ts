@@ -145,7 +145,7 @@ test("stop awaits started book publication, closes HTTP admission and startup re
 
 test("stop during initial preparation settles startup without a fatal failure and permits restart", async () => {
   // #given an initial real book read held before publication and an observed startup promise
-  const { root, dataPath, deps } = await tree();
+  const { root, filesPath, dataPath, deps } = await tree();
   const entered = gate();
   const release = gate();
   const fatal: unknown[] = [];
@@ -157,8 +157,11 @@ test("stop during initial preparation settles startup without a fatal failure an
         ...deps.fs,
         stat: async (path: string) => {
           const result = await deps.fs.stat(path);
-          entered.open();
-          await release.promise;
+
+          if (path === join(filesPath, "Book.fb2")) {
+            entered.open();
+            await release.promise;
+          }
 
           return result;
         },
@@ -210,8 +213,8 @@ test("stop during initial preparation settles startup without a fatal failure an
           followUp: null,
           failure: null,
           work: { state: "stopped", pending: 0, active: null, errors: [] },
-          available: false,
-          availableFrom: null,
+          available: true,
+          availableFrom: "minimum-publication",
           verifying: false,
           completed: false,
           errors: [],
