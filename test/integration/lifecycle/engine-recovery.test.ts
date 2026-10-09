@@ -3,8 +3,11 @@ import { Effect, Cause, Exit } from "effect";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes } from "node:fs/promises";
 import { engineStatePath, acquireOutputTree } from "@seigiard/sync-engine";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createCatalogueHttpHandler } from "../../../src/catalogue-http.ts";
 import { initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { openLiveEngineCatalogue } from "../../../src/lifecycle/live-engine-catalogue.ts";
+import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
 import { buildContext } from "../../../src/context.ts";
 import { CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
@@ -458,53 +461,47 @@ test("folder-to-book cleanup retries after a failed obsolete-folder removal", as
   try {
     const observation = await Effect.runPromise(
       Effect.scoped(
-        openEngineCatalogue(faultyDeps).pipe(
-          Effect.flatMap((session) =>
-            io(async () => {
-              await rm(join(sourcePath, name), { recursive: true });
-              await copyFile(fixture, join(sourcePath, name));
+        Effect.gen(function* () {
+          const session = yield* openLiveEngineCatalogue(faultyDeps);
 
-              // #when the first pass publishes the new book but cannot remove the old folder marker
-              await Effect.runPromise(
-                session.submit([
-                  CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
-                  CatalogueEvent.BookCreated({ parent: sourcePath, name }),
-                ]),
-              );
-              await Effect.runPromise(session.awaitCompletion);
-              const failed = await Effect.runPromise(session.status);
+          return yield* io(async () => {
+            await rm(join(sourcePath, name), { recursive: true });
+            await copyFile(fixture, join(sourcePath, name));
 
-              // #when a later pass retries the obsolete folder cleanup after cleanup is possible again
-              await Effect.runPromise(
-                session.submit([
-                  CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
-                  CatalogueEvent.BookCreated({ parent: sourcePath, name }),
-                ]),
-              );
-              await Effect.runPromise(session.awaitCompletion);
-              const retried = await Effect.runPromise(session.status);
+            // #when the first real pass publishes the new book but cannot remove the old folder marker
+            const firstAdmission = await Effect.runPromise(session.requestPass());
+            await Effect.runPromise(session.awaitCompletion);
+            const failed = await Effect.runPromise(session.status);
 
-              return {
-                failedState: failed.state,
-                failedErrors: failed.errors.map((error) => error.work._tag),
-                retriedState: retried.state,
-                retriedErrors: retried.errors.map((error) => error.work._tag),
-                folderMarker: await pathExists(join(outputPath, name, "_entry.xml")),
-                bookMarker: await pathExists(join(outputPath, name, "entry.xml")),
-                rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map(
-                  (entry) => entry.href ?? entry.acquisitions?.[0]?.href,
-                ),
-              };
-            }),
-          ),
-        ),
+            // #when a later real pass retries the obsolete folder cleanup after cleanup is possible again
+            const retryAdmission = await Effect.runPromise(session.requestPass());
+            await Effect.runPromise(session.awaitCompletion);
+            const retried = await Effect.runPromise(session.status);
+
+            return {
+              firstAdmission,
+              failedState: failed.work.state,
+              failedErrors: failed.work.errors.map((error) => error.work._tag),
+              retryAdmission,
+              retriedState: retried.work.state,
+              retriedErrors: retried.work.errors.map((error) => error.work._tag),
+              folderMarker: await pathExists(join(outputPath, name, "_entry.xml")),
+              bookMarker: await pathExists(join(outputPath, name, "entry.xml")),
+              rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map(
+                (entry) => entry.href ?? entry.acquisitions?.[0]?.href,
+              ),
+            };
+          });
+        }),
       ),
     );
 
     // #then the obsolete folder marker is retried away and the parent lists the book representation
     expect(observation).toEqual({
+      firstAdmission: "started",
       failedState: "complete-with-errors",
       failedErrors: ["FolderDeleted"],
+      retryAdmission: "started",
       retriedState: "complete",
       retriedErrors: [],
       folderMarker: false,
@@ -575,6 +572,73 @@ test("source symlink replacement cleans the stale published output", async () =>
 
     // #then the symlink is treated as obsolete source, not an eternal observation failure
     expect(observation).toEqual({ completion: "Success", before: true, staleFeed: false, staleEntry: false, rootReferences: [] });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  { replacement: "symlink", nested: "book", ancestor: "Linked" },
+  { replacement: "symlink", nested: "folder", ancestor: "Linked" },
+  { replacement: "regular file", nested: "book", ancestor: "Archive" },
+  { replacement: "regular file", nested: "folder", ancestor: "Archive" },
+  { replacement: "book file", nested: "book", ancestor: "Novel.fb2" },
+  { replacement: "book file", nested: "folder", ancestor: "Novel.fb2" },
+] as const)("$replacement replacing an ancestor cleans obsolete nested $nested outputs", async ({ replacement, nested, ancestor }) => {
+  // #given a published nested output whose ancestor is replaced by a non-directory source
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const nestedSource = nested === "book" ? join(sourcePath, ancestor, "Book.fb2") : join(sourcePath, ancestor, "Sub", "Book.fb2");
+  await mkdir(dirname(nestedSource), { recursive: true });
+  await copyFile(fixture, nestedSource);
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    const before = await pathExists(join(outputPath, ancestor));
+
+    await rm(join(sourcePath, ancestor), { recursive: true });
+
+    if (replacement === "symlink") {
+      const target = join(root, "external-source");
+      await mkdir(target);
+      await symlink(target, join(sourcePath, ancestor));
+    } else if (replacement === "regular file") {
+      await Bun.write(join(sourcePath, ancestor), "not a book");
+    } else {
+      await copyFile(fixture, join(sourcePath, ancestor));
+    }
+
+    // #when a real live pass declares cleanup from the current source tree
+    const runtime = createLiveEngineLifecycle(deps);
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+
+    try {
+      await runtime.start();
+      const status = await (await fetch(`${server.url.href.slice(0, -1)}/status`)).json();
+
+      const observation = {
+        before,
+        completed: status.completed,
+        errors: status.errors.map((error: { source: string }) => error.source),
+        staleOutput: await pathExists(join(outputPath, ancestor, nested === "book" ? "Book.fb2" : "Sub")),
+        ancestorOutput: await pathExists(join(outputPath, ancestor)),
+        rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map(
+          (entry) => entry.href ?? entry.acquisitions?.[0]?.href,
+        ),
+      };
+
+      // #then obsolete descendant output is absent and no retained deletion failure remains
+      expect(observation).toEqual({
+        before: true,
+        completed: true,
+        errors: [],
+        staleOutput: false,
+        ancestorOutput: replacement === "book file",
+        rootReferences: replacement === "book file" ? [`/${ancestor}/${ancestor}`] : [],
+      });
+    } finally {
+      server.stop(true);
+      await runtime.stop();
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

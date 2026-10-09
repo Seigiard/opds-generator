@@ -71,3 +71,24 @@ test("parent folder deletion declares descendant output deletions before the par
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("same-path book source still declares descendant output deletions before obsolete folder cleanup", async () => {
+  // #given output whose old folder representation contains a child book and whose current source is a same-path book
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(outputPath, "Novel.fb2", "Inside.fb2"), { recursive: true });
+  await Bun.write(join(outputPath, "Novel.fb2", FOLDER_ENTRY_FILE), "folder");
+  await Bun.write(join(outputPath, "Novel.fb2", "Inside.fb2", ENTRY_FILE), "book");
+
+  try {
+    // #when the source scan contains the replacement book at the folder path
+    const work = await Effect.runPromise(orphanedOutputs(deps, [{ path: "Novel.fb2", kind: "file", size: 1, mtimeMs: 1 }]));
+
+    // #then child cleanup can clear retained child failures before the parent folder cleanup removes the subtree
+    expect(work.map(deletionSummary)).toEqual([
+      { tag: "BookDeleted", parent: join(sourcePath, "Novel.fb2"), name: "Inside.fb2" },
+      { tag: "FolderDeleted", parent: sourcePath, name: "Novel.fb2" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -46,7 +46,7 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
             if (!(await deps.fs.stat(absolute)).isDirectory()) continue;
 
             if (await deps.fs.exists(join(absolute, FOLDER_ENTRY_FILE))) {
-              if (!books.has(relative)) await walk(relative);
+              await walk(relative);
 
               if ((await deps.fs.exists(join(absolute, ENTRY_FILE))) && !books.has(relative)) {
                 orphans.push(bookDeleted(deps, relative));
@@ -95,3 +95,5 @@ function folderDeleted(deps: HandlerDeps, path: string): EventType {
 
   return CatalogueEvent.FolderDeleted({ parent: dirname(source), name: basename(source) });
 }
+
+// Keep a small tail after the final function body for Docker/Bun bind-mount parsing on macOS.

@@ -30,7 +30,7 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
 
     const observation = yield* observeSourcePath(filesPath, path, sourceFs).pipe(
       Effect.catchTag("SourceObservationFailed", (error) => {
-        if (deleted && isUnsupportedSourceReplacement(error)) {
+        if (deleted && isObsoleteSourceReplacement(error)) {
           unsupportedSourceReplacement = true;
 
           return Effect.succeed({ state: "absent" } as const);
@@ -54,9 +54,9 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
             sourceFs,
           );
 
-      if (unsupportedSourceReplacement && Predicate.isTagged(event, "BookDeleted")) {
+      if (unsupportedSourceReplacement) {
         const parent = dirname(path);
-        const unsupportedParent = parent !== "." && (yield* isUnsupportedSourcePath(filesPath, parent, sourceFs));
+        const unsupportedParent = parent !== "." && (yield* isNonDirectorySourcePath(filesPath, parent, sourceFs));
 
         if (unsupportedParent) return [];
       }
@@ -89,11 +89,15 @@ export function isUnsupportedSourceReplacement(error: { readonly message: string
   return error.message === "Unsupported source path";
 }
 
-function isUnsupportedSourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
+function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
+  return isUnsupportedSourceReplacement(error) || error.message === "Source ancestor is not a directory";
+}
+
+function isNonDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
   return observeSourcePath(sourcePath, path, sourceFs).pipe(
     Effect.match({
-      onFailure: (error) => isUnsupportedSourceReplacement(error),
-      onSuccess: () => false,
+      onFailure: (error) => isObsoleteSourceReplacement(error),
+      onSuccess: (observation) => observation.state === "present" && observation.entry.kind !== "directory",
     }),
   );
 }
@@ -149,3 +153,5 @@ function confinedPath(root: string, path: string): string {
 
   return absolute;
 }
+
+// Keep a small tail after the final function body for Docker/Bun bind-mount parsing on macOS.
