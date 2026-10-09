@@ -7,6 +7,7 @@ import { createCatalogueHttpHandler } from "../../../src/catalogue-http.ts";
 import { buildContext } from "../../../src/context.ts";
 import { engineOptions, initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
 import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
+import { openLiveEngineCatalogue } from "../../../src/lifecycle/live-engine-catalogue.ts";
 import { CatalogueDeps, CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../../../src/effect-file-system.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
@@ -19,6 +20,9 @@ import { parseFeed } from "../../../src/render/parse-feed.ts";
 const ancient = new Date("2020-01-01T00:00:00Z");
 
 const fixture = join(import.meta.dir, "../../../files/test/Test Book - Test Author.fb2");
+
+const safePromise = <T>(run: () => Promise<T>) =>
+  Effect.tryPromise({ try: run, catch: (cause) => new Error(String(cause)) }).pipe(Effect.uninterruptible);
 
 async function facts(url: string) {
   const body = await (await fetch(`${url}/status`)).json();
@@ -492,6 +496,69 @@ test("a hint while an earlier real book publication is active keeps it eligible 
     }).toEqual({ earlier: ["Test Book"], repaired: ["Next Book"] });
   } finally {
     release();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("adding one book to a folder does not reprocess unchanged sibling books", async () => {
+  // #given a folder with several published sibling books and recorded freshness
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await rm(join(sourcePath, "Fiction", "Book.fb2"));
+  const existing = ["Alpha.txt", "Beta.txt", "Gamma.txt"];
+
+  for (const name of existing) await Bun.write(join(sourcePath, "Fiction", name), `${name} source bytes`);
+
+  const completedHandlers: string[] = [];
+
+  const countedDeps = {
+    ...deps,
+    logger: {
+      ...deps.logger,
+      info: (component: string, message: string, fields?: LogContext) => {
+        if (message === "Handler completed" && fields?.event_tag === "BookCreated") completedHandlers.push(String(fields.path));
+        deps.logger.info(component, message, fields);
+      },
+    },
+  };
+
+  try {
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const session = yield* openLiveEngineCatalogue(countedDeps);
+          const entryPaths = existing.map((name) => join(outputPath, "Fiction", name, "entry.xml"));
+
+          yield* safePromise(async () => {
+            for (const path of entryPaths) await utimes(path, ancient, ancient);
+          });
+
+          completedHandlers.length = 0;
+
+          // #when one new book is added and the live OPDS pass refreshes the folder
+          yield* safePromise(() => Bun.write(join(sourcePath, "Fiction", "Delta.txt"), "Delta.txt source bytes"));
+          yield* session.notify(["Fiction/Delta.txt"]);
+          yield* session.awaitCompletion;
+
+          return yield* safePromise(async () => ({
+            bookHandlers: completedHandlers.map((path) => path.replace(sourcePath + "/", "")).sort(),
+            existingMtimes: await Promise.all(entryPaths.map(async (path) => (await stat(path)).mtimeMs)),
+            titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8"))
+              .entries.map((entry) => entry.title)
+              .sort(),
+            rootSummary: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((entry) => entry.summary),
+          }));
+        }),
+      ),
+    );
+
+    // #then only the new book is extracted while the existing entries stay fresh and folder feeds include all books
+    expect(result).toEqual({
+      bookHandlers: ["Fiction/Delta.txt"],
+      existingMtimes: existing.map(() => ancient.getTime()),
+      titles: ["Alpha", "Beta", "Delta", "Gamma"],
+      rootSummary: ["📚 4"],
+    });
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

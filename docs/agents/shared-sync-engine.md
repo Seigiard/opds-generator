@@ -324,9 +324,9 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 
 ## Final release evidence (#64 and OPDS review update)
 
-OPDS currently pins `@seigiard/sync-engine@0.5.1`, published from engine commit
-`e1c6d2641f231d55ee7fd9ba687ec9542571d6e7` with registry integrity
-`sha512-dIO+BVc7lw2Ydc+dKCg2TXn7p2hLltwL7AcUMH1wqt1EbhlruO6cPBSL7CdqsnvvAQRFou3kIR6lSsGEQytskA==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`.
+OPDS currently pins `@seigiard/sync-engine@0.5.2`, published from engine commit
+`f23139d5039dfbf3c58c444e06a4209319cd95eb` with registry integrity
+`sha512-OMcchaY+OpHqiEqFWqY9fpncpu91kG8vJ8JnrFsOBVtpoH0xnAlGTK2Yv1FBWsNuAF3C89iMQaZY9GIKYwUZyQ==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.1`: directory size/mtime changes that keep the same kind no longer become prefix hints, fatal first passes set terminal state before completing waiters, closed-scope rejects cannot save stale freshness, and `undefined` work items are valid.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity
