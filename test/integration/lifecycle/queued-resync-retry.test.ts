@@ -90,3 +90,57 @@ test("a resync queued during recoverable warm-start failure retries without a se
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a persistently failing warm-start opening consumes one queued resync and then waits", async () => {
+  const { root, sourcePath, deps } = await tree();
+  await copyFile(fixture, join(sourcePath, "Book.fb2"));
+  const first = createLiveEngineLifecycle(deps);
+  await first.start();
+  await first.stop();
+  await copyFile(fixture, join(sourcePath, "Second.fb2"));
+  let attempts = 0;
+
+  const failingDeps = {
+    ...deps,
+    fs: {
+      ...deps.fs,
+      readdir: async (path: string) => {
+        if (path === sourcePath) {
+          attempts += 1;
+          throw new Error("Source read denied");
+        }
+
+        return deps.fs.readdir(path);
+      },
+    },
+  };
+
+  const runtime = createLiveEngineLifecycle(failingDeps);
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+  const url = server.url.href.slice(0, -1);
+
+  try {
+    await runtime.start();
+    const afterStart = attempts;
+
+    const resync = await fetch(`${url}/resync`, { method: "POST" });
+    await Bun.sleep(150);
+    const afterRetry = attempts;
+    await Bun.sleep(150);
+
+    const observed = { resync: resync.status, afterStart, afterRetry, final: attempts };
+
+    expect(observed).toEqual({
+      resync: 202,
+      afterStart: 1,
+      afterRetry: 3,
+      final: 3,
+    });
+  } finally {
+    server.stop();
+    await runtime.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Keep a small tail after the final test body for Docker/Bun bind-mount parsing on macOS.

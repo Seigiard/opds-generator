@@ -329,12 +329,13 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 ## Final release evidence (#64 and OPDS review update)
 
 OPDS currently tests `@seigiard/sync-engine@0.5.4` from the temporary local archive
-`vendor/seigiard-sync-engine-0.5.4.tgz`, built from engine commit `8c103c1`. Archive SHA256:
-`8189be5782457412210788e624f85e1b83957347536be88a28954de30d829e8d`. Lock integrity:
-`sha512-NgIpJK+d2GuLC5S4lCAigMazBVzFObP6+oF14Sz06vQgDpGB0PJyEN1m5WNhZts+xXRQp+hEmxCU6kw9Bqf5LQ==`.
+`vendor/seigiard-sync-engine-0.5.4.tgz`, rebuilt from engine commit `099195e`. Archive SHA256:
+`20c29744f4acf7381ad0e01bb74688419df4cf28b7f83d9f99468a47cb91cbbf`. Lock integrity:
+`sha512-9CR9pqHmp9zlx2wvRd88dwsuwmoxOsTLfo+OK2azWtvubLDTbB7H8sF4QS99U/8DGZVrJshuvwqe09esLX2x+w==`.
 Replace this `file:` pin with the registry release before merge, then update the registry integrity here. OPDS package
 equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.3`: a queued
-resync after a recoverable warm-start opening failure retries in the same live scope.
+resync after a recoverable warm-start opening failure retries in the same live scope. Changes over the earlier `0.5.4`
+candidate: persistent failed-opening retries are bounded to admitted requests.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity
