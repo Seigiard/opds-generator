@@ -2,9 +2,9 @@
 
 This is the final cross-application evidence for the accepted shared synchronization contract in ADR 0004 and issue #49.
 
-OPDS review follow-up supersedes only OPDS's consumed package version: OPDS temporarily tests `@seigiard/sync-engine@0.5.4` from the final-candidate `vendor/seigiard-sync-engine-0.5.4.tgz` with lock integrity `sha512-RPylp1SMoOV89Wgmb/qXxFSoDqLKh2/OTMgyw/79lmF7wRA0x9/CyaJUhfblnPFo/vBp4rGeqIl8sPp9OvwrDA==`. TTRPG Map Viewer and OPML Generator remain covered by the #64 `0.5.0` evidence below until their own update.
+OPDS review follow-up supersedes only OPDS's consumed package version: OPDS temporarily tests `@seigiard/sync-engine@0.5.4` from the final-candidate `vendor/seigiard-sync-engine-0.5.4.tgz` with lock integrity `sha512-RPylp1SMoOV89Wgmb/qXxFSoDqLKh2/OTMgyw/79lmF7wRA0x9/CyaJUhfblnPFo/vBp4rGeqIl8sPp9OvwrDA==`. Registry `0.5.4` is a superseded candidate with the unbounded failed-opening retry loop and must not be pinned. The final reviewed engine must be published as `0.5.5`, then OPDS must repin to registry `0.5.5` and remove the temporary runtime archive. TTRPG Map Viewer and OPML Generator remain covered by the #64 `0.5.0` evidence below until their own update.
 
-OPDS `0.5.4` temporary-tarball equality evidence: the final-candidate `vendor/seigiard-sync-engine-0.5.4.tgz` was extracted outside the repository; host `node_modules/@seigiard/sync-engine` and production image `/app/node_modules/@seigiard/sync-engine` both diffed cleanly against that extracted package. Archive SHA256 is `0257e050b8c5794879734337e105dab1edc9838d7955ad19384971a7ea79086c`. Changes over the earlier 0.5.4 candidate: persistent failed-opening retries are bounded to admitted requests. Replace the local archive with the registry release before merge.
+OPDS `0.5.4` temporary-tarball equality evidence: the final-candidate `vendor/seigiard-sync-engine-0.5.4.tgz` was extracted outside the repository; host `node_modules/@seigiard/sync-engine` and production image `/app/node_modules/@seigiard/sync-engine` both diffed cleanly against that extracted package. Archive SHA256 is `0257e050b8c5794879734337e105dab1edc9838d7955ad19384971a7ea79086c`. Changes over registry `0.5.4`: persistent failed-opening retries are bounded to admitted requests. Replace the local archive with registry `0.5.5` before merge.
 
 ## Release identity
 

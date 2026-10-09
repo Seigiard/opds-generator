@@ -25,7 +25,7 @@ The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, recon
 ## Scans and reconciliation
 
 - Every pass scans the source, declares every applicable book and folder, and lets freshness decide what runs. `force` and watcher `changedPaths` reach freshness. Ordinary passes reuse results whose source stamp and processing version match.
-- Every pass also looks for orphaned outputs in DATA (`orphans.ts`): a book or folder entry whose source is gone. Candidates become `BookDeleted` / `FolderDeleted` work. The source work re-observes each path and removes only on confirmed absence, confirmed source-kind change, or a source path that now resolves to an unsupported entry such as a symlink.
+- Every pass also looks for orphaned outputs in DATA (`orphans.ts`): a book or folder entry whose source is gone. Candidates become `BookDeleted` / `FolderDeleted` work. The source work re-observes each path and removes only on confirmed absence, confirmed source-kind change, an unsupported source path, or a deletion whose source ancestor is now a non-directory such as a regular file, book file or symlink. That ancestor case removes the confined output, does not re-observe through the ancestor, and refreshes no non-directory parent. Orphan cleanup declares descendants before their folder.
 - Requests coalesce. A request during a pass guarantees one follow-up. Force is OR'd. Hints are unioned. This holds while the first pass runs too.
 - `BookDeleted` and `FolderDeleted` do nothing when the source still has the expected kind at processing time (stale delete). If the source exists with the opposite kind, OPDS removes obsolete outputs before publishing the current representation.
 - A watcher notice (`POST /events/books`) is a hint for the engine; repeated notices are not dropped.
@@ -38,7 +38,7 @@ The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, recon
 
 ## Shutdown
 
-- `stop()` closes admission, interrupts the scope, discards pending work and requests, and joins owned consumer work before the lease is released. Native Promise work is awaited. Extraction commands get SIGTERM, then SIGKILL after their grace period.
+- `stop()` closes admission, joins in-flight admission, interrupts the scope, discards pending work and requests, and joins owned consumer work before the lease is released. Native Promise work is awaited. Extraction commands get SIGTERM, then SIGKILL after their grace period.
 - Book preparation is interruptible. Once publication starts, the handler finishes its symlink and entry. A new instance replays unfinished work through successful-only freshness.
 - Interrupted startup rejects `start()` without calling `onFatal`. `server.ts` treats that as shutdown and exits 0.
 - The guarantee is cooperative. SIGKILL, the 8 s deadline and power loss can interrupt intermediate writes. Evidence: `shared-sync-engine.md`.

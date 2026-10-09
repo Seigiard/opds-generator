@@ -85,12 +85,10 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
   }).pipe(Effect.uninterruptible);
 }
 
-export function isUnsupportedSourceReplacement(error: { readonly message: string }): boolean {
-  return error.message === "Unsupported source path";
-}
+const OBSOLETE_SOURCE_REPLACEMENT_MESSAGES = new Set(["Unsupported source path", "Source ancestor is not a directory"]);
 
-function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
-  return isUnsupportedSourceReplacement(error) || error.message === "Source ancestor is not a directory";
+export function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
+  return OBSOLETE_SOURCE_REPLACEMENT_MESSAGES.has(error.message);
 }
 
 function isNonDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
@@ -153,5 +151,3 @@ function confinedPath(root: string, path: string): string {
 
   return absolute;
 }
-
-// Keep a small tail after the final function body for Docker/Bun bind-mount parsing on macOS.

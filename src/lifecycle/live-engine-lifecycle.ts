@@ -29,11 +29,17 @@ const STOPPED: LiveStatus<EventType> = {
  */
 export function createLiveEngineLifecycle(
   deps: HandlerDeps,
-  options: EngineCatalogueOptions & { readonly onFatal?: (cause: unknown) => void; readonly reconcileIntervalMs?: number } = {},
+  options: EngineCatalogueOptions & {
+    readonly onFatal?: (cause: unknown) => void;
+    readonly reconcileIntervalMs?: number;
+    readonly startCatalogue?: typeof startLiveEngineCatalogue;
+  } = {},
 ) {
   const controller = new AbortController();
   const started = Promise.withResolvers<void>();
   const handle = Promise.withResolvers<Session>();
+  const admissions = new Set<Promise<unknown>>();
+  const startCatalogue = options.startCatalogue ?? startLiveEngineCatalogue;
   let running: Promise<void> | undefined;
   // A stop that precedes the session leaves nobody to read this rejection.
   handle.promise.catch(() => undefined);
@@ -42,7 +48,7 @@ export function createLiveEngineLifecycle(
     Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const session = yield* startLiveEngineCatalogue(deps, options);
+          const session = yield* startCatalogue(deps, options);
           handle.resolve(session);
           yield* session.ready;
           started.resolve();
@@ -61,7 +67,15 @@ export function createLiveEngineLifecycle(
     if (controller.signal.aborted) return otherwise;
     const session = await handle.promise.catch(() => undefined);
 
-    return session ? Effect.runPromise(use(session)) : otherwise;
+    if (!session) return otherwise;
+    const admission = Effect.runPromise(use(session));
+    admissions.add(admission);
+
+    try {
+      return await admission;
+    } finally {
+      admissions.delete(admission);
+    }
   };
 
   return {
@@ -101,7 +115,7 @@ export function createLiveEngineLifecycle(
     },
     async stop() {
       controller.abort();
-      await running;
+      await Promise.allSettled([running, ...admissions]);
     },
   };
 }

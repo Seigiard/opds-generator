@@ -87,9 +87,11 @@ runs are retained by the engine and run as one follow-up after it.
 Every pass also declares orphan cleanup (`orphans.ts`). It walks DATA for book entries (`entry.xml`) and folder
 entries (`_entry.xml`) whose source is not in the scan, and emits `BookDeleted` / `FolderDeleted` candidates. This
 covers sources removed while the service was down, deletions the watcher missed, and the deletion hints the
-adapter forwards. The source work removes only on confirmed absence or a confirmed source-kind change. A source path
-that is now a symlink or other unsupported entry is treated as obsolete for cleanup, not as a permanent observation
-failure. A directory that cannot be read yields no candidates.
+adapter forwards. The source work removes only on confirmed absence, confirmed source-kind change, an unsupported
+source path, or a deletion whose source ancestor is now a non-directory such as a regular file, book file or symlink.
+That ancestor case removes the confined output, does not re-observe through the ancestor, and refreshes no
+non-directory parent. Orphan cleanup declares descendants before their folder. A directory that cannot be read yields
+no candidates.
 
 `status` separates the active pass, pending follow-up and work status.
 `awaitCompletion` includes all admitted passes and required cascades.
@@ -329,11 +331,12 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 ## Final release evidence (#64 and OPDS review update)
 
 OPDS currently tests the final reviewed `@seigiard/sync-engine` archive from the temporary local archive
-`vendor/seigiard-sync-engine-0.5.4.tgz`. It is not a registry dependency yet. Before merge, publish that final reviewed
-archive, repin OPDS to the registry version, and remove the temporary `vendor/` runtime pin. Record the published
-registry identity and package equality in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.3`: a queued resync
-after a recoverable warm-start opening failure retries in the same live scope. Changes over the earlier `0.5.4`
-candidate: persistent failed-opening retries are bounded to admitted requests.
+`vendor/seigiard-sync-engine-0.5.4.tgz`. It is not a registry dependency. Registry `0.5.4` is an earlier superseded
+candidate with the unbounded failed-opening retry loop, so consumers must not repin to it. Before merge, publish the
+final reviewed engine as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary `vendor/` runtime pin.
+Record the published registry identity and package equality in `docs/agents/shared-sync-evidence.md`. Changes over
+`0.5.3`: a queued resync after a recoverable warm-start opening failure retries in the same live scope. Changes over
+the registry `0.5.4` candidate: persistent failed-opening retries are bounded to admitted requests.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

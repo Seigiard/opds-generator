@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { lstat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { SourceEntry } from "@seigiard/sync-engine";
 import type { HandlerDeps } from "../context.ts";
@@ -11,7 +12,8 @@ import { ownedPromise } from "../utils/owned-promise.ts";
 /**
  * Output entries whose source is no longer in the scan: a book folder (`entry.xml`) or a catalogue folder
  * (`_entry.xml`) in DATA. They are candidates only. The engine's source work re-observes each path and removes it
- * on confirmed absence or a confirmed source-kind change. An unreadable source never authorizes removal.
+ * on confirmed absence, a confirmed source-kind change, or a deletion whose source ancestor is now a non-directory.
+ * Folder candidates walk descendants first. DATA symlinks and unreadable paths never authorize removal.
  * Dot names are bookkeeping.
  */
 export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry[]): Effect.Effect<readonly EventType[]> {
@@ -43,7 +45,9 @@ export function orphanedOutputs(deps: HandlerDeps, entries: readonly SourceEntry
           const absolute = join(deps.config.dataPath, relative);
 
           try {
-            if (!(await deps.fs.stat(absolute)).isDirectory()) continue;
+            const entry = await lstat(absolute);
+
+            if (entry.isSymbolicLink() || !entry.isDirectory()) continue;
 
             if (await deps.fs.exists(join(absolute, FOLDER_ENTRY_FILE))) {
               await walk(relative);
@@ -95,5 +99,3 @@ function folderDeleted(deps: HandlerDeps, path: string): EventType {
 
   return CatalogueEvent.FolderDeleted({ parent: dirname(source), name: basename(source) });
 }
-
-// Keep a small tail after the final function body for Docker/Bun bind-mount parsing on macOS.

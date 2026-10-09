@@ -115,7 +115,7 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 <important if="you are extracting the shared synchronization engine, migrating an application to it, or updating the engine package">
 
-Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS temporarily tests the final reviewed `@seigiard/sync-engine` archive from `vendor/seigiard-sync-engine-0.5.4.tgz`; before merge, publish that archive, repin OPDS to the registry version, and remove the temporary runtime archive. TTRPG Map Viewer and OPML Generator run the shared released engine and their #64 evidence remains in `docs/agents/shared-sync-evidence.md`. `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure.
+Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS temporarily tests the final reviewed `@seigiard/sync-engine` archive from `vendor/seigiard-sync-engine-0.5.4.tgz`; registry `0.5.4` is an earlier superseded build and must not be pinned. Before merge, publish the final reviewed engine as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary runtime archive. TTRPG Map Viewer and OPML Generator run the shared released engine and their #64 evidence remains in `docs/agents/shared-sync-evidence.md`. `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure.
 
 </important>
 
@@ -127,7 +127,7 @@ Final cross-application release evidence and the scenario matrix live in `docs/a
 The engine owns scans, scheduling, reconciliation, retry and shutdown. Add no timer, queue or scan state to OPDS code.
 `GET /status` separates `available`, `verifying`, `completed` and `errors`; only a first pass without a usable root minimum is fatal.
 Stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
-Cleanup treats a source path that becomes a symlink or other unsupported entry as obsolete output, not as a permanent source read failure.
+Cleanup treats a source path, or deletion source ancestor, that becomes a symlink, regular file, book file or other unsupported entry as obsolete output, not as a permanent source read failure. Orphan cleanup declares descendants before their folder and does not refresh through a non-directory parent.
 Deployment health is `healthcheck.sh` (available + root feed + root page), never `feed.xml` alone.
 
 </important>

@@ -142,5 +142,3 @@ test("a persistently failing warm-start opening consumes one queued resync and t
     await rm(root, { recursive: true, force: true });
   }
 });
-
-// Keep a small tail after the final test body for Docker/Bun bind-mount parsing on macOS.

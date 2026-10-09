@@ -513,7 +513,7 @@ test("folder-to-book cleanup retries after a failed obsolete-folder removal", as
   }
 });
 
-test("source kind-change cleanup refuses a symlinked DATA ancestor", async () => {
+test("source kind-change cleanup skips a symlinked DATA ancestor discovered as an orphan", async () => {
   // #given a published book whose DATA ancestor is replaced by an operator-created symlink
   const { root, sourcePath, outputPath, deps } = await tree();
   await mkdir(join(sourcePath, "Fiction"));
@@ -524,7 +524,7 @@ test("source kind-change cleanup refuses a symlinked DATA ancestor", async () =>
   await symlink(external, join(outputPath, "Fiction"));
 
   try {
-    // #when the source changes from a book to a folder and local kind-change cleanup runs
+    // #when the source changes from a book to a folder and orphan cleanup sees the symlinked DATA ancestor
     await rm(join(sourcePath, "Fiction", "Novel.fb2"));
     await mkdir(join(sourcePath, "Fiction", "Novel.fb2"));
     await copyFile(fixture, join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2"));
@@ -538,8 +538,8 @@ test("source kind-change cleanup refuses a symlinked DATA ancestor", async () =>
       sourceIsFolder: await pathExists(join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2")),
     };
 
-    // #then OPDS's own guard refuses to delete through the symlinked DATA ancestor
-    expect(observation).toEqual({ completion: "Failure", failedSafely: true, externalEntry: true, sourceIsFolder: true });
+    // #then orphan cleanup skips the DATA symlink, so no deletion is attempted through it
+    expect(observation).toEqual({ completion: "Success", failedSafely: false, externalEntry: true, sourceIsFolder: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -670,7 +670,7 @@ test("underscore-prefixed source deletions are cleaned from DATA", async () => {
   }
 });
 
-test("cleanup refuses a symlinked DATA ancestor instead of deleting through it", async () => {
+test("orphan cleanup skips a symlinked DATA ancestor instead of deleting through it", async () => {
   // #given a published folder whose DATA ancestor is replaced by an operator-created symlink
   const { root, sourcePath, outputPath, deps } = await tree();
   await mkdir(join(sourcePath, "Fiction"));
@@ -682,7 +682,7 @@ test("cleanup refuses a symlinked DATA ancestor instead of deleting through it",
   await rm(join(sourcePath, "Fiction", "Book.fb2"));
 
   try {
-    // #when startup cleanup observes the book as absent through that symlinked DATA ancestor
+    // #when startup orphan cleanup sees that symlinked DATA ancestor
     const completion = await Effect.runPromiseExit(initialEngineCatalogue(deps));
 
     const observation = {
@@ -692,8 +692,8 @@ test("cleanup refuses a symlinked DATA ancestor instead of deleting through it",
       sourceGone: !(await pathExists(join(sourcePath, "Fiction", "Book.fb2"))),
     };
 
-    // #then the external target survives and the failed cleanup is public
-    expect(observation).toEqual({ completion: "Failure", failedSafely: true, externalEntry: true, sourceGone: true });
+    // #then the external target survives and no deletion is attempted through the symlink
+    expect(observation).toEqual({ completion: "Success", failedSafely: false, externalEntry: true, sourceGone: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

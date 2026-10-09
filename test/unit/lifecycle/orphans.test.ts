@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildContext } from "../../../src/context.ts";
@@ -88,6 +88,25 @@ test("same-path book source still declares descendant output deletions before ob
       { tag: "BookDeleted", parent: join(sourcePath, "Novel.fb2"), name: "Inside.fb2" },
       { tag: "FolderDeleted", parent: sourcePath, name: "Novel.fb2" },
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("orphan scan skips directory symlinks in DATA", async () => {
+  // #given a planted DATA symlink that points at a directory with a book marker
+  const { root, outputPath, deps } = await tree();
+  const outside = join(root, "outside", "Foreign.fb2");
+  await mkdir(outside, { recursive: true });
+  await Bun.write(join(outside, ENTRY_FILE), "book");
+  await symlink(join(root, "outside"), join(outputPath, "Linked"));
+
+  try {
+    // #when the source scan is empty
+    const work = await Effect.runPromise(orphanedOutputs(deps, []));
+
+    // #then cleanup ignores the symlink instead of traversing foreign DATA
+    expect(work.map(deletionSummary)).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
