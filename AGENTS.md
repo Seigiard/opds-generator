@@ -92,7 +92,7 @@ Run, and fix until clean:
 5. After touching `ui/` or `src/render`: `bun run build:ui`. After touching `src/render` markup: bump `PROCESSING_VERSIONS.folder` in `src/processing-versions.ts`, run `bun run render:golden`, and commit regenerated output. After changing extractor metadata, cover handling or book entry/link output, bump `PROCESSING_VERSIONS.book`.
 6. `git status` shows `static/` and `test/golden/` committed with the change.
 
-The pre-commit hook (`simple-git-hooks` → `nano-staged`, config in `.nano-staged.mjs`) runs `oxfmt --write`, `oxlint --fix` and `tsc --noEmit` on staged files and re-stages the fixes. It covers steps 1–2 only; tests and `knip` stay manual. A fresh clone gets the hook from `bun install` (`postinstall`).
+The pre-commit hook (Lefthook, config in `lefthook.yml`) runs `oxfmt --write` and `oxlint --fix` on staged files and re-stages the fixes. Staged TypeScript changes also trigger a full `tsc --noEmit` check. Formatting excludes generated output and vendored code. It covers steps 1–2 only; tests and `knip` stay manual. A fresh clone gets the hook from `bun install` (`prepare`); installs without `.git`, including Docker builds, skip hook setup.
 
 CI runs each quality gate as its own step in `.github/workflows/docker.yml`, plus the full e2e (`test:e2e`: nginx routing and event logging).
 
