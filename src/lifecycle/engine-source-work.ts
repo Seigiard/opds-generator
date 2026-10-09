@@ -54,7 +54,7 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
             sourceFs,
           );
 
-      if (unsupportedSourceReplacement) {
+      if (deleted) {
         const parent = dirname(path);
         const unsupportedParent = parent !== "." && (yield* isNonDirectorySourcePath(filesPath, parent, sourceFs));
 

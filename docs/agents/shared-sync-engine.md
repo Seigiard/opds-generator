@@ -331,7 +331,7 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 ## Final release evidence (#64 and OPDS review update)
 
 OPDS currently tests the final reviewed `@seigiard/sync-engine` archive from the temporary local archive
-`vendor/seigiard-sync-engine-0.5.4.tgz`. It is not a registry dependency. Registry `0.5.4` is an earlier superseded
+`vendor/seigiard-sync-engine-0.5.5.tgz`. It is not a registry dependency. Registry `0.5.4` is an earlier superseded
 candidate with the unbounded failed-opening retry loop, so consumers must not repin to it. Before merge, publish the
 final reviewed engine as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary `vendor/` runtime pin.
 Record the published registry identity and package equality in `docs/agents/shared-sync-evidence.md`. Changes over

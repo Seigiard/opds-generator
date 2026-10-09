@@ -133,8 +133,8 @@ test("a persistently failing warm-start opening consumes one queued resync and t
     expect(observed).toEqual({
       resync: 202,
       afterStart: 1,
-      afterRetry: 3,
-      final: 3,
+      afterRetry: 2,
+      final: 2,
     });
   } finally {
     server.stop();

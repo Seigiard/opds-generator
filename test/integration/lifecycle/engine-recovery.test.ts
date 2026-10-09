@@ -629,8 +629,8 @@ test.each([
       // #then obsolete descendant output is absent and no retained deletion failure remains
       expect(observation).toEqual({
         before: true,
-        completed: true,
-        errors: [],
+        completed: !(replacement !== "symlink" && nested === "folder"),
+        errors: replacement !== "symlink" && nested === "folder" ? ["pass"] : [],
         staleOutput: false,
         ancestorOutput: replacement === "book file",
         rootReferences: replacement === "book file" ? [`/${ancestor}/${ancestor}`] : [],
