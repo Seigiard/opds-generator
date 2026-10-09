@@ -328,9 +328,9 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 
 ## Final release evidence (#64 and OPDS review update)
 
-OPDS currently pins `@seigiard/sync-engine@0.5.2`, published from engine commit
-`f23139d5039dfbf3c58c444e06a4209319cd95eb` with registry integrity
-`sha512-OMcchaY+OpHqiEqFWqY9fpncpu91kG8vJ8JnrFsOBVtpoH0xnAlGTK2Yv1FBWsNuAF3C89iMQaZY9GIKYwUZyQ==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.1`: directory size/mtime changes that keep the same kind no longer become prefix hints, fatal first passes set terminal state before completing waiters, closed-scope rejects cannot save stale freshness, and `undefined` work items are valid.
+OPDS currently pins `@seigiard/sync-engine@0.5.3`, published from engine commit
+`d70a8903d92cdc81ea03a3782b5b821fab4cc165` with registry integrity
+`sha512-H0zW/UZlh76lGwdBTK0HU2udFymrdXtHNKUx02LA3KAYYP0WmjnAO8288Efxt6gu4aHbn6ffx1yIsZMN2eLppQ==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.2`: failed-pass watcher hints and `force` carry into an already queued follow-up; a handler defect in a later live pass rejects further admission and releases the lease; forced/notified requests invalidate active freshness immediately; `undefined` active work item is visible in status; `key`/`failureKey` callback defects settle completion; README release wording.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

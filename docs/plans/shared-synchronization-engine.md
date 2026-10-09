@@ -109,7 +109,7 @@ Extraction is complete only when all three applications use the engine for the a
 
 ### Status
 
-- **OPDS: adopted (#57, updated to 0.5.2 in review follow-up).** The released package is the only synchronization path in the standard Docker startup. The legacy lifecycle, scanner, consumer and temporary selection are removed.
+- **OPDS: adopted (#57, updated to 0.5.3 in review follow-up).** The released package is the only synchronization path in the standard Docker startup. The legacy lifecycle, scanner, consumer and temporary selection are removed.
 - **TTRPG Map Viewer: adopted (#60).** Production catalog synchronization uses the released engine package. The regeneration controller and temporary `SYNC_ENGINE` selection are removed.
 - **OPML Generator: adopted (#63).** Production podcast synchronization uses the released engine package. The legacy queue, scanner, lifecycle and `OPML_SYNC_ENGINE` selection are removed.
 - **Final evidence (#64):** release identity, consumer revisions, scenario matrix and delegation audit are recorded in `docs/agents/shared-sync-evidence.md`.
