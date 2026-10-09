@@ -601,6 +601,55 @@ test("ordinary folder cleanup preserves configured state and its held lease inod
   }
 });
 
+test("cleanup refuses DATA root overlap with engine state", async () => {
+  // #given a held public-engine lease and persistent state under DATA
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await copyFile(fixture, join(sourcePath, "Book.fb2"));
+
+  try {
+    const observation = await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(deps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              const statePath = await Effect.runPromise(engineStatePath(outputPath, join(outputPath, ".sync-engine")));
+              const lock = join(statePath, "lock");
+              const before = (await stat(lock)).ino;
+              await Bun.write(join(statePath, "saved-state"), "Persistent state bytes");
+
+              // #when an invalid deletion would map to the DATA root
+              await Effect.runPromise(session.submit([CatalogueEvent.BookDeleted({ parent: sourcePath, name: "" })]));
+              await Effect.runPromise(session.awaitCompletion);
+              const status = await Effect.runPromise(session.status);
+              const savedState = join(statePath, "saved-state");
+              const savedExists = await pathExists(savedState);
+
+              return {
+                state: status.state,
+                failedSafely: status.errors.some((error) => Cause.pretty(error.cause).includes("Path leaves its owned tree")),
+                sameInode: (await pathExists(lock)) && (await stat(lock)).ino === before,
+                saved: savedExists ? await readFile(savedState, "utf8") : null,
+                rootFeed: await pathExists(join(outputPath, "feed.xml")),
+              };
+            }),
+          ),
+        ),
+      ),
+    );
+
+    // #then cleanup refuses to remove the DATA root that contains engine state
+    expect(observation).toEqual({
+      state: "complete-with-errors",
+      failedSafely: true,
+      sameInode: true,
+      saved: "Persistent state bytes",
+      rootFeed: true,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("OPDS ignores dot-source subtrees before traversal and does not publish hidden hints", async () => {
   // #given a supported book and an unreadable excluded dot subtree
   const { root, sourcePath, outputPath, deps } = await tree();
