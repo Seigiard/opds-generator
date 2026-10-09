@@ -5,7 +5,7 @@
  * stay on the exercised path. Only the named executable is replaced, by a script that reports its PID and stdout
  * file and then sleeps, so the test can interrupt at a known point.
  */
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -44,12 +44,7 @@ describe("Stopping during FBZ archive extraction", () => {
 
       const errorLines: string[] = [];
 
-      const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-        errorLines.push(line);
-      });
-
       cleanups.push(async () => {
-        consoleError.mockRestore();
         restore();
 
         if (pid !== undefined && isAlive(pid)) process.kill(pid, "SIGKILL");
@@ -60,7 +55,7 @@ describe("Stopping during FBZ archive extraction", () => {
 
       const deps: HandlerDeps = {
         config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-        logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+        logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
         fs,
       };
 

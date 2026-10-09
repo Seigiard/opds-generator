@@ -103,12 +103,12 @@ async function setUp(hanging: readonly string[]): Promise<Fixture> {
   return { root, filesPath, bookData, pidDirectory, tiffPaths, pids };
 }
 
-async function startProcessor(fixture: Fixture) {
+async function startProcessor(fixture: Fixture, failureLogs: string[] = []) {
   const { fs } = await buildContext();
 
   const deps: HandlerDeps = {
     config: { filesPath: fixture.filesPath, dataPath: join(fixture.root, "data"), port: 3000, reconcileInterval: 1800 },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    logger: { info: () => {}, warn: () => {}, error: (_tag, message) => failureLogs.push(message), debug: () => {} },
     fs,
   };
 
@@ -126,15 +126,7 @@ async function publishedState(fixture: Fixture) {
 const UNTOUCHED = { entry: "previous entry", linkExists: false, coverExists: false };
 
 function captureHandlerFailures(): string[] {
-  const lines: string[] = [];
-
-  const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-    lines.push(line);
-  });
-
-  cleanups.push(async () => consoleError.mockRestore());
-
-  return lines;
+  return [];
 }
 
 describe("Stopping DJVU extraction", () => {
@@ -164,7 +156,7 @@ describe("Stopping DJVU extraction", () => {
     // #given real metadata commands and a running cover command
     const fixture = await setUp(["ddjvu"]);
     const failures = captureHandlerFailures();
-    const run = await startProcessor(fixture);
+    const run = await startProcessor(fixture, failures);
     const { controller, task } = run;
     fixture.pids.push(...(await waitForPids(fixture.pidDirectory, 1)));
 
@@ -210,7 +202,7 @@ describe("Stopping DJVU extraction", () => {
     });
 
     cleanups.push(async () => toBufferSpy.mockRestore());
-    const run = await startProcessor(fixture);
+    const run = await startProcessor(fixture, failures);
     const { controller, task } = run;
     await nativeStarted.promise;
 

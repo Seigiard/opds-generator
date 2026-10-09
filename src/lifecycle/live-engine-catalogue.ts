@@ -16,6 +16,14 @@ type LiveCatalogueOptions = EngineCatalogueOptions & { readonly reconcileInterva
  * exist, a failed verification keeps serving them and is retried by the engine; without them it is fatal.
  */
 function liveOptions(deps: HandlerDeps, options: LiveCatalogueOptions): LiveOptions<EventType, Error, CatalogueDeps | EffectFileSystem> {
+  const existingFile = async (path: string): Promise<boolean> => {
+    try {
+      return !(await deps.fs.stat(path)).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+
   return {
     ...engineOptions(deps, options),
     reconcileIntervalMs: options.reconcileIntervalMs ?? deps.config.reconcileInterval * 1000,
@@ -23,10 +31,7 @@ function liveOptions(deps: HandlerDeps, options: LiveCatalogueOptions): LiveOpti
       existing: ownedPromise(
         async () =>
           (
-            await Promise.all([
-              deps.fs.exists(join(deps.config.dataPath, FEED_FILE)),
-              deps.fs.exists(join(deps.config.dataPath, INDEX_FILE)),
-            ])
+            await Promise.all([existingFile(join(deps.config.dataPath, FEED_FILE)), existingFile(join(deps.config.dataPath, INDEX_FILE))])
           ).every(Boolean),
         (cause) => new Error(String(cause)),
       ).pipe(Effect.orElseSucceed(() => false)),

@@ -127,6 +127,7 @@ Final cross-application release evidence and the scenario matrix live in `docs/a
 The engine owns scans, scheduling, reconciliation, retry and shutdown. Add no timer, queue or scan state to OPDS code.
 `GET /status` separates `available`, `verifying`, `completed` and `errors`; only a first pass without a usable root minimum is fatal.
 Stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
+Cleanup treats a source path that becomes a symlink or other unsupported entry as obsolete output, not as a permanent source read failure.
 Deployment health is `healthcheck.sh` (available + root feed + root page), never `feed.xml` alone.
 
 </important>

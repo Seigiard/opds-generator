@@ -82,12 +82,7 @@ describe("Stopping during PDF cover extraction", () => {
 
     const errorLines: string[] = [];
 
-    const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-      errorLines.push(line);
-    });
-
     cleanups.push(async () => {
-      consoleError.mockRestore();
       restore();
 
       if (pid !== undefined && isAlive(pid)) process.kill(pid, "SIGKILL");
@@ -98,7 +93,7 @@ describe("Stopping during PDF cover extraction", () => {
 
     const deps: HandlerDeps = {
       config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-      logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+      logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
       fs,
     };
 

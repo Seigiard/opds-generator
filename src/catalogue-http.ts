@@ -15,7 +15,7 @@ export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime) {
     const url = new URL(req.url);
 
     if (req.method === "POST" && url.pathname === "/events/books") {
-      if (!runtime.accepting()) return new Response("Queue not ready", { status: 503 });
+      if (!runtime.accepting()) return new Response("Not accepting", { status: 503 });
 
       try {
         const body = await req.json();
@@ -28,7 +28,7 @@ export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime) {
 
         const event = adaptBooksEvent(body);
 
-        if (event === null) return new Response("Deduplicated", { status: 202 });
+        if (event === null) return new Response("Ignored", { status: 202 });
         await runtime.submit(event);
 
         return new Response("OK", { status: 202 });
@@ -43,7 +43,7 @@ export function createCatalogueHttpHandler(runtime: CatalogueHttpRuntime) {
       const force = url.searchParams.get("force") === "1";
       const admission = await runtime.requestScan({ kind: "resync", force });
 
-      if (admission === "rejected") return new Response("Queue not ready", { status: 503 });
+      if (admission === "rejected") return new Response("Not accepting", { status: 503 });
 
       return new Response(admission === "queued" ? "Resync queued" : "Resync started", { status: 202 });
     }

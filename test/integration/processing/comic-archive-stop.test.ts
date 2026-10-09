@@ -41,17 +41,11 @@ async function startSync(root: string, name: string, source: string) {
 
   const errorLines: string[] = [];
 
-  const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-    errorLines.push(line);
-  });
-
-  cleanups.push(async () => consoleError.mockRestore());
-
   const { fs } = await buildContext();
 
   const deps: HandlerDeps = {
     config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
     fs,
   };
 

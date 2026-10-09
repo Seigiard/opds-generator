@@ -36,9 +36,10 @@ declaration.
 
 Inside `Effect.scoped`, keep the scope open while calling `submit([CatalogueEvent...])`, `awaitCompletion`, and
 `status`. Closing the scope joins the owned consumer before releasing its output lease. Book and new-folder events use
-the existing Effect handlers. BookDeleted and FolderDeleted use engine-owned associated-output cleanup and explicit
-parent refreshes. `engine-source-work.ts` supplies source authority; `engine-policy.ts` declares source selection and
-state placement.
+the existing Effect handlers. Confirmed absence uses engine-owned associated-output cleanup and explicit parent
+refreshes. Confirmed source-kind changes use OPDS's confined `removeOutputPath` in `engine-source-work.ts` before the
+current representation publishes. `engine-source-work.ts` supplies source authority; `engine-policy.ts` declares source
+selection and state placement.
 
 The engine combines pending work only for OPDS-declared folder-refresh keys. A repeated pending refresh moves behind
 intervening work. A refresh requested while equivalent work is active schedules one pending follow-up.
@@ -46,7 +47,9 @@ Handler-returned cascades enter pending work before active clears. `status.state
 cascades publish; `complete` means work completion, not freshness. Typed failures retain their previous results while
 independent work continues. `awaitCompletion` resolves after required work drains. `complete-with-errors` retains
 public `{ work, cause }` records after that drain. A successful retry clears the matching OPDS source/folder identity.
-Defects and interruption still stop the consumer. Initial failures prevent the final minimum publication.
+Defects and interruption still stop the consumer. A minimum-publication failure prevents availability and remaining work.
+A later initial-work failure keeps an already published minimum available but prevents the pass from completing
+successfully.
 
 OPDS owns the propagation rule: a book refreshes its folder, and folder summaries propagate to the parent only when
 `_entry.xml` changes without its timestamp. Each folder still writes its own feed. A book's symlink exists before its
@@ -84,8 +87,9 @@ runs are retained by the engine and run as one follow-up after it.
 Every pass also declares orphan cleanup (`orphans.ts`). It walks DATA for book entries (`entry.xml`) and folder
 entries (`_entry.xml`) whose source is not in the scan, and emits `BookDeleted` / `FolderDeleted` candidates. This
 covers sources removed while the service was down, deletions the watcher missed, and the deletion hints the
-adapter forwards. The source work removes only on confirmed absence. A directory that cannot be read yields no
-candidates.
+adapter forwards. The source work removes only on confirmed absence or a confirmed source-kind change. A source path
+that is now a symlink or other unsupported entry is treated as obsolete for cleanup, not as a permanent observation
+failure. A directory that cannot be read yields no candidates.
 
 `status` separates the active pass, pending follow-up and work status.
 `awaitCompletion` includes all admitted passes and required cascades.

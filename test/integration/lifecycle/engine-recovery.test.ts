@@ -432,6 +432,70 @@ test.each(["folder-to-book", "book-to-folder"] as const)("a source kind change r
   }
 });
 
+test("source kind-change cleanup refuses a symlinked DATA ancestor", async () => {
+  // #given a published book whose DATA ancestor is replaced by an operator-created symlink
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Fiction"));
+  await copyFile(fixture, join(sourcePath, "Fiction", "Novel.fb2"));
+  await Effect.runPromise(initialEngineCatalogue(deps));
+  const external = join(root, "external");
+  await rename(join(outputPath, "Fiction"), external);
+  await symlink(external, join(outputPath, "Fiction"));
+
+  try {
+    // #when the source changes from a book to a folder and local kind-change cleanup runs
+    await rm(join(sourcePath, "Fiction", "Novel.fb2"));
+    await mkdir(join(sourcePath, "Fiction", "Novel.fb2"));
+    await copyFile(fixture, join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2"));
+    const completion = await Effect.runPromiseExit(initialEngineCatalogue(deps));
+
+    const observation = {
+      completion: completion._tag,
+      failedSafely:
+        Exit.isFailure(completion) && Cause.pretty(completion.cause).includes("OPDS cleanup ancestor is not an owned directory"),
+      externalEntry: await pathExists(join(external, "Novel.fb2", "entry.xml")),
+      sourceIsFolder: await pathExists(join(sourcePath, "Fiction", "Novel.fb2", "Inside.fb2")),
+    };
+
+    // #then OPDS's own guard refuses to delete through the symlinked DATA ancestor
+    expect(observation).toEqual({ completion: "Failure", failedSafely: true, externalEntry: true, sourceIsFolder: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source symlink replacement cleans the stale published output", async () => {
+  // #given a published folder that is later replaced by a source symlink
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Linked"));
+  await copyFile(fixture, join(sourcePath, "Linked", "Book.fb2"));
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    const before = await pathExists(join(outputPath, "Linked", "_entry.xml"));
+    const target = join(root, "external-source");
+    await mkdir(target);
+    await rm(join(sourcePath, "Linked"), { recursive: true });
+    await symlink(target, join(sourcePath, "Linked"));
+
+    // #when startup reconciliation sees the source path as unsupported by policy
+    const completion = await Effect.runPromiseExit(initialEngineCatalogue(deps));
+
+    const observation = {
+      completion: completion._tag,
+      before,
+      staleFeed: await pathExists(join(outputPath, "Linked", "feed.xml")),
+      staleEntry: await pathExists(join(outputPath, "Linked", "_entry.xml")),
+      rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((item) => item.href),
+    };
+
+    // #then the symlink is treated as obsolete source, not an eternal observation failure
+    expect(observation).toEqual({ completion: "Success", before: true, staleFeed: false, staleEntry: false, rootReferences: [] });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("underscore-prefixed source deletions are cleaned from DATA", async () => {
   // #given a supported underscore-prefixed source folder with a published book
   const { root, sourcePath, outputPath, deps } = await tree();
@@ -645,6 +709,50 @@ test("cleanup refuses DATA root overlap with engine state", async () => {
       saved: "Persistent state bytes",
       rootFeed: true,
     });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source kind-change cleanup refuses a state symlink alias", async () => {
+  // #given a folder publication whose path is also aliased as the engine state directory
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const name = "Novel.fb2";
+  await mkdir(join(sourcePath, name));
+  await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
+  const errors: string[] = [];
+
+  const countedDeps = {
+    ...deps,
+    logger: {
+      ...deps.logger,
+      error: (component: string, message: string, cause?: unknown, ctx?: LogContext) => {
+        errors.push(`${message}: ${cause instanceof Error ? cause.message : String(cause)}`);
+        deps.logger.error(component, message, cause, ctx);
+      },
+    },
+  };
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(countedDeps));
+    const outputFolder = join(outputPath, name);
+    await rm(join(outputPath, ".sync-engine"), { recursive: true, force: true });
+    await symlink(outputFolder, join(outputPath, ".sync-engine"));
+    await rm(join(sourcePath, name), { recursive: true });
+    await copyFile(fixture, join(sourcePath, name));
+
+    // #when local kind-change cleanup would remove the folder publication
+    const completion = await Effect.runPromiseExit(initialEngineCatalogue(countedDeps));
+
+    const observation = {
+      completion: completion._tag,
+      failedSafely: errors.some((error) => error.includes("OPDS cleanup overlaps engine state")),
+      outputFeed: await pathExists(join(outputFolder, "feed.xml")),
+      stateAlias: await pathExists(join(outputPath, ".sync-engine", "feed.xml")),
+    };
+
+    // #then canonical state overlap keeps both the output and its state alias intact
+    expect(observation).toEqual({ completion: "Success", failedSafely: true, outputFeed: true, stateAlias: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

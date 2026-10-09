@@ -373,6 +373,23 @@ describe("startup readiness through the production server and nginx", () => {
 
       // #then the container failed and no usable deployment was ever reported
       expect({ exitCode: exited.exitCode, seen }).toEqual({ exitCode: 1, seen: { available: false, pageServed: false } });
+
+      // #and a restart against the same unusable DATA still fails instead of treating the page directory as prior output
+      await s.compose("up", "-d");
+      const restartSeen = { available: false, pageServed: false };
+
+      const restarted = await until("container exit after restart", async () => {
+        const facts = await s.status();
+
+        if (facts?.available) restartSeen.available = true;
+
+        if ((await get("/index.html").catch(() => undefined))?.status === 200) restartSeen.pageServed = true;
+        const state = await s.container();
+
+        return state?.state === "exited" ? state : undefined;
+      });
+
+      expect({ exitCode: restarted.exitCode, seen: restartSeen }).toEqual({ exitCode: 1, seen: { available: false, pageServed: false } });
     });
   });
 
