@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, Effect 4 event pipeline (ADR 0003), Effect 4 for command ownership, nginx in front, everything runs in Docker.
+OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata and covers from epub/fb2/mobi/pdf/djvu/cbz/txt, and writes OPDS 1.2 feeds plus a browser viewer. Bun + TypeScript, nginx in front, everything runs in Docker. Synchronization (scans, scheduling, reconciliation, freshness, retry, shutdown) is the released `@seigiard/sync-engine` package (ADR 0004); OPDS keeps extraction, rendering, source policy and publication as Effect 4 handlers (ADR 0003).
 
 `AGENTS.md` is the single source of truth for project context (`CLAUDE.md` is a symlink to it). Update it in the same change when you alter architecture, dependencies, commands, gotchas, or project structure. Deep topics live in `docs/agents/`; update the matching file there too.
 
@@ -8,18 +8,18 @@ OPDS catalog generator for local ebooks. It watches `/books`, extracts metadata 
 
 ```
 src/
-├── server.ts        # HTTP server + initial sync + DI setup
-├── scanner.ts       # File scanning, sync planning
+├── server.ts        # HTTP server + housekeeping + shutdown; starts the one production lifecycle
+├── catalogue-http.ts # Bun-local watcher/resync/status routes; nginx owns external auth
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
-├── lifecycle/       # transition.ts (pure rules), lifecycle.ts (executes them), disk-scanner.ts
-├── processing/      # Effect 4 event pipeline
-│   ├── catalogue-processor.ts # Shared processor contract, event path/id helpers, memory snapshots
-│   ├── catalogue-processor-effect.ts, effect-handler.ts # Effect consumer, fixed handler registry, busy/empty edges
-│   ├── adapters/    # Raw → typed events: books-adapter, sync-plan-adapter
-│   └── handlers/    # Effect handlers: book/folder sync, folder meta sync, cleanup, OPDS book entry helper
+├── processing-versions.ts # Book/folder processing versions; bump to rebuild existing output
+├── lifecycle/       # live-engine-lifecycle.ts (Promise adapter), live-engine-catalogue.ts, initial-engine-catalogue.ts (engineOptions + test compositions), engine-failure-key.ts (retained-failure identity), engine-freshness-describe.ts (freshness descriptors), engine-source-work.ts, engine-policy.ts, orphans.ts, handler-logging.ts, legacy-data.ts
+├── processing/      # Event types, adapters and Effect handlers (no queue or consumer: the engine schedules)
+│   ├── effect-handler.ts # CatalogueDeps, CatalogueEvent, handler types
+│   ├── adapters/    # Raw → typed events: books-adapter
+│   └── handlers/    # Effect handlers: production book/folder meta sync plus compatibility cleanup/folder-sync seams
 ├── render/          # FeedModel + two renderers (browser-importable: no Bun/node:fs)
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
@@ -44,6 +44,8 @@ tools/oxlint/anti-slop/ # Vendored anti-slop Oxlint plugin; UPSTREAM.md records 
 tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never add rules to the vendored plugin
 ```
 
+`healthcheck.sh` is the image and Compose health check: Bun's `/status` `available` plus nginx 200 for `/feed.xml` and `/index.html`.
+
 `/data` mirrors `/books`. A book becomes a folder with `entry.xml`, `cover.jpg`, `thumb.jpg`, and a `file` symlink. A folder gets `feed.xml`, `index.html`, and `_entry.xml` (consumed by its parent).
 
 ## Always-on rules
@@ -57,24 +59,25 @@ tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never ad
 
 Other scripts (`start`, `rebuild`, `lint`, `format`, `test:unit`, `test:integration`, `test:coverage`) are in `package.json`.
 
-| Command                                                                   | What it does                                                                  |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `git submodule update --init`                                             | Fetch foliate-js (first checkout; `build:ui` needs it)                        |
-| `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                    |
-| `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                               |
-| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)          |
-| `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                          |
-| `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors              |
-| `bun --bun tsc --noEmit`                                                  | Type check (host is fine)                                                     |
-| `bun run test`                                                            | Unit + integration tests in Docker                                            |
-| `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                             |
-| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)        |
-| `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                |
-| `npx knip`                                                                | Unused exports/deps (`knip.json`)                                             |
-| `bun run build:ui` / `bun run build:ui:check`                             | Regenerate `static/` / fail if `static/` differs from the commit              |
-| `bun run render:golden` / `bun run render:check`                          | Regenerate `test/golden/*.html` / fail on any golden diff or untracked golden |
-| `bun run dev:ui`                                                          | Vite HMR preview of renderer + reader, no Docker (http://localhost:5173)      |
-| `bun run fixtures:pull`                                                   | Refresh renderer cassettes                                                    |
+| Command                                                                   | What it does                                                                     |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `git submodule update --init`                                             | Fetch foliate-js (first checkout; `build:ui` needs it)                           |
+| `bun run dev`                                                             | Docker dev server at http://localhost:8080 with hot reload                       |
+| `docker compose -f docker-compose.dev.yml logs -f`                        | Dev server logs                                                                  |
+| `curl -u admin:secret http://localhost:8080/resync[?force=1]`             | Resync in place; `?force=1` reprocesses every book (dev credentials)             |
+| `bun run rebuild:dev` / `bun run rebuild:test`                            | Rebuild dev / test images (after dependency changes)                             |
+| `bun run fix`                                                             | `format:fix` + `lint:fix`; must end with 0 warnings and 0 errors                 |
+| `bun --bun tsc --noEmit`                                                  | Type check (host is fine)                                                        |
+| `bun run test`                                                            | Unit + integration tests in Docker                                               |
+| `docker compose -f docker-compose.test.yml run --rm test bun test <file>` | Run one test file                                                                |
+| `bun run test:e2e`                                                        | nginx + event-logging e2e (host bun against e2e compose; what CI runs)           |
+| `STARTUP_PORT=<port> bun test test/e2e/startup-readiness.test.ts`         | Startup-readiness e2e; starts its own Compose projects (also part of `test:e2e`) |
+| `bun run test:all`                                                        | `build:ui:check` + `render:check` + `render:pure` + test + e2e                   |
+| `npx knip`                                                                | Unused exports/deps (`knip.json`)                                                |
+| `bun run build:ui` / `bun run build:ui:check`                             | Regenerate `static/` / fail if `static/` differs from the commit                 |
+| `bun run render:golden` / `bun run render:check`                          | Regenerate `test/golden/*.html` / fail on any golden diff or untracked golden    |
+| `bun run dev:ui`                                                          | Vite HMR preview of renderer + reader, no Docker (http://localhost:5173)         |
+| `bun run fixtures:pull`                                                   | Refresh renderer cassettes                                                       |
 
 ## Finishing a task
 
@@ -86,7 +89,7 @@ Run, and fix until clean:
 2. `bun --bun tsc --noEmit`
 3. `bun run test` — 0 failures before every commit, no exceptions
 4. `npx knip`
-5. After touching `ui/` or `src/render`: `bun run build:ui`. After touching `src/render` markup: `bun run render:golden`.
+5. After touching `ui/` or `src/render`: `bun run build:ui`. After touching `src/render` markup: bump `PROCESSING_VERSIONS.folder` in `src/processing-versions.ts`, run `bun run render:golden`, and commit regenerated output. After changing extractor metadata, cover handling or book entry/link output, bump `PROCESSING_VERSIONS.book`.
 6. `git status` shows `static/` and `test/golden/` committed with the change.
 
 The pre-commit hook (`simple-git-hooks` → `nano-staged`, config in `.nano-staged.mjs`) runs `oxfmt --write`, `oxlint --fix` and `tsc --noEmit` on staged files and re-stages the fixes. It covers steps 1–2 only; tests and `knip` stay manual. A fresh clone gets the hook from `bun install` (`postinstall`).
@@ -110,13 +113,26 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 </important>
 
-<important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
+<important if="you are extracting the shared synchronization engine, migrating an application to it, or updating the engine package">
 
-Read `docs/agents/lifecycle.md` first.
+Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS runs the reviewed `@seigiard/sync-engine@0.5.5` registry release; registry `0.5.4` is an older build. TTRPG Map Viewer and OPML Generator run the shared released engine and their #64 evidence remains in `docs/agents/shared-sync-evidence.md`. `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure.
 
 </important>
 
-<important if="you are working on event adapters, the queue, the consumer, cascades, or handlers in src/processing/">
+<important if="you are changing startup, scans, resync, reconciliation, or shutdown in src/lifecycle/ or src/server.ts">
+
+Read `docs/agents/lifecycle.md` first.
+When changing the engine composition, freshness, recovery or the package, also read `docs/agents/shared-sync-engine.md`.
+Final cross-application release evidence and the scenario matrix live in `docs/agents/shared-sync-evidence.md`.
+The engine owns scans, scheduling, reconciliation, retry and shutdown. Add no timer, queue or scan state to OPDS code.
+`GET /status` separates `available`, `verifying`, `completed` and `errors`; only a first pass without a usable root minimum is fatal.
+Stop closes admission, joins owned cleanup and started publication, and lets startup scanning replay unfinished work; its public status clears active work after the join.
+Cleanup treats a source path, or deletion source ancestor, that becomes a symlink, regular file, book file or other unsupported entry as obsolete output, not as a permanent source read failure. Engine `0.5.5` reports descendants below a file ancestor as absent; OPDS still refreshes a deletion parent only when that parent is root or a present directory. Orphan cleanup declares descendants before their folder and never refreshes through a non-directory or absent parent.
+Deployment health is `healthcheck.sh` (available + root feed + root page), never `feed.xml` alone.
+
+</important>
+
+<important if="you are working on event adapters, cascades, or handlers in src/processing/">
 
 Read `docs/agents/processing.md` first.
 
@@ -146,7 +162,7 @@ Read `docs/agents/reader.md` first.
 - Audience split is by URL, not content negotiation. Browsers: `/` → 302 `/index.html`, `/<folder>/` → `index.html`. Readers: `/opds` → root `feed.xml` as 200 XML, `/<folder>/feed.xml`. Also `/static/*` → `/app/static`, downloads and covers → `/data/*`.
 - During initial sync or mid-cascade, folder URLs and missing `index.html`/`feed.xml` return 503 (`@check_initializing`).
 - `/resync` needs `ADMIN_USER` + `ADMIN_TOKEN`. Without them, `entrypoint.sh` (`AUTH_ENABLED`) removes the auth block.
-- The Docker healthcheck uses `wget` (`wget -q --spider http://127.0.0.1/feed.xml`); the alpine image has no `curl`.
+- The Docker healthcheck is `/app/healthcheck.sh`: Bun `/status` must be available and nginx must serve `/feed.xml` plus `/index.html`. It uses `wget` because the alpine image has no `curl`.
 
 </important>
 
@@ -187,7 +203,7 @@ Read `docs/agents/reader.md` first.
 
 <important if="a memory or RSS test fails, or you are touching the memory gates">
 
-Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per consumer event) plus JS-object growth below 0.5 per operation (per event for the batched consumer scenario). `memory-oracle-calibration.test.ts` proves both go red on retained memory. Keep the limits fixed: a red run is a finding, not a threshold to raise. The handler-chain RSS gate is weak at its limit.
+Read `docs/memory-oracle-investigation.md` first. Gates run in `test/helpers/leak-probe.ts` subprocesses: RSS per operation (limits 8 / 3 full-chain / 5 handler chain / 1 per event of the engine work scheduler and per cycle of the production lifecycle) plus JS-object growth below 0.5 per operation (per event or cycle for the batched scenarios). `memory-oracle-calibration.test.ts` proves both go red on retained memory. Keep the limits fixed: a red run is a finding, not a threshold to raise. The handler-chain RSS gate is weak at its limit.
 
 </important>
 

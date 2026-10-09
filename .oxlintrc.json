@@ -202,8 +202,11 @@
         "src/formats/mobi.ts",
         "src/formats/txt.ts",
         "src/effect-file-system.ts",
+        "src/lifecycle/initial-engine-catalogue.ts",
+        "src/lifecycle/live-engine-catalogue.ts",
+        "src/lifecycle/live-engine-lifecycle.ts",
+        "src/lifecycle/engine-source-work.ts",
         "src/processing/effect-handler.ts",
-        "src/processing/catalogue-processor-effect.ts",
         "src/processing/handlers/**/*-effect.ts"
       ],
       "rules": {

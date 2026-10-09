@@ -2,7 +2,7 @@
  * Stopping DJVU extraction at each owned point: the two metadata commands, the cover command, and the native
  * TIFF conversion.
  *
- * The production processor, `bookSync`, format registry, DJVU extractor and command owner stay on the exercised
+ * The production lifecycle, `bookSync`, format registry, DJVU extractor and command owner stay on the exercised
  * path. A stage under test is held at a known point: a command by a script that reports its PID and sleeps
  * (Bun resolves commands against the PATH it started with, so a spawn spy maps the name to the script), and the
  * native conversion by a barrier around sharp's `toBuffer` that still runs the real conversion once released.
@@ -16,14 +16,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildContext, type HandlerDeps } from "../../../src/context.ts";
 import { djvuExtractorRegistration } from "../../../src/formats/djvu.ts";
-import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { startProductionLifecycle } from "../../helpers/production-lifecycle.ts";
 
 const SOURCE_DJVU = join(import.meta.dir, "../../../files/test/Test Book - Test Author.djvu");
 
 const STOP_LIMIT_MS = 5000;
 
-// Long enough for an unowned conversion to let the processor stop first; an owned one cannot stop before release.
+// Long enough for an unowned conversion to let the lifecycle stop first; an owned one cannot stop before release.
 const EARLY_STOP_WINDOW_MS = 300;
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -104,21 +103,16 @@ async function setUp(hanging: readonly string[]): Promise<Fixture> {
   return { root, filesPath, bookData, pidDirectory, tiffPaths, pids };
 }
 
-async function startProcessor(fixture: Fixture) {
+async function startProcessor(fixture: Fixture, failureLogs: string[]) {
   const { fs } = await buildContext();
 
   const deps: HandlerDeps = {
     config: { filesPath: fixture.filesPath, dataPath: join(fixture.root, "data"), port: 3000, reconcileInterval: 1800 },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    logger: { info: () => {}, warn: () => {}, error: (_tag, message) => failureLogs.push(message), debug: () => {} },
     fs,
   };
 
-  const processor = createEffectCatalogueProcessor({ deps, handlers: { BookCreated: bookSyncEffect } });
-  const controller = new AbortController();
-  const task = processor.start(controller.signal);
-  processor.submit({ _tag: "BookCreated", parent: fixture.filesPath, name: "Stop.djvu" });
-
-  return { processor, controller, task };
+  return startProductionLifecycle(deps);
 }
 
 async function publishedState(fixture: Fixture) {
@@ -130,18 +124,6 @@ async function publishedState(fixture: Fixture) {
 }
 
 const UNTOUCHED = { entry: "previous entry", linkExists: false, coverExists: false };
-
-function captureHandlerFailures(): string[] {
-  const lines: string[] = [];
-
-  const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-    lines.push(line);
-  });
-
-  cleanups.push(async () => consoleError.mockRestore());
-
-  return lines;
-}
 
 describe("Stopping DJVU extraction", () => {
   test("interruption during the metadata commands settles both children and is not an extraction failure", async () => {
@@ -169,11 +151,12 @@ describe("Stopping DJVU extraction", () => {
   test("stopping during the cover command kills the child, removes the page directory and keeps the previous entry", async () => {
     // #given real metadata commands and a running cover command
     const fixture = await setUp(["ddjvu"]);
-    const failures = captureHandlerFailures();
-    const { processor, controller, task } = await startProcessor(fixture);
+    const failures: string[] = [];
+    const run = await startProcessor(fixture, failures);
+    const { controller, task } = run;
     fixture.pids.push(...(await waitForPids(fixture.pidDirectory, 1)));
 
-    // #when the processor stops
+    // #when the lifecycle stops
     const startedAt = performance.now();
     controller.abort(new Error("shutdown"));
     const stop = await Promise.race([task.then(() => "stopped"), Bun.sleep(STOP_LIMIT_MS).then(() => "still running")]);
@@ -184,7 +167,7 @@ describe("Stopping DJVU extraction", () => {
       stop,
       childAlive: isAlive(fixture.pids[0]!),
       pageDirectoryExists: existsSync(dirname(fixture.tiffPaths[0]!)),
-      active: processor.status().active,
+      active: await run.active(),
       ...(await publishedState(fixture)),
       failureLogs: failures.filter((line) => line.includes("Handler failed")),
     }).toEqual({ stop: "stopped", childAlive: false, pageDirectoryExists: false, active: null, ...UNTOUCHED, failureLogs: [] });
@@ -193,7 +176,7 @@ describe("Stopping DJVU extraction", () => {
   test("stopping during native conversion waits for it with the page image present, then removes the page directory", async () => {
     // #given the real cover command finished and the native conversion held at a barrier
     const fixture = await setUp([]);
-    const failures = captureHandlerFailures();
+    const failures: string[] = [];
     const nativeStarted = Promise.withResolvers<void>();
     const nativeRelease = Promise.withResolvers<void>();
     const nativeUse = { imagePresentAtRead: false, converted: false, ended: false };
@@ -215,10 +198,11 @@ describe("Stopping DJVU extraction", () => {
     });
 
     cleanups.push(async () => toBufferSpy.mockRestore());
-    const { processor, controller, task } = await startProcessor(fixture);
+    const run = await startProcessor(fixture, failures);
+    const { controller, task } = run;
     await nativeStarted.promise;
 
-    // #when the processor stops while the native work runs
+    // #when the lifecycle stops while the native work runs
     controller.abort(new Error("shutdown"));
     const stoppedEarly = await Promise.race([task.then(() => true), Bun.sleep(EARLY_STOP_WINDOW_MS).then(() => false)]);
     nativeRelease.resolve();
@@ -226,12 +210,12 @@ describe("Stopping DJVU extraction", () => {
     await task;
     console.log(`  DJVU native conversion stop after release: ${(performance.now() - startedAt).toFixed(1)} ms`);
 
-    // #then the processor stopped only after the native work ended, which read the page image before removal
+    // #then the lifecycle stopped only after the native work ended, which read the page image before removal
     expect({
       stoppedEarly,
       nativeUse,
       pageDirectoryExists: existsSync(dirname(fixture.tiffPaths[0]!)),
-      active: processor.status().active,
+      active: await run.active(),
       ...(await publishedState(fixture)),
       failureLogs: failures.filter((line) => line.includes("Handler failed")),
     }).toEqual({

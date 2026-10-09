@@ -1,7 +1,7 @@
 /**
- * Stopping the real Effect processor while PDF extraction waits on a running cover command.
+ * Stopping the production lifecycle while PDF extraction waits on a running cover command.
  *
- * The production processor, `bookSync`, format registry, PDF extractor and command owner stay on the
+ * The production lifecycle, `bookSync`, format registry, PDF extractor and command owner stay on the
  * exercised path. Only the `pdftoppm` executable is replaced, by a script that reports its PID and then
  * sleeps, so the test can interrupt at a known point. Bun resolves commands against the PATH it started
  * with, so the spawn spy maps the name to the script and leaves every other command and option alone.
@@ -11,8 +11,7 @@ import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildContext, type HandlerDeps } from "../../../src/context.ts";
-import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { startProductionLifecycle } from "../../helpers/production-lifecycle.ts";
 
 const SOURCE_PDF = join(import.meta.dir, "../../../files/test/Test Book - Test Author.pdf");
 
@@ -83,12 +82,7 @@ describe("Stopping during PDF cover extraction", () => {
 
     const errorLines: string[] = [];
 
-    const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-      errorLines.push(line);
-    });
-
     cleanups.push(async () => {
-      consoleError.mockRestore();
       restore();
 
       if (pid !== undefined && isAlive(pid)) process.kill(pid, "SIGKILL");
@@ -99,17 +93,15 @@ describe("Stopping during PDF cover extraction", () => {
 
     const deps: HandlerDeps = {
       config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-      logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+      logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
       fs,
     };
 
-    const processor = createEffectCatalogueProcessor({ deps, handlers: { BookCreated: bookSyncEffect } });
-    const controller = new AbortController();
-    const task = processor.start(controller.signal);
-    processor.submit({ _tag: "BookCreated", parent: filesPath, name: "Stop.pdf" });
+    const lifecycle = startProductionLifecycle(deps);
+    const { controller, task } = lifecycle;
     pid = await waitForPid(ready);
 
-    // #when the processor stops
+    // #when the lifecycle stops
     const startedAt = performance.now();
     controller.abort(new Error("shutdown"));
     const stop = await Promise.race([task.then(() => "stopped"), Bun.sleep(STOP_LIMIT_MS).then(() => "still running")]);
@@ -119,7 +111,7 @@ describe("Stopping during PDF cover extraction", () => {
     expect({
       stop,
       childAlive: isAlive(pid),
-      active: processor.status().active,
+      active: await lifecycle.active(),
       entry: await Bun.file(join(bookData, "entry.xml")).text(),
       linkExists: await Bun.file(join(bookData, "Stop.pdf")).exists(),
       failureLogs: errorLines.filter((line) => line.includes("Handler failed")),

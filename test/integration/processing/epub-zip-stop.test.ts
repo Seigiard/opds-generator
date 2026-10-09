@@ -1,17 +1,16 @@
 /**
- * Stopping the real Effect processor while EPUB extraction waits on a running ZIP read.
+ * Stopping the production lifecycle while EPUB extraction waits on a running ZIP read.
  *
- * The production processor, `bookSync`, format registry, EPUB extractor, ZIP operations and command owner stay
+ * The production lifecycle, `bookSync`, format registry, EPUB extractor, ZIP operations and command owner stay
  * on the exercised path. Only the `unzip` executable is replaced, by a script that reports its PID and stdout
  * file and then sleeps, so the test can interrupt at a known point.
  */
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildContext, type HandlerDeps } from "../../../src/context.ts";
-import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { startProductionLifecycle } from "../../helpers/production-lifecycle.ts";
 import { installHangingCommands, isAlive, waitForHangingChild } from "../../helpers/hanging-command.ts";
 
 const SOURCE_EPUB = join(import.meta.dir, "../../../files/test/Test Book - Test Author.epub");
@@ -40,12 +39,7 @@ describe("Stopping during EPUB ZIP extraction", () => {
 
     const errorLines: string[] = [];
 
-    const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-      errorLines.push(line);
-    });
-
     cleanups.push(async () => {
-      consoleError.mockRestore();
       restore();
 
       if (pid !== undefined && isAlive(pid)) process.kill(pid, "SIGKILL");
@@ -56,18 +50,16 @@ describe("Stopping during EPUB ZIP extraction", () => {
 
     const deps: HandlerDeps = {
       config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-      logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+      logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
       fs,
     };
 
-    const processor = createEffectCatalogueProcessor({ deps, handlers: { BookCreated: bookSyncEffect } });
-    const controller = new AbortController();
-    const task = processor.start(controller.signal);
-    processor.submit({ _tag: "BookCreated", parent: filesPath, name: "Stop.epub" });
+    const lifecycle = startProductionLifecycle(deps);
+    const { controller, task } = lifecycle;
     const child = await waitForHangingChild(ready("unzip"));
     pid = child.pid;
 
-    // #when the processor stops
+    // #when the lifecycle stops
     const startedAt = performance.now();
     controller.abort(new Error("shutdown"));
     const stop = await Promise.race([task.then(() => "stopped"), Bun.sleep(STOP_LIMIT_MS).then(() => "still running")]);
@@ -81,7 +73,7 @@ describe("Stopping during EPUB ZIP extraction", () => {
         () => true,
         () => false,
       ),
-      active: processor.status().active,
+      active: await lifecycle.active(),
       entry: await Bun.file(join(bookData, "entry.xml")).text(),
       linkExists: await Bun.file(join(bookData, "Stop.epub")).exists(),
       failureLogs: errorLines.filter((line) => line.includes("Handler failed")),

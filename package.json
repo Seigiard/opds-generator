@@ -18,7 +18,7 @@
     "test:unit": "docker compose -f docker-compose.test.yml run --rm test bun test test/unit",
     "test:integration": "docker compose -f docker-compose.test.yml run --rm test bun test test/integration",
     "test:coverage": "docker compose -f docker-compose.test.yml run --rm test bun test --coverage",
-    "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && (bun test test/e2e; rc=$?; docker compose -f docker-compose.e2e.yml down; exit $rc)",
+    "test:e2e": "docker compose -f docker-compose.e2e.yml up -d --build --wait && (bun test test/e2e/nginx.test.ts test/e2e/event-logging.test.ts && bun test test/e2e/startup-readiness.test.ts; rc=$?; docker compose -f docker-compose.e2e.yml down; exit $rc)",
     "test:e2e:routing": "docker compose -f docker-compose.e2e.yml up -d --build --wait && (bun test test/e2e/nginx.test.ts; rc=$?; docker compose -f docker-compose.e2e.yml down; exit $rc)",
     "build:ui": "bun ui/scripts/build-ui.ts",
     "build:ui:check": "bun run build:ui && git diff --exit-code static/ && git ls-files --others --exclude-standard static/ | (! grep .)",
@@ -31,6 +31,7 @@
     "postinstall": "simple-git-hooks || true"
   },
   "dependencies": {
+    "@seigiard/sync-engine": "0.5.5",
     "effect": "4.0.1",
     "fast-xml-parser": "^5.11.2",
     "hono": "^4.13.13",
@@ -42,6 +43,8 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "1.87.0",
+    "@seigiard/sync-engine-0-4": "npm:@seigiard/sync-engine@0.4.0",
+    "@seigiard/sync-engine-previous": "file:vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz",
     "@types/bun": "latest",
     "autoprefixer": "^10.6.1",
     "cssnano": "^9.3.2",

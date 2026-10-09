@@ -1,0 +1,186 @@
+import { test, expect } from "bun:test";
+import { mkdtemp, mkdir, readFile, readlink, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect } from "effect";
+import { acquireOutputTree, OutputOwnershipFailed } from "@seigiard/sync-engine";
+import { buildContext } from "../../../src/context.ts";
+import { initialEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
+import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
+import { parseFeed } from "../../../src/render/parse-feed.ts";
+
+function gate() {
+  let open = () => {};
+
+  const promise = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+
+  return { promise, open };
+}
+
+test("initial book publication waits for its required download target", async () => {
+  // #given a real TXT source and a held download-link filesystem operation
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-target-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
+  const ctx = await buildContext();
+  const entered = gate();
+  const release = gate();
+
+  const deps = {
+    ...ctx,
+    config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath },
+    fs: {
+      ...ctx.fs,
+      symlink: async (target: string, path: string) => {
+        entered.open();
+        await release.promise;
+        await ctx.fs.symlink(target, path);
+      },
+    },
+  };
+
+  const task = Effect.runPromise(initialEngineCatalogue(deps));
+
+  try {
+    // #when publication has reached the required-target boundary
+    await entered.promise;
+    const prematureEntry = await Bun.file(join(outputPath, "First Book.txt", "entry.xml")).exists();
+    // The root minimum may already exist, but it must not reference a book whose target is still held.
+    const minimumFeed = await Bun.file(join(outputPath, "feed.xml")).text();
+    const prematureReference = minimumFeed.includes("First Book");
+    release.open();
+    await task;
+    // #then no new reference preceded its target and the final download is readable
+    expect({
+      prematureEntry,
+      minimumPublished: minimumFeed.includes("<feed"),
+      prematureReference,
+      download: await readFile(join(outputPath, "First Book.txt", "First Book.txt"), "utf8"),
+    }).toEqual({
+      prematureEntry: false,
+      minimumPublished: true,
+      prematureReference: false,
+      download: "Independent source bytes.\n",
+    });
+  } finally {
+    release.open();
+    await task;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("packaged engine publishes a TXT book, its root catalogue and a working download", async () => {
+  // #given a real source and the production handler dependencies
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
+  const ctx = await buildContext();
+  const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
+
+  try {
+    // #when the initial pass runs through the packaged public interface
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    // #then public artifacts and the download resolve to the independent example
+    const feedFile = Bun.file(join(outputPath, "feed.xml"));
+    const htmlFile = Bun.file(join(outputPath, "index.html"));
+    const entryFile = Bun.file(join(outputPath, "First Book.txt", "entry.xml"));
+    const feed = (await feedFile.exists()) ? parseFeed(await feedFile.text()) : null;
+    const html = (await htmlFile.exists()) ? await htmlFile.text() : "";
+    const entry = (await entryFile.exists()) ? parseFeed(`<feed>${await entryFile.text()}</feed>`).entries[0] : null;
+    const download = join(outputPath, "First Book.txt", "First Book.txt");
+    expect({
+      titles: feed?.entries.map((item) => item.title) ?? [],
+      entryTitle: entry?.title ?? null,
+      acquisition: entry?.acquisitions?.[0]?.href ?? null,
+      browserDownload: html.includes('href="/First%20Book.txt/First%20Book.txt"'),
+      downloadTarget: (await Bun.file(download).exists()) ? await readlink(download) : null,
+      downloadBytes: (await Bun.file(download).exists()) ? await readFile(download, "utf8") : null,
+      sourceBytes: await readFile(join(sourcePath, "First Book.txt"), "utf8"),
+    }).toEqual({
+      titles: ["First Book"],
+      entryTitle: "First Book",
+      acquisition: "/First%20Book.txt/First%20Book.txt",
+      browserDownload: true,
+      downloadTarget: join(sourcePath, "First Book.txt"),
+      downloadBytes: "Independent source bytes.\n",
+      sourceBytes: "Independent source bytes.\n",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a resync during startup against another owner's output queues and publishes nothing", async () => {
+  // #given another composition owns the output before the production lifecycle starts
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-admission-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
+  const release = await Effect.runPromise(acquireOutputTree(outputPath, join(outputPath, ".sync-engine")));
+  const ctx = await buildContext();
+  const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
+  const lifecycle = createLiveEngineLifecycle(deps);
+
+  try {
+    // #when startup is pending and a forced resync arrives before it owns output
+    const start = lifecycle.start().then(
+      () => "accepted",
+      (error) => (error instanceof OutputOwnershipFailed ? "owned" : "other failure"),
+    );
+
+    const admission = await lifecycle.requestScan({ kind: "resync", force: true });
+    const outcome = await start;
+    await lifecycle.stop();
+    // #then the request was queued behind the open and no competing publication started
+    expect({ outcome, admission, feed: await Bun.file(join(outputPath, "feed.xml")).exists() }).toEqual({
+      outcome: "owned",
+      admission: "queued",
+      feed: false,
+    });
+  } finally {
+    await lifecycle.stop();
+    await release();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the production lifecycle refuses a second composition until it stops", async () => {
+  // #given the production lifecycle has exclusive ownership of an output tree
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-owner-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, "First Book.txt"), "Independent source bytes.\n");
+  const ctx = await buildContext();
+  const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
+  const lifecycle = createLiveEngineLifecycle(deps);
+
+  try {
+    await lifecycle.start();
+
+    // #when the engine tries to publish to that same tree, then retries after a stop
+    const refused = await Effect.runPromise(
+      initialEngineCatalogue(deps).pipe(
+        Effect.as("accepted"),
+        Effect.catch((error) => Effect.succeed(error instanceof OutputOwnershipFailed ? "owned" : "other failure")),
+      ),
+    );
+
+    await lifecycle.stop();
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    // #then refusal is specific to ownership, and the released tree is usable
+    expect({ refused, titles: parseFeed(await Bun.file(join(outputPath, "feed.xml")).text()).entries.map((entry) => entry.title) }).toEqual(
+      { refused: "owned", titles: ["First Book"] },
+    );
+  } finally {
+    await lifecycle.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});

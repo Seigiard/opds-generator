@@ -88,6 +88,41 @@ describe("folderMetaSync handler", () => {
     expect(exists).toBe(true);
   });
 
+  describe("browser page publication failure", () => {
+    const failingHtml: HandlerDeps = {
+      ...deps,
+      fs: {
+        ...deps.fs,
+        atomicWrite: async (path, content) => {
+          if (path.endsWith("index.html")) throw new Error("index.html cannot be written");
+          await deps.fs.atomicWrite(path, content);
+        },
+      },
+    };
+
+    test("a root page failure fails the handler instead of reporting a feed-only minimum", async () => {
+      const result = await folderMetaSync(folderMetaSyncEvent(DATA_DIR), failingHtml);
+
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toContain("index.html cannot be written");
+    });
+
+    test("a nested page failure leaves the parent without a reference to the folder", async () => {
+      const nestedPath = join(DATA_DIR, "Nested");
+      await mkdir(nestedPath, { recursive: true });
+      await mkdir(join(FILES_DIR, "Nested"), { recursive: true });
+
+      const result = await folderMetaSync(folderMetaSyncEvent(nestedPath), failingHtml);
+
+      const entry = await stat(join(nestedPath, "_entry.xml")).then(
+        () => true,
+        () => false,
+      );
+
+      expect({ failed: result.isErr(), entry }).toEqual({ failed: true, entry: false });
+    });
+  });
+
   test("includes XML declaration and no XSLT stylesheet PI (post-flip)", async () => {
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");

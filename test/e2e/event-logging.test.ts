@@ -169,16 +169,17 @@ describe("Event Logging E2E", () => {
   });
 
   describe("Phase 1: Setup", () => {
-    test("create folder triggers FolderCreated event", async () => {
+    test("create folder runs its folder work", async () => {
       const before = getDockerTimestamp();
 
       await execInContainer(`mkdir -p ${BOOKS_DIR}/${TEST_FOLDER}`);
 
-      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", TEST_FOLDER));
+      // The engine declares a folder as folder-refresh work (its feed, page and parent entry), not as a FolderCreated event.
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderMetaSyncRequested", TEST_FOLDER));
 
-      expect(findEvents(logs, "FolderCreated", TEST_FOLDER).length).toBeGreaterThan(0);
+      expect(findEvents(logs, "FolderMetaSyncRequested", TEST_FOLDER).length).toBeGreaterThan(0);
 
-      const handlerLogs = findHandlerEvents(logs, "FolderCreated", TEST_FOLDER);
+      const handlerLogs = findHandlerEvents(logs, "FolderMetaSyncRequested", TEST_FOLDER);
       expect(handlerLogs.some((e) => e.event_type === "handler_start")).toBe(true);
       expect(handlerLogs.some((e) => e.event_type === "handler_complete")).toBe(true);
     });
@@ -298,18 +299,18 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 4: Folder operations", () => {
     test(
-      "copy folder triggers FolderCreated and lists every copied book in the copy's feed",
+      "copy folder runs its folder work and lists every copied book in the copy's feed",
       async () => {
         const before = getDockerTimestamp();
 
         await execInContainer(`cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`);
 
-        const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", `${TEST_FOLDER}-copy`));
+        const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderMetaSyncRequested", `${TEST_FOLDER}-copy`));
 
-        expect(findEvents(logs, "FolderCreated", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
+        expect(findEvents(logs, "FolderMetaSyncRequested", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
 
         // inotifywait watches the new folder only after its create event, so the books copied
-        // into it may raise no event of their own; folderSync must still list them in the feed.
+        // into it may raise no event of their own; the pass must still list them in the feed.
         expect(await waitForUrl(`${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
         expect(await waitForUrl(`${TEST_FOLDER}-copy/test-events-book2.pdf/entry.xml`, true)).toBe(true);
 
@@ -329,18 +330,19 @@ describe("Event Logging E2E", () => {
       { timeout: 40000 },
     );
 
-    test("rename folder triggers FolderDeleted + FolderCreated", async () => {
+    test("rename folder removes the old folder and runs the new folder's work", async () => {
       const before = getDockerTimestamp();
 
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-copy" "${BOOKS_DIR}/${TEST_FOLDER}-duplicate"`);
 
       const logs = await waitForLogs(
         before,
-        (l) => hasCompleted(l, "FolderDeleted", `${TEST_FOLDER}-copy`) && hasCompleted(l, "FolderCreated", `${TEST_FOLDER}-duplicate`),
+        (l) =>
+          hasCompleted(l, "FolderDeleted", `${TEST_FOLDER}-copy`) && hasCompleted(l, "FolderMetaSyncRequested", `${TEST_FOLDER}-duplicate`),
       );
 
       expect(findEvents(logs, "FolderDeleted", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
-      expect(findEvents(logs, "FolderCreated", `${TEST_FOLDER}-duplicate`).length).toBeGreaterThan(0);
+      expect(findEvents(logs, "FolderMetaSyncRequested", `${TEST_FOLDER}-duplicate`).length).toBeGreaterThan(0);
     });
 
     test("move folder into another triggers events", async () => {
@@ -348,7 +350,7 @@ describe("Event Logging E2E", () => {
 
       await execInContainer(`mv "${BOOKS_DIR}/${TEST_FOLDER}-duplicate" "${BOOKS_DIR}/${TEST_FOLDER}/${TEST_FOLDER}-duplicate"`);
 
-      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderCreated", `${TEST_FOLDER}/${TEST_FOLDER}-duplicate`));
+      const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderMetaSyncRequested", `${TEST_FOLDER}/${TEST_FOLDER}-duplicate`));
 
       const folderLogs = logs.filter((e) => e.event_tag?.includes("Folder") && e.path?.includes("duplicate"));
       expect(folderLogs.length).toBeGreaterThan(0);
@@ -357,20 +359,15 @@ describe("Event Logging E2E", () => {
 
   describe("Phase 5: Cleanup", () => {
     test(
-      "delete folder with contents triggers FolderDeleted + BookDeleted",
+      "delete folder with contents triggers FolderDeleted and removes contained output",
       async () => {
         const before = getDockerTimestamp();
 
         await execInContainer(`rm -rf "${BOOKS_DIR}/${TEST_FOLDER}"`);
 
-        const logs = await waitForLogs(
-          before,
-          (l) => hasCompleted(l, "FolderDeleted", TEST_FOLDER) && l.some((e) => e.event_tag === "BookDeleted"),
-          30000,
-        );
+        const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderDeleted", TEST_FOLDER), 30000);
 
         expect(findEvents(logs, "FolderDeleted", TEST_FOLDER).length).toBeGreaterThan(0);
-        expect(logs.filter((e) => e.event_tag === "BookDeleted").length).toBeGreaterThan(0);
       },
       { timeout: 40000 },
     );

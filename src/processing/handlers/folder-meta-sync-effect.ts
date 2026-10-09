@@ -19,23 +19,15 @@ interface EntryWithTitle {
   readonly dirName: string;
 }
 
-interface FolderEntries {
-  readonly folderEntries: EntryWithTitle[];
-  readonly bookEntries: EntryWithTitle[];
-}
-
 interface FailureProps {
   readonly path: string;
   readonly cause: unknown;
   readonly message: string;
 }
 
-const EMPTY_ENTRIES: FolderEntries = {
-  folderEntries: [],
-  bookEntries: [],
-};
-
 class FolderFeedPublishFailed extends Data.TaggedError("FolderFeedPublishFailed")<FailureProps> {}
+
+class FolderBrowserPublishFailed extends Data.TaggedError("FolderBrowserPublishFailed")<FailureProps> {}
 
 class FolderEntryPublishFailed extends Data.TaggedError("FolderEntryPublishFailed")<FailureProps> {}
 
@@ -54,7 +46,7 @@ export const folderMetaSyncEffect = Effect.fn("folderMetaSync")(function* (event
 
     const sourceExists = yield* fs.stat(sourceFolder).pipe(
       Effect.map((s) => s.isDirectory()),
-      Effect.catch(() => Effect.succeed(false)),
+      Effect.catchTag("FileSystemNotFound", () => Effect.succeed(false)),
     );
 
     if (!sourceExists) {
@@ -64,22 +56,17 @@ export const folderMetaSyncEffect = Effect.fn("folderMetaSync")(function* (event
     }
   }
 
-  return yield* generateFeed(normalizedDir, relativePath);
+  return yield* publishFolderFeed(normalizedDir, relativePath);
 });
 
-const generateFeed = Effect.fnUntraced(function* (normalizedDir: string, relativePath: string) {
+/** Shared safe publication after the caller confirms the source folder. */
+export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: string, relativePath: string) {
   const { logger } = yield* CatalogueDeps;
   const fs = yield* EffectFileSystem;
 
   logger.info("FolderMetaSync", "Processing", { path: relativePath || "(root)" });
 
-  const { folderEntries, bookEntries } = yield* readFolderEntries(normalizedDir).pipe(
-    Effect.catch((error) => {
-      logger.warn("FolderMetaSync", "Error reading folder", { path: relativePath, error: String(error) });
-
-      return Effect.succeed(EMPTY_ENTRIES);
-    }),
-  );
+  const { folderEntries, bookEntries } = yield* readFolderEntries(normalizedDir);
 
   folderEntries.sort(sortByTitle);
   bookEntries.sort(sortByAuthorTitle);
@@ -113,12 +100,13 @@ const generateFeed = Effect.fnUntraced(function* (normalizedDir: string, relativ
     books: bookEntries.length,
   });
 
-  yield* fs.atomicWrite(join(normalizedDir, INDEX_FILE), renderHtml(model)).pipe(
-    Effect.tap(() => Effect.sync(() => logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" }))),
-    Effect.catch((htmlError) =>
-      Effect.sync(() => logger.error("FolderMetaSync", "Failed to render index.html", htmlError, { path: relativePath || "/" })),
-    ),
-  );
+  // The browser page is part of the usable publication: a parent must not reference a folder without it.
+  const browserOutputPath = join(normalizedDir, INDEX_FILE);
+
+  yield* fs
+    .atomicWrite(browserOutputPath, renderHtml(model))
+    .pipe(Effect.mapError((cause) => new FolderBrowserPublishFailed(failure(browserOutputPath, cause))));
+  logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
 
   if (relativePath === "") return [];
 
@@ -159,7 +147,14 @@ const readFolderEntries = Effect.fnUntraced(function* (normalizedDir: string) {
   const fs = yield* EffectFileSystem;
   const folderEntries: EntryWithTitle[] = [];
   const bookEntries: EntryWithTitle[] = [];
-  const items = yield* fs.readdir(normalizedDir);
+
+  const items = yield* fs
+    .readdir(normalizedDir)
+    .pipe(
+      Effect.catchTag("FileSystemNotFound", () =>
+        fs.mkdir(normalizedDir, { recursive: true }).pipe(Effect.flatMap(() => fs.readdir(normalizedDir))),
+      ),
+    );
 
   for (const item of items) {
     if (item.startsWith("_") || item === FEED_FILE || item.endsWith(".tmp")) continue;

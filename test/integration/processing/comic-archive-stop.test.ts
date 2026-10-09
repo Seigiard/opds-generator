@@ -1,7 +1,7 @@
 /**
- * Stopping the real Effect processor while comic extraction runs archive work.
+ * Stopping the production lifecycle while comic extraction runs archive work.
  *
- * The production processor, `bookSync`, format registry, comic extractor, archive dispatch, command owner and
+ * The production lifecycle, `bookSync`, format registry, comic extractor, archive dispatch, command owner and
  * RAR extraction stay on the exercised path. Shell cases replace only the 7z/TAR read executables, by scripts that
  * report their PID and stdout file and then sleep. The RAR case holds only the read of the extracted file.
  */
@@ -10,8 +10,7 @@ import { copyFile, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildContext, type HandlerDeps } from "../../../src/context.ts";
-import { createEffectCatalogueProcessor } from "../../../src/processing/catalogue-processor-effect.ts";
-import { bookSyncEffect } from "../../../src/processing/handlers/book-sync-effect.ts";
+import { startProductionLifecycle } from "../../helpers/production-lifecycle.ts";
 import { installHangingCommands, isAlive, waitForHangingChildren } from "../../helpers/hanging-command.ts";
 import { FIXTURES_DIR, SAMPLE_IMAGE_SHA256, SAMPLE_IMAGES, buildComic, sampleImage, sha256 } from "../../helpers/comic-archives.ts";
 
@@ -30,7 +29,7 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-/** A catalogue with a previous entry for `name`, and a running processor that has been asked to sync it. */
+/** A catalogue with a previous entry for `name`, and a running lifecycle that syncs it. */
 async function startSync(root: string, name: string, source: string) {
   const filesPath = join(root, "files");
   const dataPath = join(root, "data");
@@ -42,24 +41,16 @@ async function startSync(root: string, name: string, source: string) {
 
   const errorLines: string[] = [];
 
-  const consoleError = spyOn(console, "error").mockImplementation((line: string) => {
-    errorLines.push(line);
-  });
-
-  cleanups.push(async () => consoleError.mockRestore());
-
   const { fs } = await buildContext();
 
   const deps: HandlerDeps = {
     config: { filesPath, dataPath, port: 3000, reconcileInterval: 1800 },
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    logger: { info: () => {}, warn: () => {}, error: (_tag, message) => errorLines.push(message), debug: () => {} },
     fs,
   };
 
-  const processor = createEffectCatalogueProcessor({ deps, handlers: { BookCreated: bookSyncEffect } });
-  const controller = new AbortController();
-  const task = processor.start(controller.signal);
-  processor.submit({ _tag: "BookCreated", parent: filesPath, name });
+  const lifecycle = startProductionLifecycle(deps);
+  const { controller, task } = lifecycle;
 
   const stop = async (beforeSettle: () => Promise<void> = async () => {}) => {
     const startedAt = performance.now();
@@ -72,7 +63,7 @@ async function startSync(root: string, name: string, source: string) {
   };
 
   const published = async () => ({
-    active: processor.status().active,
+    active: await lifecycle.active(),
     entry: await Bun.file(join(bookData, "entry.xml")).text(),
     linkExists: await exists(join(bookData, name)),
     failureLogs: errorLines.filter((line) => line.includes("Handler failed")),
@@ -119,7 +110,7 @@ describe("Stopping during comic archive extraction", () => {
       const children = await waitForHangingChildren(hangRoot, command, 2);
       pids = children.map((child) => child.pid);
 
-      // #when the processor stops
+      // #when the lifecycle stops
       const stop = await sync.stop();
 
       // #then both reads are gone with their outputs, and nothing was published
@@ -166,7 +157,7 @@ describe("Stopping during comic archive extraction", () => {
     const extracted = await started;
     const duringRead: ReadObservation = { beforeRelease: "", extracted: null };
 
-    // #when the processor stops during the read, which is then released
+    // #when the lifecycle stops during the read, which is then released
     const stop = await sync.stop(async () => {
       duringRead.beforeRelease = await Promise.race([sync.task.then(() => "stopped"), Bun.sleep(100).then(() => "waiting")]);
       duringRead.extracted = sha256(Buffer.from(await originalFile(extracted).arrayBuffer()));

@@ -5,6 +5,7 @@
     "": {
       "name": "opds-generator",
       "dependencies": {
+        "@seigiard/sync-engine": "0.5.5",
         "effect": "4.0.1",
         "fast-xml-parser": "^5.11.2",
         "hono": "^4.13.13",
@@ -16,6 +17,8 @@
       },
       "devDependencies": {
         "@oxlint/plugins": "1.87.0",
+        "@seigiard/sync-engine-0-4": "npm:@seigiard/sync-engine@0.4.0",
+        "@seigiard/sync-engine-previous": "file:vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz",
         "@types/bun": "latest",
         "autoprefixer": "^10.6.1",
         "cssnano": "^9.3.2",
@@ -316,6 +319,12 @@
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
     "@rollup/rollup-linux-x64-gnu": ["@rollup/rollup-linux-x64-gnu@4.59.0", "", { "os": "linux", "cpu": "x64" }, "sha512-3AHmtQq/ppNuUspKAlvA8HtLybkDflkMuLK4DPo77DfthRb71V84/c4MlWJXixZz4uruIH4uaa07IqoAkG64fg=="],
+
+    "@seigiard/sync-engine": ["@seigiard/sync-engine@0.5.5", "", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-G2Wt1V62P9ciywD4E/2c7l9vjXPzjokQy7c5WWNY8HKFP8hWpKUZr0fZ7M9fNFkVj4a9FVUEIqN2tyA4GZbv0Q=="],
+
+    "@seigiard/sync-engine-0-4": ["@seigiard/sync-engine@0.4.0", "", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-LQfGhwk0nzKCmI/2BnWyrvaVQxaerDJ8TM4ymPzNeKfmcybHwcIPfft6MDGUtc0CZKj8vciG58FjDCwgzA61yw=="],
+
+    "@seigiard/sync-engine-previous": ["@seigiard/sync-engine@vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz", { "peerDependencies": { "effect": "4.0.1" } }, "sha512-DZ+DnkF+k9eB2fYfEN97yH29gQLAJIWn2LX32aHDNKh8xNC5nuExjKoOeAP2SE3BOcHzeppyApIc1MZIRXMBMA=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 

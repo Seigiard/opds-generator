@@ -34,15 +34,10 @@ export interface FileSystemService {
   unlink(path: string): Promise<void>;
 }
 
-export interface DeduplicationService {
-  shouldProcess(key: string): boolean;
-}
-
 export interface AppContext {
   readonly config: ConfigService;
   readonly logger: LoggerService;
   readonly fs: FileSystemService;
-  readonly dedup: DeduplicationService;
 }
 
 export type HandlerDeps = Pick<AppContext, "config" | "logger" | "fs">;
@@ -107,30 +102,9 @@ export async function buildContext(): Promise<AppContext> {
     unlink: (path) => unlink(path),
   };
 
-  const seen = new Map<string, number>();
-
-  const dedup: DeduplicationService = {
-    shouldProcess(key: string): boolean {
-      const now = Date.now();
-      const lastSeen = seen.get(key);
-
-      if (lastSeen && now - lastSeen < 500) return false;
-      seen.set(key, now);
-
-      if (seen.size > 100) {
-        for (const [k, t] of seen) {
-          if (now - t > 2000) seen.delete(k);
-        }
-      }
-
-      return true;
-    },
-  };
-
   return {
     config: configService,
     logger,
     fs: fsService,
-    dedup,
   };
 }

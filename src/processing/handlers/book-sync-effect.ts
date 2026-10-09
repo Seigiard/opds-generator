@@ -1,5 +1,6 @@
 import { Data, Effect, Predicate } from "effect";
 import { join, relative, dirname } from "node:path";
+import type { BookMetadata } from "../../formats/types.ts";
 import { getExtractor } from "../../formats/index.ts";
 import { saveCoverAndThumbnail, COVER_MAX_SIZE, THUMBNAIL_MAX_SIZE } from "../../utils/image.ts";
 import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
@@ -24,7 +25,11 @@ class EntryPublishFailed extends Data.TaggedError("EntryPublishFailed")<FailureP
 /** Recovered inside `bookSync`: the book keeps its metadata and gets no cover. */
 class CoverSaveFailed extends Data.TaggedError("CoverSaveFailed")<FailureProps> {}
 
-const NO_METADATA = { meta: { title: "" }, hasCover: false };
+const NO_METADATA: PreparedExtraction = { meta: { title: "" }, hasCover: false };
+
+type PreparedExtraction =
+  | { readonly meta: BookMetadata; readonly hasCover: boolean; readonly extractionError?: never }
+  | { readonly extractionError: string; readonly meta?: never; readonly hasCover?: never };
 
 /**
  * `bookSync` shutdown may interrupt only the preparation:
@@ -38,10 +43,16 @@ export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType)
   const { logger, fs } = yield* CatalogueDeps;
   const book = yield* Effect.interruptible(prepareBook(event.parent, event.name));
 
+  if (book.entryXml === undefined) {
+    logger.warn("BookSync", "Keeping previous entry after extraction failure", { path: book.relativePath, error: book.extractionError });
+
+    return [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(book.dataDir) })];
+  }
+
   yield* ownedPromise(
     async () => {
-      await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
       await fs.symlink(book.filePath, join(book.dataDir, event.name));
+      await fs.atomicWrite(join(book.dataDir, ENTRY_FILE), book.entryXml);
     },
     (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
   );
@@ -68,15 +79,39 @@ const prepareBook = Effect.fnUntraced(function* (parent: string, name: string) {
     (cause) => new BookDataDirFailed(failure(dataDir, cause)),
   );
 
-  const { meta, hasCover } = yield* extractMetadataAndCover(filePath, dataDir).pipe(
-    Effect.catchTag("ExtractionFailed", () => Effect.succeed(NO_METADATA)),
+  const extraction: PreparedExtraction = yield* extractMetadataAndCover(filePath, dataDir).pipe(
+    Effect.catchTag("ExtractionFailed", (error) =>
+      ownedPromise(
+        () => fs.exists(join(dataDir, ENTRY_FILE)),
+        (cause) => new BookStatFailed(failure(filePath, cause)),
+      ).pipe(
+        Effect.flatMap((published) =>
+          published
+            ? Effect.succeed<PreparedExtraction>({ extractionError: error.message })
+            : Effect.succeed<PreparedExtraction>(NO_METADATA),
+        ),
+      ),
+    ),
   );
 
-  return { filePath, relativePath, dataDir, hasCover, entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size) };
+  if (extraction.extractionError !== undefined) {
+    return { filePath, relativePath, dataDir, hasCover: false, entryXml: undefined, extractionError: extraction.extractionError };
+  }
+
+  const { meta, hasCover } = extraction;
+
+  return {
+    filePath,
+    relativePath,
+    dataDir,
+    hasCover,
+    entryXml: bookEntryXml(relativePath, name, meta, hasCover, fileStat.size),
+  };
 });
 
 const extractMetadataAndCover = Effect.fnUntraced(function* (filePath: string, bookDataDir: string) {
-  const extract = getExtractor(filePath.split(".").pop() ?? "");
+  const extension = filePath.toLowerCase().endsWith(".fb2.zip") ? "fb2" : (filePath.split(".").pop() ?? "");
+  const extract = getExtractor(extension);
 
   if (!extract) return NO_METADATA;
 
