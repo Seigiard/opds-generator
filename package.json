@@ -28,7 +28,7 @@
     "dev:ui": "vite --config ui/vite.config.ts",
     "fixtures:pull": "bun ui/scripts/fixtures-pull.ts",
     "test:all": "bun run build:ui:check && bun run render:check && bun run render:pure && bun run test && bun run test:e2e",
-    "postinstall": "simple-git-hooks || true"
+    "prepare": "if [ -e .git ]; then lefthook install; fi"
   },
   "dependencies": {
     "@seigiard/sync-engine": "0.5.5",
@@ -48,21 +48,17 @@
     "@types/bun": "latest",
     "autoprefixer": "^10.6.1",
     "cssnano": "^9.3.2",
-    "nano-staged": "^1.0.2",
+    "lefthook": "^2.2.1",
     "neverthrow": "^8.2.0",
     "oxfmt": "^0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "postcss": "^8.5.29",
     "postcss-nesting": "^14.0.3",
-    "simple-git-hooks": "^2.14.0",
     "vite": "^8.3.3"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "./node_modules/.bin/nano-staged"
   },
   "knip": {
     "entry": [
