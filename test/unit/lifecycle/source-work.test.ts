@@ -73,3 +73,59 @@ test("unsupported source replacement cleanup is decided through source work", as
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("source observation failures that only contain the unsupported path sentinel keep stale output", async () => {
+  // #given an unreadable supported source folder whose name contains the unsupported-source sentinel
+  const root = await mkdtemp(join(tmpdir(), "opds-source-work-"));
+  const filesPath = join(root, "source");
+  const dataPath = join(root, "output");
+  const sentinelFolder = "Unsupported source path";
+  await mkdir(join(filesPath, sentinelFolder), { recursive: true });
+  await mkdir(join(dataPath, sentinelFolder, "Book.fb2"), { recursive: true });
+
+  const deps: HandlerDeps = {
+    config: { filesPath, dataPath, port: 3000, reconcileInterval: 0 },
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined },
+    fs: {
+      mkdir: async (path, options) => {
+        await mkdir(path, options);
+      },
+      rm,
+      readdir: async (path) => {
+        if (path === join(filesPath, sentinelFolder)) {
+          throw new Error(`EACCES: permission denied, scandir '${join(filesPath, sentinelFolder)}'`);
+        }
+
+        return [];
+      },
+      stat: async (path) => {
+        const info = await stat(path);
+
+        return { isDirectory: () => info.isDirectory(), size: info.size };
+      },
+      exists: pathExists,
+      writeFile: async () => undefined,
+      atomicWrite: async () => undefined,
+      symlink: async () => undefined,
+      unlink: async () => undefined,
+    },
+  };
+
+  try {
+    // #when a deletion event fails while re-observing the existing parent directory
+    const exit = await Effect.runPromiseExit(
+      engineSourceWork(deps, CatalogueEvent.BookDeleted({ parent: join(filesPath, sentinelFolder), name: "Book.fb2" }), undefined).pipe(
+        Effect.provideService(CatalogueDeps, deps),
+        Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+      ),
+    );
+
+    // #then OPDS treats the read failure as a failure, not as an obsolete source replacement
+    expect({ exit: exit._tag, staleOutput: await pathExists(join(dataPath, sentinelFolder, "Book.fb2")) }).toEqual({
+      exit: "Failure",
+      staleOutput: true,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
