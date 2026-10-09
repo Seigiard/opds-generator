@@ -27,7 +27,7 @@ Code: `src/utils/process.ts`.
 
 ## Effect scope
 
-- `effect` is pinned to `4.0.1`. It owns command/resource ownership and, by ADR 0003, event processing. `server.ts` runs the Effect catalogue processor and Effect handlers.
+- `effect` is pinned to `4.0.1`. It owns command/resource ownership and, by ADR 0003, handler execution. `server.ts` runs `createLiveEngineLifecycle`; the shared engine scheduler owns scans, pass coalescing, retry and shutdown while OPDS handlers remain Effect programs.
 - All catalogue handlers are Effects (`src/processing/handlers/*-effect.ts`) with tagged errors and Promise crossings through `ownedPromise`. Format extraction runs in the handler's fiber (ADR 0003).
 - The vendored `anti-slop-effect` rules run at `error` on Effect-owned modules via the `.oxlintrc.json` override. `opds/no-direct-effect-promise` (project plugin in `tools/oxlint/opds/`) runs on the whole tree: a direct `Effect.promise` / `Effect.tryPromise` abandons its Promise on interruption. Use `ownedPromise` from `src/utils/owned-promise.ts`, pipe the crossing through `Effect.uninterruptible`, or put it inside `Effect.acquireRelease`. Where abandoning is intended, disable the line with the reason. When another module adopts Effect, add its path to the override; migrated format modules belong there too.
 - Keep acquisition and release scoped, let native work outlive interruption, and preserve original errors at the Promise boundary.

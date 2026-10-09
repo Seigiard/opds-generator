@@ -135,6 +135,6 @@ The #64 evidence maps each scenario to the test or smoke step that currently own
 
 OPDS [ADR 0001](../adr/0001-resync-repairs-in-place.md) already establishes repair-in-place resync. [ADR 0002](../adr/0002-cascades-replace-data-watcher.md) establishes explicit cascades instead of output-watcher propagation. Both inform this contract.
 
-[ADR 0003](../adr/0003-effect-owns-event-processing.md) currently keeps lifecycle execution plain async. Adoption of the shared engine changes that boundary, as recorded in ADR 0004. The existing application architecture remains in force until migration.
+[ADR 0003](../adr/0003-effect-owns-event-processing.md) kept lifecycle execution plain async while handlers moved to Effect. That boundary is now superseded: ADR 0004 governs the shared engine lifecycle, and OPDS runs the released engine for scanning, scheduling, reconciliation, retry and shutdown.
 
 OPML currently has pass-scoped publication completion and a private cache-path layout. TTRPG uses full regeneration and publishes indexes before image work finishes. Their migrations must satisfy this contract while preserving domain-specific output and URL requirements.

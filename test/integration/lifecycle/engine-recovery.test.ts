@@ -734,25 +734,110 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
   };
 
   try {
-    await Effect.runPromise(initialEngineCatalogue(countedDeps));
-    const outputFolder = join(outputPath, name);
-    await rm(join(outputPath, ".sync-engine"), { recursive: true, force: true });
-    await symlink(outputFolder, join(outputPath, ".sync-engine"));
-    await rm(join(sourcePath, name), { recursive: true });
-    await copyFile(fixture, join(sourcePath, name));
+    const observation = await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(countedDeps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              const outputFolder = join(outputPath, name);
+              await rm(join(outputPath, ".sync-engine"), { recursive: true, force: true });
+              await symlink(outputFolder, join(outputPath, ".sync-engine"));
+              await rm(join(sourcePath, name), { recursive: true });
+              await copyFile(fixture, join(sourcePath, name));
 
-    // #when local kind-change cleanup would remove the folder publication
-    const completion = await Effect.runPromiseExit(initialEngineCatalogue(countedDeps));
+              // #when local kind-change cleanup fails and the same path also publishes as a book
+              await Effect.runPromise(
+                session.submit([
+                  CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
+                  CatalogueEvent.BookCreated({ parent: sourcePath, name }),
+                ]),
+              );
+              await Effect.runPromise(session.awaitCompletion);
+              const status = await Effect.runPromise(session.status);
 
-    const observation = {
-      completion: completion._tag,
-      failedSafely: errors.some((error) => error.includes("OPDS cleanup overlaps engine state")),
-      outputFeed: await pathExists(join(outputFolder, "feed.xml")),
-      stateAlias: await pathExists(join(outputPath, ".sync-engine", "feed.xml")),
-    };
+              return {
+                state: status.state,
+                failedSafely: errors.some((error) => error.includes("OPDS cleanup overlaps engine state")),
+                retainedErrors: status.errors.map((error) => error.work._tag),
+                outputFeed: await pathExists(join(outputFolder, "feed.xml")),
+                stateAlias: await pathExists(join(outputPath, ".sync-engine", "feed.xml")),
+              };
+            }),
+          ),
+        ),
+      ),
+    );
 
-    // #then canonical state overlap keeps both the output and its state alias intact
-    expect(observation).toEqual({ completion: "Success", failedSafely: true, outputFeed: true, stateAlias: true });
+    // #then the failed folder cleanup remains visible even though the same source path published as a book
+    expect(observation).toEqual({
+      state: "complete-with-errors",
+      failedSafely: true,
+      retainedErrors: ["FolderDeleted"],
+      outputFeed: true,
+      stateAlias: true,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("successful folder deletion clears that folder's retained publication error", async () => {
+  // #given a published folder whose later folder page publication fails
+  const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(join(sourcePath, "Fiction"));
+  let failPage = false;
+
+  const faultyDeps = {
+    ...deps,
+    fs: {
+      ...deps.fs,
+      atomicWrite: async (path: string, content: string) => {
+        if (failPage && path === join(outputPath, "Fiction", "index.html")) throw new Error("Folder page denied");
+
+        await deps.fs.atomicWrite(path, content);
+      },
+    },
+  };
+
+  try {
+    const observation = await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(faultyDeps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              failPage = true;
+              await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: join(outputPath, "Fiction") })]));
+              await Effect.runPromise(session.awaitCompletion);
+              const failed = await Effect.runPromise(session.status);
+              failPage = false;
+              await rm(join(sourcePath, "Fiction"), { recursive: true });
+
+              // #when the folder is confirmed deleted and its output cleanup succeeds
+              await Effect.runPromise(session.submit([CatalogueEvent.FolderDeleted({ parent: sourcePath, name: "Fiction" })]));
+              await Effect.runPromise(session.awaitCompletion);
+              const cleaned = await Effect.runPromise(session.status);
+
+              return {
+                failedState: failed.state,
+                failedErrors: failed.errors.map((error) => error.work._tag),
+                cleanedState: cleaned.state,
+                cleanedErrors: cleaned.errors.map((error) => error.work._tag),
+                folderOutput: await pathExists(join(outputPath, "Fiction", "feed.xml")),
+              };
+            }),
+          ),
+        ),
+      ),
+    );
+
+    // #then the deletion clears the retained folder-publication failure for that same folder
+    expect(observation).toEqual({
+      failedState: "complete-with-errors",
+      failedErrors: ["FolderMetaSyncRequested"],
+      cleanedState: "complete",
+      cleanedErrors: [],
+      folderOutput: false,
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

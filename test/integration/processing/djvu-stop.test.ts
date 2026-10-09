@@ -103,7 +103,7 @@ async function setUp(hanging: readonly string[]): Promise<Fixture> {
   return { root, filesPath, bookData, pidDirectory, tiffPaths, pids };
 }
 
-async function startProcessor(fixture: Fixture, failureLogs: string[] = []) {
+async function startProcessor(fixture: Fixture, failureLogs: string[]) {
   const { fs } = await buildContext();
 
   const deps: HandlerDeps = {
@@ -124,10 +124,6 @@ async function publishedState(fixture: Fixture) {
 }
 
 const UNTOUCHED = { entry: "previous entry", linkExists: false, coverExists: false };
-
-function captureHandlerFailures(): string[] {
-  return [];
-}
 
 describe("Stopping DJVU extraction", () => {
   test("interruption during the metadata commands settles both children and is not an extraction failure", async () => {
@@ -155,7 +151,7 @@ describe("Stopping DJVU extraction", () => {
   test("stopping during the cover command kills the child, removes the page directory and keeps the previous entry", async () => {
     // #given real metadata commands and a running cover command
     const fixture = await setUp(["ddjvu"]);
-    const failures = captureHandlerFailures();
+    const failures: string[] = [];
     const run = await startProcessor(fixture, failures);
     const { controller, task } = run;
     fixture.pids.push(...(await waitForPids(fixture.pidDirectory, 1)));
@@ -180,7 +176,7 @@ describe("Stopping DJVU extraction", () => {
   test("stopping during native conversion waits for it with the page image present, then removes the page directory", async () => {
     // #given the real cover command finished and the native conversion held at a barrier
     const fixture = await setUp([]);
-    const failures = captureHandlerFailures();
+    const failures: string[] = [];
     const nativeStarted = Promise.withResolvers<void>();
     const nativeRelease = Promise.withResolvers<void>();
     const nativeUse = { imagePresentAtRead: false, converted: false, ended: false };

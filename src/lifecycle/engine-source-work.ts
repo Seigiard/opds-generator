@@ -119,7 +119,7 @@ function confinedPath(root: string, path: string): string {
 }
 
 function overlaps(parent: string, child: string): boolean {
-  const within = relative(parent, child);
+  const path = relative(parent, child);
 
-  return within === "" || (within !== ".." && !within.startsWith(".." + sep) && !isAbsolute(within));
+  return path === "" || (path !== ".." && !path.startsWith(".." + sep) && !isAbsolute(path));
 }

@@ -1,6 +1,6 @@
 import { openSynchronization, runInitialPass, type InitialPass, type SourceEntry } from "@seigiard/sync-engine";
 import { Effect, Predicate } from "effect";
-import { dirname, basename, join, extname, relative } from "node:path";
+import { dirname, basename, join, extname } from "node:path";
 import type { HandlerDeps } from "../context.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../effect-file-system.ts";
 import { BOOK_EXTENSIONS } from "../types.ts";
@@ -13,7 +13,8 @@ import { orphanedOutputs } from "./orphans.ts";
 import { engineSourceWork } from "./engine-source-work.ts";
 import { withHandlerLogs } from "./handler-logging.ts";
 import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
-import { PROCESSING_VERSIONS } from "../processing-versions.ts";
+import { failureKey } from "./engine-failure-key.ts";
+import { describeFreshness } from "./engine-freshness-describe.ts";
 
 /** Initial-pass composition for contract tests; production runs the live composition. */
 export function initialEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueOptions = {}) {
@@ -84,45 +85,12 @@ export function engineOptions(
     includeSource: includeCatalogueSource,
     freshness: {
       check: options.check,
-      describe: (event) => {
-        if (Predicate.isTagged(event, "BookCreated")) {
-          const source = relative(deps.config.filesPath, join(event.parent, event.name));
-
-          if (!includeCatalogueSource(source)) return undefined;
-
-          return {
-            sourcePaths: [source],
-            resultKind: "book",
-            processingVersion: options.processingVersions?.book ?? PROCESSING_VERSIONS.book,
-            outputPaths: [join(source, "entry.xml"), join(source, event.name)],
-          };
-        }
-
-        if (Predicate.isTagged(event, "FolderMetaSyncRequested")) {
-          const source = relative(deps.config.dataPath, event.path);
-
-          if (!includeCatalogueSource(source)) return undefined;
-
-          return {
-            sourcePaths: [source],
-            resultKind: "folder",
-            processingVersion: options.processingVersions?.folder ?? PROCESSING_VERSIONS.folder,
-            outputPaths: [join(source, "feed.xml"), join(source, "index.html"), ...(source ? [join(source, "_entry.xml")] : [])],
-          };
-        }
-
-        return undefined;
-      },
+      describe: describeFreshness(deps, options),
     },
     declare,
     onMinimum: options.onMinimum,
     key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${event.path}` : undefined),
-    failureKey: (event) =>
-      Predicate.isTagged(event, "FolderMetaSyncRequested")
-        ? `folder:${event.path}`
-        : Predicate.isTagged(event, "Ignored")
-          ? undefined
-          : `source:${join(event.parent, event.name)}`,
+    failureKey: failureKey(deps),
     handle: (event) => withHandlerLogs(deps, event, engineSourceWork(deps, event, handlers[event._tag])),
   };
 }

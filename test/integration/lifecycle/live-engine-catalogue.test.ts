@@ -85,6 +85,39 @@ test("HTTP watcher input publishes a real book without a manual resync", async (
   }
 });
 
+test("HTTP watcher input repairs an equal-stamp book replacement through its changed path hint", async () => {
+  // #given a published book and its original source timestamp
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const bookPath = join(sourcePath, "Book.fb2");
+  const stableStamp = new Date("2020-01-01T00:00:00Z");
+  await copyFile(fixture, bookPath);
+  await utimes(bookPath, stableStamp, stableStamp);
+  const runtime = createLiveEngineLifecycle(deps);
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+
+  try {
+    await runtime.start();
+    const original = await readFile(bookPath, "utf8");
+    await Bun.write(bookPath, original.replace("<book-title>Test Book</book-title>", "<book-title>Twin Book</book-title>"));
+    await utimes(bookPath, stableStamp, stableStamp);
+
+    // #when only the watcher route reports an equal-size, equal-mtime replacement
+    const admission = await post(server.url.href.slice(0, -1), "/events/books", {
+      parent: sourcePath,
+      name: "Book.fb2",
+      events: "CLOSE_WRITE",
+    });
+
+    await waitFor(async () => (await titles(outputPath)).includes("Twin Book"));
+    // #then the changed path hint reaches freshness and republishes the new metadata
+    expect({ admission, titles: await titles(outputPath) }).toEqual({ admission: { status: 202, text: "OK" }, titles: ["Twin Book"] });
+  } finally {
+    server.stop(true);
+    await runtime.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("HTTP resync while busy retains results and preserves forced follow-up after source replacement", async () => {
   // #given two real books and a held publication after extraction read the first replacement
   const { root, sourcePath, outputPath, deps } = await tree();

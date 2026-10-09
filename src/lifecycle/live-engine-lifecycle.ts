@@ -79,10 +79,6 @@ export function createLiveEngineLifecycle(
     },
     requestScan: (request: { readonly kind: "resync"; readonly force: boolean }) =>
       admit<PassAdmission>((session) => session.requestPass({ force: request.force }), "rejected"),
-    /**
-     * Independent facts: `available` (a usable root feed and page are in DATA), `verifying` (a pass is active or pending),
-     * `completed` (required work drained) and `errors` (retained failures). Engine fields stay as reported.
-     */
     async status() {
       const session = await handle.promise.catch(() => undefined);
       const { availability, ...engine } = session ? await Effect.runPromise(session.status) : STOPPED;
