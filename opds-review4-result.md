@@ -46,3 +46,19 @@
 ## Notes
 
 - Earlier full Docker attempts failed because Docker served truncated versions of newly edited files inside the container. The final split files passed targeted Docker tests and the full Docker suite.
+
+## 0.5.4 tarball pin
+
+- Commit: `chore: TEMPORARY test against sync engine 0.5.4 tarball`.
+- Source archive: `vendor/seigiard-sync-engine-0.5.4.tgz`, copied from `/var/folders/mg/mg22yjv17054nxmbq8_jkqnm0000gn/T/opencode/opds49-publish054-verified/seigiard-sync-engine-0.5.4.tgz`.
+- Archive SHA256: `8189be5782457412210788e624f85e1b83957347536be88a28954de30d829e8d`.
+- Lock integrity: `sha512-NgIpJK+d2GuLC5S4lCAigMazBVzFObP6+oF14Sz06vQgDpGB0PJyEN1m5WNhZts+xXRQp+hEmxCU6kw9Bqf5LQ==`.
+- Host equality: unpacked archive diffed cleanly against `node_modules/@seigiard/sync-engine`; installed version `0.5.4`.
+- Production-image equality: `opds49-r4-tarpin-prod` package diffed cleanly against the same unpacked archive; installed version `0.5.4`.
+- Consumer check added: `test/integration/lifecycle/queued-resync-retry.test.ts` verifies a resync queued during recoverable warm-start failure retries without a second request.
+- Gates: `fix`, `tsc`, `knip`, `build:ui:check`, `render:check`, `render:pure`, and `git diff --check` passed.
+- Docker tests: first full run found one weak memory-gate RSS failure; isolated `memory-leak-handler.test.ts` then passed `2 pass, 0 fail`; final full run passed `646 pass, 0 fail`.
+- e2e: `COMPOSE_PROJECT_NAME=opds49-r4-tarpin-e2e TEST_PORT=18054 TEST_BASE_URL=http://localhost:18054 STARTUP_PORT=18084 bun run test:e2e` passed `53 pass, 0 fail`.
+- Production smoke: `opds49-r4-tarpin-smoke` became healthy and served `/feed.xml` and `/index.html`; container installed engine version `0.5.4`.
+- Active leftover containers: none matching `opds49-r4-tarpin`.
+- Leftover Docker images: `opds49-r4-tarpin-e2e-opds:latest`, `opds49-r4-tarpin-full-test:latest`, `opds49-r4-tarpin-full2-test:latest`, `opds49-r4-tarpin-memory-test:latest`, `opds49-r4-tarpin-prod:latest`, `opds49-r4-tarpin-queued-test:latest`, `opds49-r4-tarpin-smoke:latest`.

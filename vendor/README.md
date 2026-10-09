@@ -8,4 +8,7 @@ dev-only `@seigiard/sync-engine-previous` alias that `engine-freshness.test.ts` 
 package upgrade against real handlers. Keep it and its lock integrity. It is not a runtime dependency and is not part
 of the production image's installed packages.
 
+`seigiard-sync-engine-0.5.4.tgz` is a temporary runtime tarball pin for the round 4 review loop. Replace it with the
+registry release before merge.
+
 The procedure to update the runtime package is in `docs/agents/shared-sync-engine.md`.
