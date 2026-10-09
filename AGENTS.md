@@ -15,7 +15,7 @@ src/
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
 ├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
 ├── processing-versions.ts # Book/folder processing versions; bump to rebuild existing output
-├── lifecycle/       # live-engine-lifecycle.ts (Promise adapter), live-engine-catalogue.ts, initial-engine-catalogue.ts (engineOptions + test compositions), engine-source-work.ts, engine-policy.ts, orphans.ts, handler-logging.ts, legacy-data.ts
+├── lifecycle/       # live-engine-lifecycle.ts (Promise adapter), live-engine-catalogue.ts, initial-engine-catalogue.ts (engineOptions + test compositions), engine-failure-key.ts (retained-failure identity), engine-freshness-describe.ts (freshness descriptors), engine-source-work.ts, engine-policy.ts, orphans.ts, handler-logging.ts, legacy-data.ts
 ├── processing/      # Event types, adapters and Effect handlers (no queue or consumer: the engine schedules)
 │   ├── effect-handler.ts # CatalogueDeps, CatalogueEvent, handler types
 │   ├── adapters/    # Raw → typed events: books-adapter
@@ -115,7 +115,7 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 <important if="you are extracting the shared synchronization engine, migrating an application to it, or updating the engine package">
 
-Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS runs `@seigiard/sync-engine@0.5.3`; TTRPG Map Viewer and OPML Generator run the shared released engine and their #64 evidence remains in `docs/agents/shared-sync-evidence.md`. `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure.
+Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md`. OPDS temporarily tests `@seigiard/sync-engine@0.5.4` from `vendor/seigiard-sync-engine-0.5.4.tgz`; TTRPG Map Viewer and OPML Generator run the shared released engine and their #64 evidence remains in `docs/agents/shared-sync-evidence.md`. `docs/agents/shared-sync-engine.md` holds the package boundary and the release and update procedure.
 
 </important>
 

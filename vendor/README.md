@@ -1,7 +1,7 @@
 # Local engine packages
 
-`package.json` selects the runtime engine from the npm registry. This directory keeps only the immutable
-previous-package upgrade fixture.
+`package.json` normally selects the runtime engine from the npm registry. During the round 4 and round 5 review loop it
+temporarily selects a local runtime tarball from this directory.
 
 `seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz` is a packed 0.3.0 archive. It is the
 dev-only `@seigiard/sync-engine-previous` alias that `engine-freshness.test.ts` installs to test a real

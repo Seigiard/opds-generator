@@ -432,6 +432,90 @@ test.each(["folder-to-book", "book-to-folder"] as const)("a source kind change r
   }
 });
 
+test("folder-to-book cleanup retries after a failed obsolete-folder removal", async () => {
+  // #given a folder source that becomes a same-name book after the first obsolete cleanup fails
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const name = "Novel.fb2";
+  await mkdir(join(sourcePath, name));
+  await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
+  let failCleanup = true;
+
+  const faultyDeps = {
+    ...deps,
+    fs: {
+      ...deps.fs,
+      rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
+        if (failCleanup && path === join(outputPath, name)) {
+          failCleanup = false;
+          throw new Error("Cleanup denied once");
+        }
+
+        await deps.fs.rm(path, options);
+      },
+    },
+  };
+
+  try {
+    const observation = await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(faultyDeps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              await rm(join(sourcePath, name), { recursive: true });
+              await copyFile(fixture, join(sourcePath, name));
+
+              // #when the first pass publishes the new book but cannot remove the old folder marker
+              await Effect.runPromise(
+                session.submit([
+                  CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
+                  CatalogueEvent.BookCreated({ parent: sourcePath, name }),
+                ]),
+              );
+              await Effect.runPromise(session.awaitCompletion);
+              const failed = await Effect.runPromise(session.status);
+
+              // #when a later pass retries the obsolete folder cleanup after cleanup is possible again
+              await Effect.runPromise(
+                session.submit([
+                  CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
+                  CatalogueEvent.BookCreated({ parent: sourcePath, name }),
+                ]),
+              );
+              await Effect.runPromise(session.awaitCompletion);
+              const retried = await Effect.runPromise(session.status);
+
+              return {
+                failedState: failed.state,
+                failedErrors: failed.errors.map((error) => error.work._tag),
+                retriedState: retried.state,
+                retriedErrors: retried.errors.map((error) => error.work._tag),
+                folderMarker: await pathExists(join(outputPath, name, "_entry.xml")),
+                bookMarker: await pathExists(join(outputPath, name, "entry.xml")),
+                rootReferences: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map(
+                  (entry) => entry.href ?? entry.acquisitions?.[0]?.href,
+                ),
+              };
+            }),
+          ),
+        ),
+      ),
+    );
+
+    // #then the obsolete folder marker is retried away and the parent lists the book representation
+    expect(observation).toEqual({
+      failedState: "complete-with-errors",
+      failedErrors: ["FolderDeleted"],
+      retriedState: "complete",
+      retriedErrors: [],
+      folderMarker: false,
+      bookMarker: true,
+      rootReferences: [`/${name}/${name}`],
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("source kind-change cleanup refuses a symlinked DATA ancestor", async () => {
   // #given a published book whose DATA ancestor is replaced by an operator-created symlink
   const { root, sourcePath, outputPath, deps } = await tree();
@@ -837,6 +921,70 @@ test("successful folder deletion clears that folder's retained publication error
       cleanedState: "complete",
       cleanedErrors: [],
       folderOutput: false,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("root folder publication failure clears when cascades refresh the same output under a normalized path", async () => {
+  // #given an output root configured with a trailing slash and a transient root write failure
+  const { root, sourcePath, outputPath, deps } = await tree();
+  const dataPath = `${outputPath}/`;
+  await mkdir(join(sourcePath, "Fiction"));
+  await copyFile(fixture, join(sourcePath, "Fiction", "Book.fb2"));
+  let failRootPage = false;
+
+  const faultyDeps = {
+    ...deps,
+    config: { ...deps.config, dataPath },
+    fs: {
+      ...deps.fs,
+      atomicWrite: async (path: string, content: string) => {
+        if (failRootPage && path === join(outputPath, "index.html")) throw new Error("Root page denied");
+
+        await deps.fs.atomicWrite(path, content);
+      },
+    },
+  };
+
+  try {
+    const observation = await Effect.runPromise(
+      Effect.scoped(
+        openEngineCatalogue(faultyDeps).pipe(
+          Effect.flatMap((session) =>
+            io(async () => {
+              failRootPage = true;
+              await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: dataPath })]));
+              await Effect.runPromise(session.awaitCompletion);
+              const failed = await Effect.runPromise(session.status);
+              failRootPage = false;
+
+              // #when a successful root refresh uses the normalized join()/dirname() spelling
+              await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: outputPath })]));
+              await Effect.runPromise(session.awaitCompletion);
+              const cleaned = await Effect.runPromise(session.status);
+
+              return {
+                failedState: failed.state,
+                failedErrors: failed.errors.map((error) => error.work._tag),
+                cleanedState: cleaned.state,
+                cleanedErrors: cleaned.errors.map((error) => error.work._tag),
+                titles: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+              };
+            }),
+          ),
+        ),
+      ),
+    );
+
+    // #then the successful root refresh clears the earlier retained root failure
+    expect(observation).toEqual({
+      failedState: "complete-with-errors",
+      failedErrors: ["FolderMetaSyncRequested"],
+      cleanedState: "complete",
+      cleanedErrors: [],
+      titles: ["Fiction"],
     });
   } finally {
     await rm(root, { recursive: true, force: true });

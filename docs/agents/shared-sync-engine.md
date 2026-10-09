@@ -1,6 +1,6 @@
 # Shared synchronization engine: production adoption, live catalogue, freshness, recovery, shutdown and readiness (#50–#64)
 
-The separate repository is `Seigiard/sync-engine`. OPDS depends on the released npm package
+The separate repository is `Seigiard/sync-engine`. OPDS normally depends on the released npm package
 `@seigiard/sync-engine` (exact version in `package.json`; the lock records the registry tarball and its integrity).
 Its exact `effect@4.0.1` peer uses OPDS's runtime; Effect is not bundled. The engine is the only synchronization
 path in production: `server.ts` starts `createLiveEngineLifecycle` and nothing else. TTRPG Map Viewer and
@@ -328,9 +328,13 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 
 ## Final release evidence (#64 and OPDS review update)
 
-OPDS currently pins `@seigiard/sync-engine@0.5.3`, published from engine commit
-`d70a8903d92cdc81ea03a3782b5b821fab4cc165` with registry integrity
-`sha512-H0zW/UZlh76lGwdBTK0HU2udFymrdXtHNKUx02LA3KAYYP0WmjnAO8288Efxt6gu4aHbn6ffx1yIsZMN2eLppQ==`. OPDS package equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.2`: failed-pass watcher hints and `force` carry into an already queued follow-up; a handler defect in a later live pass rejects further admission and releases the lease; forced/notified requests invalidate active freshness immediately; `undefined` active work item is visible in status; `key`/`failureKey` callback defects settle completion; README release wording.
+OPDS currently tests `@seigiard/sync-engine@0.5.4` from the temporary local archive
+`vendor/seigiard-sync-engine-0.5.4.tgz`, built from engine commit `8c103c1`. Archive SHA256:
+`8189be5782457412210788e624f85e1b83957347536be88a28954de30d829e8d`. Lock integrity:
+`sha512-NgIpJK+d2GuLC5S4lCAigMazBVzFObP6+oF14Sz06vQgDpGB0PJyEN1m5WNhZts+xXRQp+hEmxCU6kw9Bqf5LQ==`.
+Replace this `file:` pin with the registry release before merge, then update the registry integrity here. OPDS package
+equality and gate evidence is recorded inline in `docs/agents/shared-sync-evidence.md`. Changes over `0.5.3`: a queued
+resync after a recoverable warm-start opening failure retries in the same live scope.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

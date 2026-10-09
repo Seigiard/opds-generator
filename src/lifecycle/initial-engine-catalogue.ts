@@ -13,7 +13,7 @@ import { orphanedOutputs } from "./orphans.ts";
 import { engineSourceWork } from "./engine-source-work.ts";
 import { withHandlerLogs } from "./handler-logging.ts";
 import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
-import { failureKey } from "./engine-failure-key.ts";
+import { failureKey, folderFailureKey } from "./engine-failure-key.ts";
 import { describeFreshness } from "./engine-freshness-describe.ts";
 
 /** Initial-pass composition for contract tests; production runs the live composition. */
@@ -89,7 +89,7 @@ export function engineOptions(
     },
     declare,
     onMinimum: options.onMinimum,
-    key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${event.path}` : undefined),
+    key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${folderFailureKey(event.path)}` : undefined),
     failureKey: failureKey(deps),
     handle: (event) => withHandlerLogs(deps, event, engineSourceWork(deps, event, handlers[event._tag])),
   };
