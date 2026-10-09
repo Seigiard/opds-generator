@@ -330,13 +330,13 @@ immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previous-p
 
 ## Final release evidence (#64 and OPDS review update)
 
-OPDS currently tests the rebuilt reviewed `@seigiard/sync-engine` archive from the temporary local archive
+OPDS currently tests the rebuilt reviewed r4 `@seigiard/sync-engine` archive from the temporary local archive
 `vendor/seigiard-sync-engine-0.5.5.tgz`. It is not a registry dependency. Registry `0.5.4` is an earlier superseded
 candidate with the unbounded failed-opening retry loop, so consumers must not repin to it. Before merge, publish the
-rebuilt reviewed engine as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary `vendor/` runtime pin.
+rebuilt reviewed engine archive as `0.5.5`, repin OPDS to registry `0.5.5`, and remove the temporary `vendor/` runtime pin.
 Record the published registry identity and package equality in `docs/agents/shared-sync-evidence.md`. Changes over
 `0.5.3`: a queued resync after a recoverable warm-start opening failure retries in the same live scope. Changes over
-the registry `0.5.4` candidate: persistent failed-opening retries are bounded to admitted requests, descendants below a file ancestor observe as absent instead of raising `Source ancestor is not a directory`, freshness stamp `ENOTDIR` is treated as absence, reopen triggers are combined, and live status exposes `followUp`.
+the registry `0.5.4` candidate: persistent failed-opening retries are bounded to admitted requests, descendants below a file ancestor observe as absent instead of raising `Source ancestor is not a directory`, freshness stamp and declared-output `ENOTDIR` are treated as absence, request payloads are owned in one holder so a failed one-shot retry keeps its force and hints, reconcile ticks no longer keep a retry cycle alive, reopen triggers are combined, and live status exposes `followUp`.
 
 The common release is `@seigiard/sync-engine@0.5.0`, published from engine commit
 `63f4ac1714738ec7e93b117097ab2b88f2ab0150` with registry integrity

@@ -9,7 +9,7 @@ package upgrade against real handlers. Keep it and its lock integrity. It is not
 of the production image's installed packages.
 
 `seigiard-sync-engine-0.5.5.tgz` is a temporary runtime tarball pin for the rebuilt reviewed engine `0.5.5`. Registry `0.5.4`
-is a superseded candidate and must not be pinned. Before merge, publish the rebuilt reviewed engine as `0.5.5`, repin
+is a superseded candidate and must not be pinned. Before merge, publish the rebuilt reviewed engine archive as `0.5.5`, repin
 OPDS to registry `0.5.5`, and remove this temporary runtime archive.
 
 The procedure to update the runtime package is in `docs/agents/shared-sync-engine.md`.
