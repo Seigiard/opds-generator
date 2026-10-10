@@ -35,7 +35,7 @@
     "effect": "4.0.1",
     "fast-xml-parser": "^5.11.2",
     "hono": "^4.13.13",
-    "knip": "^6.40.0",
+    "knip": "^6.41.0",
     "node-unrar-js": "^2.0.2",
     "opds-ts": "^2.1.1",
     "sharp": "^0.35.5",
@@ -47,7 +47,7 @@
     "@seigiard/sync-engine-previous": "file:vendor/seigiard-sync-engine-0.3.0-59ec12f16880982f00d7af78de771e885f4022cb.tgz",
     "@types/bun": "latest",
     "autoprefixer": "^10.6.1",
-    "cssnano": "^9.3.2",
+    "cssnano": "^9.5.0",
     "lefthook": "^2.2.1",
     "neverthrow": "^8.2.0",
     "oxfmt": "^0.72.0",
@@ -55,7 +55,7 @@
     "oxlint-tsgolint": "7.0.2003",
     "postcss": "^8.5.29",
     "postcss-nesting": "^14.0.3",
-    "vite": "^8.3.3"
+    "vite": "^8.3.4"
   },
   "peerDependencies": {
     "typescript": "^5"
