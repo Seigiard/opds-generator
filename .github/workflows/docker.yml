@@ -14,12 +14,15 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.changes.outputs.docs_only }}
     steps:
       - uses: actions/checkout@v7
         with:
           # build:ui:check regenerates static/ from ui/, which needs the vendored
           # foliate-js submodule; the build job below ships committed static/ only.
           submodules: true
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -31,38 +34,77 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Select docs-only checks
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          docs_only=false
+          if [[ "$REF_TYPE" != "tag" ]]; then
+            base="$PUSH_BEFORE"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then base="$PR_BASE"; fi
+            if [[ -n "$base" && ! "$base" =~ ^0+$ ]] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+              changes=$(mktemp)
+              if git diff --no-renames --name-only -z "$base" HEAD > "$changes" && [[ -s "$changes" ]]; then
+                docs_only=true
+                while IFS= read -r -d '' changed_path; do
+                  case "$changed_path" in
+                    AGENTS.md|CLAUDE.md|README.md|GLOSSARY.md|docs/*.md) ;;
+                    *) docs_only=false; break ;;
+                  esac
+                done < "$changes"
+              fi
+              rm -f "$changes"
+            fi
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs_only=$docs_only"
+
       - name: Check formatting
         run: bun run format
 
       - name: Check types
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun --bun tsc --noEmit
 
       - name: Run lint
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run lint
 
       - name: Check unused exports and dependencies
+        if: steps.changes.outputs.docs_only != 'true'
         run: npx knip
 
       - name: Check static/ artifacts freshness
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run build:ui:check
 
       - name: Check renderer HTML goldens
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run render:check
 
       - name: Check renderer browser imports
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run render:pure
 
       - name: Run tests in Docker
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run test
 
       # Full e2e: nginx routing (reader CSP + cache, 206, /resync CSRF) and event logging.
       # The event-logging suite polls for events and passed 10 consecutive runs before joining CI.
       - name: Run e2e tests (nginx routing, event logging)
+        if: steps.changes.outputs.docs_only != 'true'
         run: bun run test:e2e
 
   build:
     runs-on: ubuntu-latest
     needs: test
+    if: needs.test.outputs.docs_only != 'true'
     permissions:
       contents: read
       packages: write

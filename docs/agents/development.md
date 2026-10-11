@@ -32,15 +32,21 @@ After any runtime dependency change, run `bun run rebuild:test` before tests. `h
 
 ## Finishing a task
 
-Run these checks and fix failures before committing:
+Select local checks by the affected area and fix their failures before committing:
+
+- Documentation: check formatting of changed files, review local pointers, and confirm that the intended requirements are preserved.
+- Workflows: validate workflow syntax and verify the changed behavior.
+- Application code, dependencies, tests, generated assets, and build or runtime configuration: run the gates below. Markdown used as a build input or test fixture belongs to this area.
+
+Mixed changes require the checks for each affected area.
 
 1. `bun run fix` must end with 0 warnings and 0 errors.
 2. `bun --bun tsc --noEmit` must pass.
-3. `bun run test` runs in Docker and must have 0 failures before every commit.
+3. `bun run test` runs in Docker and must have 0 failures.
 4. `npx knip` must pass.
 5. For `ui/` or `src/render` changes, run `bun run build:ui`. For `src/render` markup changes, follow `viewer.md`: bump the folder processing version when needed, run `bun run render:golden`, and commit generated output. For extractor metadata, cover handling, or book entry/link changes, bump `PROCESSING_VERSIONS.book`.
 6. Confirm `git status` includes any changed `static/` and `test/golden/` outputs.
 
 The pre-commit hook is configured in `lefthook.yml`. It formats and lints staged files, re-stages its fixes, and typechecks staged TypeScript. It does not replace the Docker test or Knip gates. A clone with `.git` installs it through `bun install`; Docker installs skip it.
 
-CI runs these quality gates separately, then the full e2e suite.
+`.github/workflows/docker.yml` owns CI check selection. Its `test` job also runs for documentation-only changes.

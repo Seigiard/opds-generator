@@ -55,7 +55,7 @@ tools/oxlint/opds/   # Project Oxlint rules (no-direct-effect-promise); never ad
 
 <important if="you are running a command, changing dependencies, or finishing a task">
 
-Read `docs/agents/development.md` first. It owns the command reference, the pinned-Bun UI rule, Docker cleanup, dependency image rebuilds, and the finishing gates. Docker tests must have 0 failures before every commit.
+Read `docs/agents/development.md` first. It owns the command reference, conditional verification policy, the pinned-Bun UI rule, Docker cleanup, dependency image rebuilds, and the finishing gates.
 
 </important>
 
