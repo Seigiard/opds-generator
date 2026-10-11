@@ -20,7 +20,16 @@ The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, recon
 - Cold start: the root minimum publishes first. Book and folder work follows and gates `completed`, not `available`.
 - A source read failure is never deletion. Cleanup needs a fresh observation of absence.
 - nginx learns "initializing" from files: missing `feed.xml` or `index.html` answers 503.
-- The Docker `HEALTHCHECK` (and Compose probes) run `healthcheck.sh`: Bun reports `available`, and nginx serves `/feed.xml` and `/index.html`. Health means the minimum is available. It does not wait for verification.
+- The health check uses the minimum-readiness contract below. It does not wait for verification.
+
+## HTTP and nginx boundary
+
+nginx on port 80 is external. Bun on port 3000 is localhost-only. Bun serves `POST /events/books` for the `/books` watcher and proxied `POST /resync[?force=1]`; its resync responses follow the contract below.
+
+- Routing is selected by URL, not content negotiation. Browsers use `/` to redirect to `/index.html` and `/<folder>/` for `index.html`. Readers use `/opds` for root `feed.xml` as 200 XML and `/<folder>/feed.xml` for folders. `/static/*` maps to `/app/static`; downloads and covers map to `/data/*`.
+- During initial synchronization or a cascade, folder URLs and missing `index.html` or `feed.xml` return 503 through `@check_initializing`.
+- `/resync` requires `ADMIN_USER` and `ADMIN_TOKEN`. Without them, `entrypoint.sh` removes the auth block through `AUTH_ENABLED`.
+- `healthcheck.sh` is the image and Compose health check. It runs inside the container because Bun's status endpoint is local. It needs `"available":true` from `/status` and nginx 200 responses for `/feed.xml` and `/index.html`. It uses `wget` because Alpine has no `curl`. A feed alone is unhealthy.
 
 ## Scans and reconciliation
 

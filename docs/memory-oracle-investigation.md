@@ -8,6 +8,10 @@ changed the probe schedule, added an exact JS-object gate and a calibration test
 The RSS limits (8, 3 for full-chain, 5 for the handler chain) are unchanged.
 The handler-chain RSS gate remains weak at its limit; see "Known limits".
 
+## Current gate contract
+
+The gates run in `test/helpers/leak-probe.ts` subprocesses. RSS limits are 8 KB per operation, 3 KB for `full-chain`, 5 KB for `handler-chain-effect`, and 1 KB per engine work-scheduler event or production-lifecycle cycle. JS-object growth must stay below 0.5 per operation, event, or cycle for batched scenarios. `memory-oracle-calibration.test.ts` proves both gates turn red under retained memory. Keep these limits fixed: a red result is a finding, not a reason to raise a threshold.
+
 The experimental patch is preserved in `docs/memory-oracle-experiment.patch`.
 It is research material from the first round, superseded by the redesign.
 Apply it in a disposable checkout before using the diagnostic launcher below.
