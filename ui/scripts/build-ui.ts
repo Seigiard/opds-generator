@@ -36,18 +36,11 @@ async function buildCss(): Promise<void> {
   // the build:ui:check freshness gate hostage to formatter version drift across machines.
   const result = await postcss(pipeline).process(source, { from: undefined });
   await Bun.write(outPath, result.css);
-  await Bun.write(join(staticDir, "_app", "style.css"), result.css);
   console.log(`build:ui → ${outPath}`);
 }
 
 async function buildShell(): Promise<void> {
-  const appDir = join(staticDir, "_app");
-  const faviconDir = join(appDir, "favicon");
-
-  await rm(appDir, { recursive: true, force: true });
-  await mkdir(faviconDir, { recursive: true });
   await Bun.write(join(staticDir, "index.html"), await Bun.file(shellSource).text());
-  await cp(join(staticDir, "favicon"), faviconDir, { recursive: true });
   console.log(`build:ui → ${join(staticDir, "index.html")}`);
 }
 
@@ -65,7 +58,6 @@ async function buildJs(): Promise<void> {
   }
 
   await Bun.write(join(staticDir, "main.js"), await build.outputs[0]!.text());
-  await Bun.write(join(staticDir, "_app", "main.js"), await build.outputs[0]!.text());
   console.log(`build:ui → ${join(staticDir, "main.js")}`);
 }
 
