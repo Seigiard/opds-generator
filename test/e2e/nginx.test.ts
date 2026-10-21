@@ -113,6 +113,17 @@ describe("nginx integration", () => {
       expect(response.status).toBe(404);
     });
 
+    test("GET feed.xml inside a book output directory returns a steady-state 404", async () => {
+      // #given the production sync created a book directory, which has entry.xml but never feed.xml
+      const path = "/_catalog/test/Test%20Book%20-%20Test%20Author.epub/feed.xml";
+
+      // #when
+      const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });
+
+      // #then the permanent miss is not reported as an initializing folder feed
+      expect(response.status).toBe(404);
+    });
+
     test("AE2: book download returns 200 with Content-Disposition", async () => {
       // discover an acquisition href from a real feed
       const feed = await (await fetch(`${BASE_URL}/_catalog/test/feed.xml`)).text();
@@ -196,6 +207,17 @@ describe("nginx integration", () => {
   });
 
   describe("app files", () => {
+    test("GET /_app/ and /_app/index.html do not expose the browser shell", async () => {
+      // #given reserved application-asset paths that are not public shell routes
+      const paths = ["/_app/", "/_app/index.html"];
+
+      // #when
+      const statuses = await Promise.all(paths.map(async (path) => (await fetch(`${BASE_URL}${path}`, { redirect: "manual" })).status));
+
+      // #then
+      expect(statuses).toEqual([404, 404]);
+    });
+
     test("GET /_app/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
       const response = await fetch(`${BASE_URL}/_app/style.css`);
       expect(response.status).toBe(200);
@@ -514,7 +536,7 @@ describe("nginx integration", () => {
       const polled: number[] = [];
 
       for (let i = 0; i < 40; i++) {
-        polled.push((await fetch(`${BASE_URL}/_catalog/feed.xml`)).status, (await fetch(`${BASE_URL}/index.html`)).status);
+        polled.push((await fetch(`${BASE_URL}/_catalog/feed.xml`)).status, (await fetch(`${BASE_URL}/_catalog/test/feed.xml`)).status);
         await new Promise((r) => setTimeout(r, 25));
       }
 

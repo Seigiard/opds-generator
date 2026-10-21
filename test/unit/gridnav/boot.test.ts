@@ -30,6 +30,7 @@ type ScenarioResult = {
   readonly homeHref: string | null;
   readonly hasGrid: boolean;
   readonly fetchCount: number;
+  readonly fetchedUrls: readonly string[];
   readonly retryDelayMs: number | null;
   readonly title: string | null;
 };
@@ -48,10 +49,15 @@ function stateMessage(state: HappyElement | null): string | null {
   return copy.textContent.trim();
 }
 
-async function runScenario(name: string, responses: readonly Response[]): Promise<ScenarioResult> {
-  const browser = new Window({ url: "http://catalog.test/fiction/" });
+async function runScenario(
+  name: string,
+  responses: readonly Response[],
+  browserUrl = "http://catalog.test/fiction/",
+): Promise<ScenarioResult> {
+  const browser = new Window({ url: browserUrl });
   browser.document.body.innerHTML = '<div id="app"></div>';
   let fetchCount = 0;
+  const fetchedUrls: string[] = [];
   let retryDelayMs: number | null = null;
 
   for (const property of GLOBAL_PROPERTIES) {
@@ -69,9 +75,10 @@ async function runScenario(name: string, responses: readonly Response[]): Promis
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     writable: true,
-    value: async (): Promise<Response> => {
+    value: async (input: string | URL | Request): Promise<Response> => {
       const response = responses[Math.min(fetchCount, responses.length - 1)];
       fetchCount += 1;
+      fetchedUrls.push(input instanceof Request ? input.url : input.toString());
 
       if (!response) throw new Error("No response configured");
 
@@ -121,6 +128,7 @@ async function runScenario(name: string, responses: readonly Response[]): Promis
     homeHref: app.querySelector<HappyAnchorElement>('a[href="/"]')?.getAttribute("href") ?? null,
     hasGrid,
     fetchCount,
+    fetchedUrls,
     retryDelayMs,
     title: hasGrid ? browser.document.title : null,
   };
@@ -149,6 +157,7 @@ describe("browser shell boot", () => {
         missingMessage: stateMessage(null),
       },
       rendered: await runScenario("rendered", [feed()]),
+      renderedWithoutTrailingSlash: await runScenario("rendered-without-trailing-slash", [feed()], "http://catalog.test/fiction"),
       starting: await runScenario("starting", [
         new Response('{"status":"initializing"}', { status: 503, headers: { "Retry-After": "60" } }),
         feed(),
@@ -175,6 +184,19 @@ describe("browser shell boot", () => {
         homeHref: "/",
         hasGrid: true,
         fetchCount: 1,
+        fetchedUrls: ["/_catalog/fiction/feed.xml"],
+        retryDelayMs: null,
+        title: "fiction",
+      },
+      renderedWithoutTrailingSlash: {
+        stateClass: null,
+        stateText: null,
+        transientClass: null,
+        transientText: null,
+        homeHref: "/",
+        hasGrid: true,
+        fetchCount: 1,
+        fetchedUrls: ["/_catalog/fiction/feed.xml"],
         retryDelayMs: null,
         title: "fiction",
       },
@@ -186,6 +208,7 @@ describe("browser shell boot", () => {
         homeHref: "/",
         hasGrid: true,
         fetchCount: 2,
+        fetchedUrls: ["/_catalog/fiction/feed.xml", "/_catalog/fiction/feed.xml"],
         retryDelayMs: 30_000,
         title: "fiction",
       },
@@ -197,6 +220,7 @@ describe("browser shell boot", () => {
         homeHref: "/",
         hasGrid: false,
         fetchCount: 1,
+        fetchedUrls: ["/_catalog/fiction/feed.xml"],
         retryDelayMs: null,
         title: null,
       },
@@ -208,6 +232,7 @@ describe("browser shell boot", () => {
         homeHref: "/",
         hasGrid: false,
         fetchCount: 1,
+        fetchedUrls: ["/_catalog/fiction/feed.xml"],
         retryDelayMs: null,
         title: null,
       },
