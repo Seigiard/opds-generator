@@ -10,7 +10,8 @@ Generated feed and entry links use `/_catalog/`. The static shell at `static/ind
 - Preview with `bun run dev:ui`. Then run `bun run build:ui`. Markup and CSS changes do not need a processing-version bump. Bump `PROCESSING_VERSIONS.folder` when feed or entry links, or `_entry.xml`, change; a restart or ordinary pass then rebuilds stale folders. `POST /resync?force=1` also reprocesses everything.
 - `test/golden/` is byte-exact and `.prettierignore`'d. Every markup change needs `bun run render:golden` and a commit of the goldens.
 - `ui/styles/variations.css` cycles through four fixed cover proportions and colors. Each card and its popup share the same variant.
-- Book popups use hash + CSS `:target` and work without JS. `main.js` is progressive enhancement only.
+- JavaScript is required: `main.js` boots the shell, renders the catalogue and opens dialogs with `showModal()`.
+  Without JavaScript, only the `<noscript>` link to `/opds` is available.
 
 ## Escaping
 

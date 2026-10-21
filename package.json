@@ -67,7 +67,6 @@
       "ui/scripts/*.ts",
       "ui/gridnav/main.ts",
       "ui/vite.config.ts",
-      "ui/playground/main.ts",
       "ui/playground/reader-preview.ts",
       "ui/reader/reader.ts",
       "test/**/*.test.ts"

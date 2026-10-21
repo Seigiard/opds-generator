@@ -17,7 +17,7 @@ Served paths are split by prefix, as in TTRPG Map Viewer: `/_app/` for the shell
 
 ## Consequences
 
-- The browser view needs JavaScript. A `<noscript>` link points at the folder's feed.
+- The browser view needs JavaScript. A `<noscript>` link points at the root OPDS feed (`/opds`).
 - A markup or style change ships with `static/` and needs no processing-version bump. Changing the feed's link scheme or content still does.
 - Book metadata reaches the page through `innerHTML`, so escaping in `renderHtml` stays the first line of defence and a Content-Security-Policy header on the shell is the second.
 - `renderHtml` returns a body fragment; the shell owns `<head>`. Golden files pin the fragment.

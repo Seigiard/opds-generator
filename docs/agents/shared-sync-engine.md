@@ -162,20 +162,19 @@ Ordinary freshness tests use the configured OPDS state.
 
 ## Startup readiness (#56, health #57)
 
-Minimum = the root `feed.xml` and `index.html`. `initialEngineCatalogue` declares it as
-`minimum: [root]` in the engine plan; book and folder work follow as remaining required work.
-Remaining work gates `completed`, not `available`. A root `index.html` write failure is a
-handler failure, so a feed alone never counts as the minimum. The root is declared again at the
+Minimum = the root `feed.xml`. `initialEngineCatalogue` declares it as `minimum: [root]` in the
+engine plan; book and folder work follow as remaining required work. Remaining work gates
+`completed`, not `available`. A feed alone is a usable minimum. The root is declared again at the
 end of `work` so the final feed lists every book.
 
 `GET /status` (Bun-local) reports four independent facts beside the engine fields:
 
-| Fact                         | Meaning                                                                                                                                   |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `available`, `availableFrom` | A usable minimum is in DATA. `prior-output`: both root files existed before verification. `minimum-publication`: this run published them. |
-| `verifying`                  | The first pass is opening, or a pass is active or pending.                                                                                |
-| `completed`                  | Required work drained and nothing is verifying.                                                                                           |
-| `errors`                     | `{ source: "work" \| "pass", message }` records. `work` entries are typed failures retained after completion; `pass` is a failed pass.    |
+| Fact                         | Meaning                                                                                                                                |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `available`, `availableFrom` | A usable minimum is in DATA. `prior-output`: the root feed existed before verification. `minimum-publication`: this run published it.  |
+| `verifying`                  | The first pass is opening, or a pass is active or pending.                                                                             |
+| `completed`                  | Required work drained and nothing is verifying.                                                                                        |
+| `errors`                     | `{ source: "work" \| "pass", message }` records. `work` entries are typed failures retained after completion; `pass` is a failed pass. |
 
 Failure map for the first pass, owned by the engine's `recovery` option: without a usable minimum the start
 promise rejects and the server exits 1 (the entrypoint passes that status to the container). With a usable
@@ -184,10 +183,11 @@ failure, and the engine reopens the session in the same scope on `POST /resync`,
 reconcile tick. Download links are symlinks to the source, so they cannot be served while the source itself is absent.
 
 Deployment health (#57): the image `HEALTHCHECK` and every Compose probe run `healthcheck.sh`. It needs
-`"available":true` from Bun's `/status` (read inside the container) and a 200 from nginx for `/feed.xml` and
-`/index.html`. A feed without its page is unhealthy. A running verification is healthy once the minimum is
+`"available":true` from Bun's `/status` (read inside the container) and a 200 from nginx for
+`/_catalog/feed.xml`. A feed alone is healthy. A running verification is healthy once the minimum is
 available. `test/e2e/startup-readiness.test.ts` pins the image's declared check and runs it in the cold
-(feed-only → unhealthy, minimum → healthy) and warm (prior output during held verification → healthy) scenarios.
+(missing feed → unhealthy, feed-only → healthy) and warm (prior output during held verification → healthy)
+scenarios.
 
 `test/e2e/startup-readiness.test.ts` runs the production image (server, nginx, entrypoint) per
 scenario. `test/e2e/startup/` holds its Compose overlay: a PATH `unzip` wrapper that holds real
@@ -202,11 +202,10 @@ In-process counterpart: `test/integration/lifecycle/startup-readiness.test.ts`.
 
 Verification record (#56). The full Docker suite (`bun run test`, project `opds49-56`) passed with
 0 failures on the committed tree: 707 pass, 1075 assertions, 61 files, 338.79 s, exit 0. An earlier
-full run ended 706 pass and 1 fail: `cascade-flow` still pinned the old behavior "a failed
-`index.html` write is logged and the handler succeeds". Root and folder page failures are now handler
-failures by design, so that test was replaced (handler fails, `feed.xml` exists, no `_entry.xml`)
-and the handler contract is owned by `folder-meta-sync.test.ts`. The memory and RSS gates ran at
-unchanged limits in both runs.
+full run ended 706 pass and 1 fail because `cascade-flow` still pinned obsolete page-publication
+behavior. Root and folder page failures are no longer part of the handler contract, so that test was
+replaced (handler fails, `feed.xml` exists, no `_entry.xml`) and the contract is owned by
+`folder-meta-sync.test.ts`. The memory and RSS gates ran at unchanged limits in both runs.
 
 ## Output ownership
 
