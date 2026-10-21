@@ -3,7 +3,11 @@ import { $ } from "bun";
 
 const renderDir = join(import.meta.dir, "..", "..", "src", "render");
 
+const gridnavDir = join(import.meta.dir, "..", "gridnav");
+
 const modules = ["feed-model.ts", "feed-xml.ts", "feed-html.ts", "parse-feed.ts"].map((f) => join(renderDir, f));
+
+modules.push(join(gridnavDir, "parse-feed-dom.ts"));
 
 // Transitive purity: a browser-target build fails on any node builtin reached
 // directly or through the dependency graph.
@@ -16,10 +20,10 @@ if (!build.success) {
 
 // Bun APIs are ambient globals, invisible to the bundler — the scoped
 // no-restricted-globals rule in .oxlintrc.json catches them.
-const lint = await $`oxlint --deny-warnings src/render/`.nothrow();
+const lint = await $`oxlint --deny-warnings src/render/ ui/gridnav/parse-feed-dom.ts`.nothrow();
 
 if (lint.exitCode !== 0) {
   throw new Error("render:pure — Bun global used in src/render/* (see oxlint output above)");
 }
 
-console.log(`render:pure → ${modules.length} render modules browser-importable, no Bun globals`);
+console.log(`render:pure → ${modules.length} browser modules browser-importable, no Bun globals`);

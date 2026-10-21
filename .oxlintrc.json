@@ -218,7 +218,7 @@
       }
     },
     {
-      "files": ["src/render/**/*.ts"],
+      "files": ["src/render/**/*.ts", "ui/gridnav/parse-feed-dom.ts"],
       "rules": {
         "no-restricted-globals": [
           "error",
