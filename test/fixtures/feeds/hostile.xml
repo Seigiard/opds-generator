@@ -3,8 +3,8 @@
   <id>urn:opds:catalog:hostile</id>
   <title>Hostile &lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt; &amp; 'quotes' "dquotes"</title>
   <updated>2026-01-01T00:00:00.000Z</updated>
-  <link rel="self" href="/hostile/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="self" href="/_catalog/hostile/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/_catalog/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 <entry>
   <id>urn:opds:catalog:hostile/Sub</id>
   <title>Folder " onmouseover=alert(1) 'apos'</title>
@@ -38,7 +38,7 @@ Break Author</name></author>
   <summary type="text">Legit summary with a &amp; ampersand.</summary>
   <dc:format>EPUB</dc:format>
   <content type="text">1.0 MB</content>
-  <link rel="http://opds-spec.org/image/thumbnail" href="/hostile/preescaped.epub/thumb.jpg" type="image/jpeg"/>
-  <link rel="http://opds-spec.org/acquisition/open-access" href="/hostile/preescaped.epub/file" type="application/epub+zip"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/_catalog/hostile/preescaped.epub/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/hostile/preescaped.epub/file" type="application/epub+zip"/>
 </entry>
 </feed>

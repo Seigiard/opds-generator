@@ -4,31 +4,31 @@
   <id>urn:opds:catalog:root</id>
   <title>Catalog</title>
   <updated>2026-07-14T05:25:47.534Z</updated>
-  <link rel="self" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  <link rel="start" href="/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="self" href="/_catalog/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start" href="/_catalog/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 <entry>
   <id>urn:opds:catalog:comics</id>
   <title>Comics</title>
   <updated>2026-07-14T05:25:47.495Z</updated>
-  <link rel="subsection" href="/comics/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="subsection" href="/_catalog/comics/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>
 <entry>
   <id>urn:opds:catalog:nonfiction</id>
   <title>Nonfiction</title>
   <updated>2026-07-14T05:25:47.521Z</updated>
-  <link rel="subsection" href="/nonfiction/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="subsection" href="/_catalog/nonfiction/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>
 <entry>
   <id>urn:opds:catalog:pdf</id>
   <title>Pdf</title>
   <updated>2026-07-14T05:25:47.516Z</updated>
-  <link rel="subsection" href="/pdf/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="subsection" href="/_catalog/pdf/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>
 <entry>
   <id>urn:opds:catalog:test</id>
   <title>Test</title>
   <updated>2026-07-14T05:25:47.511Z</updated>
-  <link rel="subsection" href="/test/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="subsection" href="/_catalog/test/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>
 <entry>
   <id>urn:opds:book:manual-test.pdf</id>
@@ -42,8 +42,8 @@
     <name>Test Author</name>
   </author>
   <content type="text">90.1 KB</content>
-  <link rel="http://opds-spec.org/image" href="/manual-test.pdf/cover.jpg" type="image/jpeg"/>
-  <link rel="http://opds-spec.org/image/thumbnail" href="/manual-test.pdf/thumb.jpg" type="image/jpeg"/>
-  <link rel="http://opds-spec.org/acquisition/open-access" href="/manual-test.pdf/file" type="application/pdf"/>
+  <link rel="http://opds-spec.org/image" href="/_catalog/manual-test.pdf/cover.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/_catalog/manual-test.pdf/thumb.jpg" type="image/jpeg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/manual-test.pdf/file" type="application/pdf"/>
 </entry>
 </feed>

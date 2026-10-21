@@ -36,8 +36,8 @@ describe("parseFeed", () => {
     expect(model.id).toBe("urn:opds:catalog:nonfiction");
     expect(model.title).toBe("Nonfiction");
     expect(model.kind).toBe("acquisition");
-    expect(model.selfHref).toBe("/nonfiction/feed.xml");
-    expect(model.startHref).toBe("/feed.xml");
+    expect(model.selfHref).toBe("/_catalog/nonfiction/feed.xml");
+    expect(model.startHref).toBe("/_catalog/feed.xml");
     expect(model.entries).toHaveLength(6);
     // and the leading folder entry classifies as a folder
     expect(model.entries[0]?.kind).toBe("folder");

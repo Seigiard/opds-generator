@@ -411,7 +411,7 @@ test("book and folder processing versions rebuild their own kinds and required d
       bookVersion: [true, true, false],
       folderVersion: [false, true, true],
       titles: ["Test Book"],
-      parent: [{ href: "/Fiction/feed.xml", summary: "📚 1" }],
+      parent: [{ href: "/_catalog/Fiction/feed.xml", summary: "📚 1" }],
       download: true,
     });
   } finally {

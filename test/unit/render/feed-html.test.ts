@@ -106,10 +106,26 @@ describe("renderHtml", () => {
     for (let i = 1; i <= bookCount; i++) expect(cardTargets).toContain(`#book-${i}`);
   });
 
-  test("R7: references the bundled main.js and no unpkg runtime scripts", async () => {
+  test("references app-prefixed assets and no unpkg runtime scripts", async () => {
     const roots = parseHtml(renderHtml(parseFeed(await readFeed("root.xml"))));
     const scripts = allElements(roots).filter((el) => el.tag === "script");
-    expect(scripts.map((s) => s.attrs.src)).toEqual(["/static/main.js"]);
+    const styles = allElements(roots).filter((el) => el.tag === "link" && el.attrs.rel === "stylesheet");
+    const icons = allElements(roots).filter((el) => el.tag === "link" && el.attrs.rel?.includes("icon"));
+
+    expect({
+      scripts: scripts.map((script) => script.attrs.src),
+      styles: styles.map((style) => style.attrs.href),
+      icons: icons.map((icon) => icon.attrs.href),
+    }).toEqual({
+      scripts: ["/_app/main.js"],
+      styles: ["/_app/style.css"],
+      icons: [
+        "/_app/favicon/favicon-96x96.png",
+        "/_app/favicon/favicon.svg",
+        "/_app/favicon/favicon.ico",
+        "/_app/favicon/apple-touch-icon.png",
+      ],
+    });
     expect(scripts.some((s) => (s.attrs.src ?? "").includes("unpkg.com"))).toBe(false);
     expect(byClass(roots, "books-grid")[0]?.attrs["data-element"]).toBe(".card__title a");
   });
@@ -211,8 +227,8 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
     title: "Viewable",
     updated: "2026-01-01T00:00:00.000Z",
     kind: "acquisition",
-    selfHref: "/v/feed.xml",
-    startHref: "/feed.xml",
+    selfHref: "/_catalog/v/feed.xml",
+    startHref: "/_catalog/feed.xml",
     entries: books.map((b, i) => ({
       xml: "<entry/>",
       kind: "book" as const,
@@ -225,16 +241,19 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
   test("AE1: epub and pdf popups contain View links, djvu popup contains none", () => {
     // #given a folder with an epub, a pdf, and a djvu book
     const model = bookModel([
-      { title: "E", href: "/v/book.epub/book.epub", type: "application/epub+zip" },
-      { title: "P", href: "/v/book.pdf/book.pdf", type: "application/pdf" },
-      { title: "D", href: "/v/book.djvu/book.djvu", type: "image/vnd.djvu" },
+      { title: "E", href: "/_catalog/v/book.epub/book.epub", type: "application/epub+zip" },
+      { title: "P", href: "/_catalog/v/book.pdf/book.pdf", type: "application/pdf" },
+      { title: "D", href: "/_catalog/v/book.djvu/book.djvu", type: "image/vnd.djvu" },
     ]);
 
     // #when rendered
     const roots = parseHtml(renderHtml(model));
     // #then exactly the epub and pdf acquisitions carry View links
     const views = byClass(roots, "popup__view-btn");
-    expect(views.map((v) => v.attrs.href)).toEqual(["/static/read.html#/v/book.epub/book.epub", "/static/read.html#/v/book.pdf/book.pdf"]);
+    expect(views.map((v) => v.attrs.href)).toEqual([
+      "/_app/read.html#/_catalog/v/book.epub/book.epub",
+      "/_app/read.html#/_catalog/v/book.pdf/book.pdf",
+    ]);
     // and every popup still has its download button
     expect(byClass(roots, "popup__download-btn")).toHaveLength(3);
   });
@@ -244,7 +263,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
     const model = bookModel([
       {
         title: "U",
-        href: "/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+        href: "/_catalog/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
         type: "application/epub+zip",
       },
     ]);
@@ -253,13 +272,13 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
     const roots = parseHtml(renderHtml(model));
     // #then the fragment carries the path exactly as encoded, no double-encoding
     expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe(
-      "/static/read.html#/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
+      "/_app/read.html#/_catalog/test/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub/%D0%9A%D0%BD%D0%B8%D0%B3%D0%B0%20one.epub",
     );
   });
 
   test("registry flip: adding fb2 turns the View link on with no renderer edit", () => {
     // #given fb2 temporarily added to the registry
-    const model = bookModel([{ title: "F", href: "/v/book.fb2/book.fb2", type: "application/x-fictionbook+xml" }]);
+    const model = bookModel([{ title: "F", href: "/_catalog/v/book.fb2/book.fb2", type: "application/x-fictionbook+xml" }]);
 
     expect(byClass(parseHtml(renderHtml(model)), "popup__view-btn")).toHaveLength(0);
     // SAFETY: VIEWABLE_FORMATS is constructed as a mutable Set in src/types.ts; restore it below.
@@ -269,7 +288,7 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
       // #when rendered with the flipped registry
       const roots = parseHtml(renderHtml(model));
       // #then the fb2 acquisition now carries a View link
-      expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe("/static/read.html#/v/book.fb2/book.fb2");
+      expect(byClass(roots, "popup__view-btn")[0]?.attrs.href).toBe("/_app/read.html#/_catalog/v/book.fb2/book.fb2");
     } finally {
       // SAFETY: restore the same concrete Set mutated above after this registry extension test.
       (VIEWABLE_FORMATS as Set<string>).delete("fb2");
@@ -281,14 +300,14 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
   });
 
   // Contract: every View link the renderer emits must be one the shell accepts. Covers
-  // both the current doubled-name shape and the legacy `/file` shape (pre-migration /data).
+  // both the current doubled-name shape and the retained bare `/file` leaf.
   test("round-trip: rendered View hrefs parse back to kind:ok in the reader shell", () => {
     const model = bookModel([
-      { title: "Doubled", href: "/sci-fi/Dune.epub/Dune.epub", type: "application/epub+zip" },
-      { title: "Legacy", href: "/manual-test.pdf/file", type: "application/pdf" },
+      { title: "Doubled", href: "/_catalog/sci-fi/Dune.epub/Dune.epub", type: "application/epub+zip" },
+      { title: "Legacy", href: "/_catalog/manual-test.pdf/file", type: "application/pdf" },
       {
         title: "Unicode",
-        href: "/t/%D0%9A%20one.epub/%D0%9A%20one.epub",
+        href: "/_catalog/t/%D0%9A%20one.epub/%D0%9A%20one.epub",
         type: "application/epub+zip",
       },
     ]);
@@ -298,8 +317,8 @@ describe("View links (VIEWABLE_FORMATS registry)", () => {
 
     for (const view of views) {
       const href = view.attrs.href!;
-      expect(href.startsWith("/static/read.html#")).toBe(true);
-      const fragment = href.slice("/static/read.html".length); // keep the leading '#'
+      expect(href.startsWith("/_app/read.html#/_catalog/")).toBe(true);
+      const fragment = href.slice("/_app/read.html".length); // keep the leading '#'
       expect(parseFragment(fragment, VIEWABLE_FORMATS, BOOK_EXTENSIONS).kind).toBe("ok");
     }
   });

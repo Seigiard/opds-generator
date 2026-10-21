@@ -39,6 +39,27 @@ async function tree() {
   };
 }
 
+function catalogueOutputTarget(outputPath: string, href: string): string | undefined {
+  const prefix = "/_catalog/";
+
+  return href.startsWith(prefix) ? join(outputPath, decodeURIComponent(href.slice(prefix.length))) : undefined;
+}
+
+test("catalogue links map to output files while app and bare paths do not", () => {
+  // #given a known output root and one URL from each public namespace
+  const outputPath = "/output";
+
+  // #when catalogue links are translated for the publication-existence control
+  const targets = [
+    catalogueOutputTarget(outputPath, "/_catalog/Fiction/Book%20One.epub/cover.jpg"),
+    catalogueOutputTarget(outputPath, "/_app/main.js"),
+    catalogueOutputTarget(outputPath, "/Fiction/feed.xml"),
+  ];
+
+  // #then only the catalogue URL maps into the output tree
+  expect(targets).toEqual(["/output/Fiction/Book One.epub/cover.jpg", undefined, undefined]);
+});
+
 test("new folder references wait for their child feed target", async () => {
   // #given an initialized real catalogue and a held new child-feed publication
   const { root, sourcePath, outputPath, deps } = await tree();
@@ -89,7 +110,12 @@ test("new folder references wait for their child feed target", async () => {
     );
 
     // #then the required feed exists before its folder entry and parent reference
-    expect(observation).toEqual({ prematureEntry: false, prematureReference: [], finalReference: ["/Fiction/feed.xml"], childTitles: [] });
+    expect(observation).toEqual({
+      prematureEntry: false,
+      prematureReference: [],
+      finalReference: ["/_catalog/Fiction/feed.xml"],
+      childTitles: [],
+    });
   } finally {
     release.open();
     await rm(root, { recursive: true, force: true });
@@ -132,7 +158,11 @@ test.each(formats)(
 
             for (const entry of model.entries) {
               for (const target of [entry.href, entry.cover, entry.thumbnail, ...(entry.acquisitions?.map((link) => link.href) ?? [])]) {
-                if (target && !(await Bun.file(join(outputPath, decodeURIComponent(target))).exists())) missingTargets.push(target);
+                if (!target) continue;
+
+                const outputTarget = catalogueOutputTarget(outputPath, target);
+
+                if (outputTarget === undefined || !(await Bun.file(outputTarget).exists())) missingTargets.push(target);
               }
             }
           }
@@ -150,7 +180,7 @@ test.each(formats)(
 
       const leaf = parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8"));
       const entry = leaf.entries[0];
-      const href = `/Fiction/${name}/${name}`;
+      const href = `/_catalog/Fiction/${name}/${name}`;
       const bookPath = join(outputPath, "Fiction", name);
 
       if (cover && author) {
@@ -184,7 +214,7 @@ test.each(formats)(
         unchangedSource: true,
         cover,
         thumbnail: cover,
-        parent: [{ href: "/Fiction/feed.xml", summary: "📚 1" }],
+        parent: [{ href: "/_catalog/Fiction/feed.xml", summary: "📚 1" }],
         missingTargets: [],
       });
     } finally {

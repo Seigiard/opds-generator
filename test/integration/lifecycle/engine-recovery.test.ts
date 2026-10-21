@@ -382,7 +382,7 @@ test("moves use old-path removal and new-path creation while stale hints preserv
       staleRetained: true,
       newTitles: ["Test Book"],
       download: true,
-      rootReferences: ["/New/feed.xml", "/Keep.txt/Keep.txt"],
+      rootReferences: ["/_catalog/New/feed.xml", "/_catalog/Keep.txt/Keep.txt"],
       neighbour: "Neighbour source",
       state: "complete",
     });
@@ -427,8 +427,8 @@ test.each(["folder-to-book", "book-to-folder"] as const)("a source kind change r
       bookMarker: await Bun.file(join(outputPath, name, "entry.xml")).exists(),
     }).toEqual(
       mode === "folder-to-book"
-        ? { rootReferences: [`/${name}/${name}`], folderMarker: false, bookMarker: true }
-        : { rootReferences: [`/${name}/feed.xml`], folderMarker: true, bookMarker: false },
+        ? { rootReferences: [`/_catalog/${name}/${name}`], folderMarker: false, bookMarker: true }
+        : { rootReferences: [`/_catalog/${name}/feed.xml`], folderMarker: true, bookMarker: false },
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -506,7 +506,7 @@ test("folder-to-book cleanup retries after a failed obsolete-folder removal", as
       retriedErrors: [],
       folderMarker: false,
       bookMarker: true,
-      rootReferences: [`/${name}/${name}`],
+      rootReferences: [`/_catalog/${name}/${name}`],
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -675,7 +675,7 @@ test.each([
         errors: [],
         staleOutput: false,
         ancestorOutput: replacement === "book file",
-        rootReferences: replacement === "book file" ? [`/${ancestor}/${ancestor}`] : [],
+        rootReferences: replacement === "book file" ? [`/_catalog/${ancestor}/${ancestor}`] : [],
       });
     } finally {
       server.stop(true);

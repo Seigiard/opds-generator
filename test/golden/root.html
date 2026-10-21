@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Catalog</title>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />
+    <link rel="stylesheet" href="/_app/style.css" />
+    <link rel="icon" type="image/png" href="/_app/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/_app/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/_app/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/_app/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/_app/favicon/site.webmanifest" />
   </head>
   <body>
     <header class="header">
@@ -63,7 +63,7 @@
       <div>
         <article class="card card--book">
           <div class="book" aria-hidden="true">
-            <div class="book__cover"><img src="/manual-test.pdf/thumb.jpg" alt="Test Book" loading="lazy" /></div>
+            <div class="book__cover"><img src="/_catalog/manual-test.pdf/thumb.jpg" alt="Test Book" loading="lazy" /></div>
           </div>
           <div class="card__info">
             <h3 class="card__title"><a href="#book-1">Test Book</a></h3>
@@ -73,7 +73,7 @@
         <dialog class="popup" id="book-1" aria-labelledby="book-1-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
-              <div class="book"><div class="book__cover"><img src="/manual-test.pdf/cover.jpg" alt="Test Book" /></div></div>
+              <div class="book"><div class="book__cover"><img src="/_catalog/manual-test.pdf/cover.jpg" alt="Test Book" /></div></div>
             </div>
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
@@ -88,7 +88,7 @@
                   <span>2025</span>
                 </div>
                 <div class="popup__downloads">
-                  <a href="/manual-test.pdf/file" class="popup__download-btn">PDF</a> <a href="/static/read.html#/manual-test.pdf/file" class="popup__view-btn">View</a>
+                  <a href="/_catalog/manual-test.pdf/file" class="popup__download-btn">PDF</a> <a href="/_app/read.html#/_catalog/manual-test.pdf/file" class="popup__view-btn">View</a>
                 </div>
               </div>
             </div>
@@ -96,6 +96,6 @@
         </dialog>
       </div>
     </main>
-    <script src="/static/main.js"></script>
+    <script src="/_app/main.js"></script>
   </body>
 </html>

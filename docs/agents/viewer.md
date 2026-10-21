@@ -2,6 +2,8 @@
 
 Code: `src/render/feed-html.ts`, `ui/styles`, `ui/gridnav`.
 
+Generated feed and entry links use `/_catalog/`. Generated pages load assets from `/_app/`; their folder cards keep the browser URL (`/<folder>/`).
+
 ## Model and build
 
 - `FeedModel` is the one source per folder. The `folder-meta-sync` cascade builds it once and writes `feed.xml` (`renderXml`) and then `index.html` (`renderHtml`). HTML is rendered at sync time. There is no browser XSLT.

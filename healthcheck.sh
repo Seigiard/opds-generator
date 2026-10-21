@@ -5,5 +5,5 @@
 BUN_PORT="${PORT:-3000}"
 
 wget -q -O - "http://127.0.0.1:${BUN_PORT}/status" | grep -q '"available":true' \
-  && wget -q --spider http://127.0.0.1/feed.xml \
+  && wget -q --spider http://127.0.0.1/_catalog/feed.xml \
   && wget -q --spider http://127.0.0.1/index.html

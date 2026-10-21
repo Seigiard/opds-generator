@@ -75,7 +75,7 @@ test("HTTP watcher input publishes a real book without a manual resync", async (
     expect({
       admission,
       titles: await titles(outputPath),
-      browserDownload: (await readFile(join(outputPath, "index.html"), "utf8")).includes('href="/Book.fb2/Book.fb2"'),
+      browserDownload: (await readFile(join(outputPath, "index.html"), "utf8")).includes('href="/_catalog/Book.fb2/Book.fb2"'),
       downloadMatches: (await readFile(join(outputPath, "Book.fb2", "Book.fb2"))).equals(await readFile(fixture)),
     }).toEqual({ admission: { status: 202, text: "OK" }, titles: ["Test Book"], browserDownload: true, downloadMatches: true });
   } finally {

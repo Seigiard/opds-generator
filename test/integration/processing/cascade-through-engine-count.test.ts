@@ -32,7 +32,7 @@ describe("Cascades through the packaged engine for count changes", () => {
       await h.makeSourceFolders("Fiction/SciFi");
       await submit(CatalogueEvent.FolderCreated({ parent: join(h.filesPath, "Fiction"), name: "SciFi" }));
 
-      return (await h.feed("Fiction")).includes("/Fiction/SciFi/feed.xml");
+      return (await h.feed("Fiction")).includes("/_catalog/Fiction/SciFi/feed.xml");
     });
 
     expect(listed).toBe(true);
