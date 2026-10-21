@@ -232,8 +232,31 @@ describe("startup readiness through the production server and nginx", () => {
     });
 
     const declared = JSON.parse((await new Response(inspect.stdout).text()).trim());
-    // #then it runs the script that needs the available fact, the feed and the page, not the feed alone
+    // #then the image delegates health to the repository's minimum-aware script
     expect({ code: await inspect.exited, declared }).toEqual({ code: 0, declared: ["CMD", "/bin/sh", "/app/healthcheck.sh"] });
+  });
+
+  test("the health check passes with the root feed alone", async () => {
+    // #given a completed production catalogue with no generated page
+    await withScenario("feed-only-health", {}, async (s) => {
+      await copyFile(EPUB, join(s.src, "Book.epub"));
+      await s.compose("up", "-d");
+      await completed(s);
+
+      // #when the static browser shell is made unavailable inside this disposable container
+      const removedShell = await s.compose("exec", "-T", "opds", "rm", "/app/static/index.html");
+      const feed = await get("/_catalog/feed.xml");
+      const shell = await get("/index.html");
+
+      // #then health follows the available root feed and does not require either kind of index.html
+      expect({
+        removedShell: removedShell.code,
+        feed: feed.status,
+        shell: shell.status,
+        generatedPage: existsSync(join(s.data, "index.html")),
+        health: await s.health(),
+      }).toEqual({ removedShell: 0, feed: 200, shell: 404, generatedPage: false, health: 0 });
+    });
   });
 
   test("a warm start serves previously published results through nginx while verification is held", async () => {
@@ -374,6 +397,7 @@ describe("startup readiness through the production server and nginx", () => {
           feedTitles: titles(feed.body),
           pageStatus: page.status,
           pageIsShell: page.body.toString("utf8").includes('<div id="app"></div>'),
+          generatedPage: existsSync(join(s.data, "index.html")),
         },
         done: summary(done),
         finalTitles: titles(final.body),
@@ -394,6 +418,7 @@ describe("startup readiness through the production server and nginx", () => {
           feedTitles: [],
           pageStatus: 200,
           pageIsShell: true,
+          generatedPage: false,
         },
         done: { available: true, availableFrom: "minimum-publication", verifying: false, completed: true, errors: [] },
         finalTitles: ["Test Book"],
@@ -402,47 +427,26 @@ describe("startup readiness through the production server and nginx", () => {
     });
   });
 
-  test("a cold start whose root page cannot be published exits unsuccessfully and is never available", async () => {
-    // #given a fresh output where the root browser page path is a directory
-    await withScenario("cold-page-fatal", {}, async (s) => {
+  test("a cold start prunes a stale generated root page while the shell stays available", async () => {
+    // #given a fresh output with a stale page from the document-generating version
+    await withScenario("cold-page-prune", {}, async (s) => {
       await copyFile(EPUB, join(s.src, "Book.epub"));
-      await mkdir(join(s.data, "index.html"));
+      await writeFile(join(s.data, "index.html"), "legacy browser page");
+
       // #when the first pass runs
       await s.compose("up", "-d");
-      const seen = { available: false, shellServed: false };
+      const facts = await completed(s);
+      const shell = await get("/index.html");
 
-      const exited = await until("container exit", async () => {
-        const facts = await s.status();
-
-        if (facts?.available) seen.available = true;
-
-        if ((await get("/index.html").catch(() => undefined))?.status === 200) seen.shellServed = true;
-        const state = await s.container();
-
-        return state?.state === "exited" ? state : undefined;
-      });
-
-      // #then the shell stays static and reachable, but the failed catalogue is never reported available
-      expect({ exitCode: exited.exitCode, seen }).toEqual({ exitCode: 1, seen: { available: false, shellServed: true } });
-
-      // #and a restart against the same unusable DATA still fails instead of treating the page directory as prior output
-      await s.compose("up", "-d");
-      const restartSeen = { available: false, shellServed: false };
-
-      const restarted = await until("container exit after restart", async () => {
-        const facts = await s.status();
-
-        if (facts?.available) restartSeen.available = true;
-
-        if ((await get("/index.html").catch(() => undefined))?.status === 200) restartSeen.shellServed = true;
-        const state = await s.container();
-
-        return state?.state === "exited" ? state : undefined;
-      });
-
-      expect({ exitCode: restarted.exitCode, seen: restartSeen }).toEqual({
-        exitCode: 1,
-        seen: { available: false, shellServed: true },
+      // #then the generator removes the stale page and nginx still serves its static shell
+      expect({
+        facts: summary(facts),
+        generatedPage: existsSync(join(s.data, "index.html")),
+        shell: { status: shell.status, body: shell.body.toString("utf8").includes('<div id="app"></div>') },
+      }).toEqual({
+        facts: { available: true, availableFrom: "minimum-publication", verifying: false, completed: true, errors: [] },
+        generatedPage: false,
+        shell: { status: 200, body: true },
       });
     });
   });

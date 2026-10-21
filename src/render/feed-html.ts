@@ -68,12 +68,6 @@ export function formatFromMime(type: string): string {
   return "Download";
 }
 
-const FAVICON_LINKS = frag`<link rel="icon" type="image/png" href="/_app/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/_app/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/_app/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/_app/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/_app/favicon/site.webmanifest" />`;
-
 export function renderHtml(model: FeedModel, crumbs: Crumb[]): string {
   let bookIndex = 0;
 
@@ -83,32 +77,6 @@ export function renderHtml(model: FeedModel, crumbs: Crumb[]): string {
   );
 
   return String(renderFragment(model, crumbs, cards));
-}
-
-/** Temporary server-rendered wrapper retained until folder index.html is removed in #73. */
-export function renderDocument(model: FeedModel, crumbs: Crumb[]): string {
-  let bookIndex = 0;
-
-  const cards = interleave(
-    model.entries.map((entry) => (entry.kind === "folder" ? renderFolder(entry) : renderBook(entry, ++bookIndex))),
-    "\n",
-  );
-
-  return String(frag`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${crumbs.at(-1)?.label ?? model.title}</title>
-    <link rel="stylesheet" href="/_app/style.css" />
-    ${FAVICON_LINKS}
-  </head>
-  <body>
-    ${renderFragment(model, crumbs, cards)}
-    <script src="/_app/main.js"></script>
-  </body>
-</html>
-`);
 }
 
 function renderFragment(model: FeedModel, crumbs: Crumb[], cards: Fragment[]): HtmlEscapedString {

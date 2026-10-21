@@ -4,8 +4,6 @@ import { Entry } from "opds-ts/v1.2";
 import { EffectFileSystem } from "../../effect-file-system.ts";
 import { ENTRY_FILE, FEED_FILE, FOLDER_ENTRY_FILE, INDEX_FILE } from "../../constants.ts";
 import { buildFeedModel } from "../../render/feed-model.ts";
-import { renderDocument } from "../../render/feed-html.ts";
-import { breadcrumbsFor } from "../../render/breadcrumbs.ts";
 import { renderXml } from "../../render/feed-xml.ts";
 import { extractAuthor, extractTitle, naturalSort, stripXmlDeclaration } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
@@ -27,8 +25,6 @@ interface FailureProps {
 }
 
 class FolderFeedPublishFailed extends Data.TaggedError("FolderFeedPublishFailed")<FailureProps> {}
-
-class FolderBrowserPublishFailed extends Data.TaggedError("FolderBrowserPublishFailed")<FailureProps> {}
 
 class FolderEntryPublishFailed extends Data.TaggedError("FolderEntryPublishFailed")<FailureProps> {}
 
@@ -101,14 +97,17 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
     books: bookEntries.length,
   });
 
-  // The browser page is part of the usable publication: a parent must not reference a folder without it.
-  const browserOutputPath = join(normalizedDir, INDEX_FILE);
-  const browserPath = relativePath === "" ? "/" : `/${encodeUrlPath(relativePath)}/`;
+  const staleBrowserOutputPath = join(normalizedDir, INDEX_FILE);
+  yield* fs.rm(staleBrowserOutputPath, { force: true }).pipe(
+    Effect.catch((cause) => {
+      logger.warn("FolderMetaSync", "Could not remove stale index.html", {
+        path: relativePath || "/",
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
 
-  yield* fs
-    .atomicWrite(browserOutputPath, renderDocument(model, breadcrumbsFor(browserPath)))
-    .pipe(Effect.mapError((cause) => new FolderBrowserPublishFailed(failure(browserOutputPath, cause))));
-  logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
+      return Effect.void;
+    }),
+  );
 
   if (relativePath === "") return [];
 

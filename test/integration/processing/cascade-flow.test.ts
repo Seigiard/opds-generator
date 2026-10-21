@@ -8,7 +8,7 @@ import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdir, rm, stat, readFile, symlink, unlink } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, readFile, symlink, unlink } from "node:fs/promises";
 
 const TEST_DIR = join(tmpdir(), `opds-cascade-test-${Date.now()}`);
 
@@ -234,7 +234,7 @@ describe("Cascade Flow Integration", () => {
     expect(subEntryAfter).toBe(subEntry);
   });
 
-  test("AE4: cascade writes feed.xml and a consistent index.html", async () => {
+  test("AE4: cascade writes only feed.xml and _entry.xml for a nested folder", async () => {
     // #given a data folder with a book entry
     await mkdir(join(FILES_DIR, "lib"), { recursive: true });
     const libData = join(DATA_DIR, "lib");
@@ -255,64 +255,28 @@ describe("Cascade Flow Integration", () => {
     // #when folderMetaSync runs
     await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, asyncDeps);
 
-    // #then both artifacts exist and reflect the same book
+    // #then both data artifacts exist, the feed reflects the book, and no browser page is generated
     const feed = await readFile(join(libData, "feed.xml"), "utf-8");
-    const html = await readFile(join(libData, "index.html"), "utf-8");
-    expect(feed).toContain("Consistent Title");
-    expect(html).toContain("<!DOCTYPE html>");
-    expect(html).toContain("Consistent Title");
-    expect(html).toContain('class="card card--book"');
+    expect({ title: feed.includes("Consistent Title"), files: (await readdir(libData)).sort() }).toEqual({
+      title: true,
+      files: ["_entry.xml", "book.epub", "feed.xml"],
+    });
   });
 
-  test("R16: re-running the sync overwrites index.html", async () => {
+  test("R16: re-running the sync prunes a stale index.html", async () => {
+    // #given a nested folder that was synchronized by the document-generating version
     await mkdir(join(FILES_DIR, "lib"), { recursive: true });
     const libData = join(DATA_DIR, "lib");
     await mkdir(libData, { recursive: true });
     const event: EventType = { _tag: "FolderMetaSyncRequested", path: libData };
-
     await folderMetaSync(event, asyncDeps);
-    const first = await stat(join(libData, "index.html"));
+    await Bun.write(join(libData, "index.html"), "legacy browser page");
+
+    // #when an ordinary sync runs again
     await folderMetaSync(event, asyncDeps);
-    const second = await stat(join(libData, "index.html"));
 
-    // #then index.html is regenerated (still present after a second unconditional sync)
-    expect(second.isFile()).toBe(true);
-    expect(second.size).toBeGreaterThan(0);
-    expect(first.isFile()).toBe(true);
-  });
-
-  test("index.html failure fails the handler: feed.xml is written but the folder is not referenced to its parent", async () => {
-    // #given a deps whose index.html write always fails
-    await mkdir(join(FILES_DIR, "lib"), { recursive: true });
-    const libData = join(DATA_DIR, "lib");
-    await mkdir(libData, { recursive: true });
-
-    const failingDeps: HandlerDeps = {
-      ...asyncDeps,
-      fs: {
-        ...asyncDeps.fs,
-        atomicWrite: async (path, content) => {
-          if (path.endsWith("index.html")) throw new Error("disk full");
-          await Bun.write(path, content);
-        },
-      },
-    };
-
-    // #when folderMetaSync runs
-    const result = await folderMetaSync({ _tag: "FolderMetaSyncRequested", path: libData }, failingDeps);
-
-    // #then the failure surfaces, the feed exists, and no _entry.xml lets the parent reference the folder
-    expect({
-      failed: result.isErr() && result.error.message.includes("disk full"),
-      feed: await stat(join(libData, "feed.xml")).then(
-        () => true,
-        () => false,
-      ),
-      entry: await stat(join(libData, "_entry.xml")).then(
-        () => true,
-        () => false,
-      ),
-    }).toEqual({ failed: true, feed: true, entry: false });
+    // #then the obsolete browser artifact is gone and the data artifacts remain
+    expect((await readdir(libData)).sort()).toEqual(["_entry.xml", "feed.xml"]);
   });
 
   test("characterization: empty folder yields a valid navigation feed", async () => {

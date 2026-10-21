@@ -16,9 +16,9 @@ inotify (`watcher.sh`) → `POST /events/books` → `adaptBooksEvent` (raw → t
 - A handler returns `Effect<readonly EventType[], HandlerError, CatalogueDeps | EffectFileSystem>`. The returned events are the cascade. See `src/processing/handlers/book-sync-effect.ts`.
 - Handlers read `CatalogueDeps = Pick<AppContext, "config" | "logger" | "fs">` and `EffectFileSystem`.
 - Cancellation is fiber interruption. Handlers run uninterruptibly and mark the phases shutdown may cancel with `Effect.interruptible`. Interruption discards a result, so a phase that must finish stays outside.
-- A root or folder `index.html` write failure is a typed handler failure (`FolderBrowserPublishFailed`). `feed.xml` is still written.
+- A stale root or folder `index.html` is pruned through the filesystem service. A removal failure is logged and does not fail the sync. `feed.xml` remains the required publication.
 - Source authority and cleanup wrap every handler (`engine-source-work.ts`): the path is re-observed first, absence or a confirmed source-kind change removes the associated outputs, a read error fails the work and keeps the previous result.
-- Application processing versions live in `src/processing-versions.ts`. Bump `book` when extractor metadata, cover handling or book entry/link output changes. Bump `folder` when `src/render/*` feed/browser markup, folder-entry text or required static contract changes existing folder output. Pure CSS/JS changes under `ui/` do not need a bump unless existing `index.html` markup or linked asset contract must change too.
+- Application processing versions live in `src/processing-versions.ts`. Bump `book` when extractor metadata, cover handling or book entry/link output changes. Bump `folder` when feed or entry links, folder-entry text, or `_entry.xml` changes existing folder output. Markup and CSS changes in the static shell do not need a folder bump.
 
 ## Cascades
 
@@ -28,7 +28,7 @@ Cascades are the only propagation. Only `/books` is watched. The process never w
 - `folderSync`, `bookCleanup` and `folderCleanup` are retained compatibility/test seams for typed adapter events and leak probes. Production does not route work to them. Prefer `engine-source-work.ts`, `bookSync` and `folderMetaSync` for production deletion or folder-publication changes until those seams are removed with their tests.
 - `folderMetaSync` returns a refresh of its parent only when its `_entry.xml` summary changed (ADR 0002). The comparison ignores the `<updated>` timestamp that opds-ts stamps on every Entry. The climb stops at the first folder whose count did not change. The folder's own `feed.xml` is always rewritten.
 - A handler that writes or removes `entry.xml` or `_entry.xml` returns the refresh itself. Nothing observes `/data`.
-- `bookSync` creates its download symlink before publishing `entry.xml`. Folder work is `FolderMetaSyncRequested`; it creates a missing derived directory, reads completed child entries, writes the folder's feed/page and updates `_entry.xml` for non-root folders.
+- `bookSync` creates its download symlink before publishing `entry.xml`. Folder work is `FolderMetaSyncRequested`; it creates a missing derived directory, reads completed child entries, writes the folder's feed and updates `_entry.xml` for non-root folders.
 
 ## Effect processing
 

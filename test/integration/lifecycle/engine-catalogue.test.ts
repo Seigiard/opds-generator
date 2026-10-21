@@ -140,7 +140,7 @@ const formats = [
 ];
 
 test.each(formats)(
-  "packaged engine retains $name metadata, covers, browser links and download bytes",
+  "packaged engine retains $name metadata, covers, feed links and download bytes",
   async ({ fixture, name, title, author, cover }) => {
     // #given existing independent book fixtures and real production services
     const { root, sourcePath, outputPath, deps } = await tree();
@@ -194,7 +194,7 @@ test.each(formats)(
         titles: leaf.entries.map((item) => item.title),
         author: entry?.author,
         download: entry?.acquisitions?.[0]?.href,
-        browserDownload: (await readFile(join(outputPath, "Fiction", "index.html"), "utf8")).includes(`href="${href}"`),
+        generatedPage: await Bun.file(join(outputPath, "Fiction", "index.html")).exists(),
         sameBytes: (await readFile(join(bookPath, name))).equals(await readFile(join(fixtures, fixture))),
         unchangedSource: (await readFile(join(sourcePath, "Fiction", name))).equals(await readFile(join(fixtures, fixture))),
         cover: await Bun.file(join(bookPath, "cover.jpg")).exists(),
@@ -209,7 +209,7 @@ test.each(formats)(
         titles: [title],
         author,
         download: href,
-        browserDownload: true,
+        generatedPage: false,
         sameBytes: true,
         unchangedSource: true,
         cover,
