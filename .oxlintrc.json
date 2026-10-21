@@ -166,6 +166,7 @@
   "globals": {},
   "ignorePatterns": [
     "static/main.js",
+    "static/_app/main.js",
     "static/reader.js",
     "static/foliate-*/**",
     "ui/vendor/**",
