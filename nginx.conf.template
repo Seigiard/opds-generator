@@ -36,9 +36,6 @@ http {
         # Use relative redirects (no host prefix)
         absolute_redirect off;
 
-        # Index file for directories (browsers get HTML)
-        index index.html;
-
         # /opds serves the root feed directly (200 XML), no 302: strict OPDS
         # readers reject the redirect's text/html body with "incorrect content".
         location = /opds {
@@ -60,6 +57,14 @@ http {
         # no-cache (ETag revalidation): style.css/main.js have unversioned URLs, and a
         # deploy regenerates index.html against the NEW assets — "immutable" left
         # browsers on day-old CSS/JS with mismatched markup (popup dead).
+        location = /_app/ {
+            return 404;
+        }
+
+        location = /_app/index.html {
+            return 404;
+        }
+
         location ^~ /_app/ {
             alias /app/static/;
             add_header Cache-Control "no-cache";
@@ -174,6 +179,12 @@ http {
 
         location @check_initializing {
             add_header Retry-After 5 always;
+
+            # Book output directories have entry.xml but never publish feed.xml.
+            # Their feed URL is a permanent miss, not a folder still being written.
+            if (-f /data$catalog_data_path/entry.xml) {
+                return 404;
+            }
 
             # A missing catalogue feed is transient while its folder exists.
             if (-d /data$catalog_data_path) {
