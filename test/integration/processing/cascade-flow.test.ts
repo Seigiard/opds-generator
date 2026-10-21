@@ -196,7 +196,7 @@ describe("Cascade Flow Integration", () => {
   <author>
     <name>Test Author</name>
   </author>
-  <link rel="http://opds-spec.org/acquisition/open-access" href="/lib/book.epub/file" type="application/epub+zip"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/lib/book.epub/file" type="application/epub+zip"/>
 </entry>`;
 
     const subEntry = `<?xml version="1.0"?>
@@ -205,7 +205,7 @@ describe("Cascade Flow Integration", () => {
   <title>Sub</title>
   <updated>2026-01-08T04:52:36.379Z</updated>
   <summary type="text">📚 1</summary>
-  <link rel="subsection" href="/lib/Sub/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="subsection" href="/_catalog/lib/Sub/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
 </entry>`;
 
     await Bun.write(join(bookDir, "entry.xml"), bookEntry);
@@ -228,7 +228,7 @@ describe("Cascade Flow Integration", () => {
     expect(first).toContain("kind=acquisition");
     // and fragments are spliced verbatim (book after folder)
     expect(first).toContain("urn:opds:book:book.epub");
-    expect(first).toContain('<link rel="subsection" href="/lib/Sub/feed.xml"');
+    expect(first).toContain('<link rel="subsection" href="/_catalog/lib/Sub/feed.xml"');
     expect(first.indexOf("urn:opds:catalog:lib/Sub")).toBeLessThan(first.indexOf("urn:opds:book:book.epub"));
     // and the subfolder's own _entry.xml is untouched by the parent sync
     expect(subEntryAfter).toBe(subEntry);
@@ -248,7 +248,7 @@ describe("Cascade Flow Integration", () => {
   <title>Consistent Title</title>
   <updated>2026-01-08T04:52:36.379Z</updated>
   <dc:format>EPUB</dc:format>
-  <link rel="http://opds-spec.org/acquisition/open-access" href="/lib/book.epub/file" type="application/epub+zip"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/lib/book.epub/file" type="application/epub+zip"/>
 </entry>`,
     );
 

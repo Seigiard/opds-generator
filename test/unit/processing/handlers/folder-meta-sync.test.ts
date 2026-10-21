@@ -136,17 +136,18 @@ describe("folderMetaSync handler", () => {
     expect(content).toContain("kind=navigation");
   });
 
-  test("includes self link in feed", async () => {
+  test("root feed links self and start through the catalogue prefix", async () => {
+    // #given the root catalogue folder
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
-    const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
-    expect(content).toContain('rel="self"');
-    expect(content).toContain("/feed.xml");
-  });
 
-  test("includes start link in feed", async () => {
-    await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
+    // #when its feed is read
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
-    expect(content).toContain('rel="start"');
+
+    // #then both public links identify the prefixed root feed
+    expect({
+      self: content.includes('rel="self" href="/_catalog/feed.xml"'),
+      start: content.includes('rel="start" href="/_catalog/feed.xml"'),
+    }).toEqual({ self: true, start: true });
   });
 
   test("includes folder entries from subfolders", async () => {
@@ -231,16 +232,24 @@ describe("folderMetaSync handler", () => {
     expect(pos4).toBeLessThan(pos5);
   });
 
-  test("handles nested folder path", async () => {
+  test("nested feed and folder entry link through the catalogue prefix", async () => {
+    // #given a nested source and output folder
     const nestedPath = join(DATA_DIR, "Fiction", "SciFi");
     const sourceFolder = join(FILES_DIR, "Fiction", "SciFi");
     await mkdir(nestedPath, { recursive: true });
     await mkdir(sourceFolder, { recursive: true });
 
+    // #when folder metadata is published
     await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
-    const content = await readFile(join(nestedPath, "feed.xml"), "utf-8");
-    expect(content).toContain("SciFi");
-    expect(content).toContain('href="/Fiction/SciFi/feed.xml"');
+    const feed = await readFile(join(nestedPath, "feed.xml"), "utf-8");
+    const entry = await readFile(join(nestedPath, "_entry.xml"), "utf-8");
+
+    // #then both representations expose the same prefixed feed URL
+    expect({
+      self: feed.includes('rel="self" href="/_catalog/Fiction/SciFi/feed.xml"'),
+      start: feed.includes('rel="start" href="/_catalog/feed.xml"'),
+      subsection: entry.includes('rel="subsection" href="/_catalog/Fiction/SciFi/feed.xml"'),
+    }).toEqual({ self: true, start: true, subsection: true });
   });
 
   describe("_entry.xml count updates", () => {

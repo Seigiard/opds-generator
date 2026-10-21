@@ -324,8 +324,13 @@ describe("bookSync handler", () => {
       author: entry.includes("<name>Test Author</name>"),
       issued: entry.includes("<dc:issued>2021-09</dc:issued>"),
       language: entry.includes("<dc:language>en</dc:language>"),
-      cover: entry.includes('rel="http://opds-spec.org/image"'),
-      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+      cover: entry.includes('rel="http://opds-spec.org/image" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/cover.jpg"'),
+      thumbnail: entry.includes(
+        'rel="http://opds-spec.org/image/thumbnail" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/thumb.jpg"',
+      ),
+      acquisition: entry.includes(
+        'rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/Test%20Book%20-%20Test%20Author.epub"',
+      ),
       link: await readlink(join(bookDir, name)),
       thumbFormat: thumb.format,
     }).toEqual({
@@ -336,6 +341,7 @@ describe("bookSync handler", () => {
       language: true,
       cover: true,
       thumbnail: true,
+      acquisition: true,
       link: bookPath,
       thumbFormat: "jpeg",
     });

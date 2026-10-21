@@ -185,7 +185,7 @@ describe("Event Logging E2E", () => {
     });
 
     test("folder data structure is created", async () => {
-      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, true)).toBe(true);
+      expect(await waitForUrl(`_catalog/${TEST_FOLDER}/feed.xml`, true)).toBe(true);
     });
   });
 
@@ -223,7 +223,7 @@ describe("Event Logging E2E", () => {
       let xml = "";
 
       while (Date.now() < deadline) {
-        const response = await fetch(`${BASE_URL}/${TEST_FOLDER}/feed.xml`);
+        const response = await fetch(`${BASE_URL}/_catalog/${TEST_FOLDER}/feed.xml`);
 
         if (response.ok) {
           xml = await response.text();
@@ -311,14 +311,14 @@ describe("Event Logging E2E", () => {
 
         // inotifywait watches the new folder only after its create event, so the books copied
         // into it may raise no event of their own; the pass must still list them in the feed.
-        expect(await waitForUrl(`${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
+        expect(await waitForUrl(`_catalog/${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
         expect(await waitForUrl(`${TEST_FOLDER}-copy/test-events-book2.pdf/entry.xml`, true)).toBe(true);
 
         const deadline = Date.now() + 20000;
         let xml = "";
 
         while (Date.now() < deadline && !xml.includes("test-events-book2.pdf")) {
-          const response = await fetch(`${BASE_URL}/${TEST_FOLDER}-copy/feed.xml`);
+          const response = await fetch(`${BASE_URL}/_catalog/${TEST_FOLDER}-copy/feed.xml`);
 
           if (response.ok) xml = await response.text();
 
@@ -373,7 +373,7 @@ describe("Event Logging E2E", () => {
     );
 
     test("data structure is cleaned up", async () => {
-      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, false)).toBe(true);
+      expect(await waitForUrl(`_catalog/${TEST_FOLDER}/feed.xml`, false)).toBe(true);
     });
   });
 });

@@ -159,7 +159,12 @@ async function get(path: string, init: RequestInit = {}) {
   const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual", ...init });
   const body = Buffer.from(await response.arrayBuffer());
 
-  return { status: response.status, body, location: response.headers.get("location") };
+  return {
+    status: response.status,
+    body,
+    location: response.headers.get("location"),
+    retryAfter: response.headers.get("retry-after"),
+  };
 }
 
 async function resync(query = "", auth = true) {
@@ -239,7 +244,16 @@ describe("startup readiness through the production server and nginx", () => {
       await copyFile(EPUB, join(s.src, "Nested", "Second.epub"));
       await s.compose("up", "-d");
       await completed(s);
-      const paths = ["/opds", "/index.html", "/Nested/", "/Nested/feed.xml", "/Book.epub/cover.jpg", "/Book.epub/Book.epub"];
+
+      const paths = [
+        "/opds",
+        "/index.html",
+        "/Nested/",
+        "/_catalog/Nested/feed.xml",
+        "/_catalog/Book.epub/cover.jpg",
+        "/_catalog/Book.epub/Book.epub",
+      ];
+
       const prior = await publicationOf(paths);
       const stopped = await s.compose("stop");
       const stoppedState = await s.container();
@@ -260,7 +274,7 @@ describe("startup readiness through the production server and nginx", () => {
         facts: summary(during),
         health: duringHealth,
         served: Object.fromEntries(paths.map((path) => [path, served[path]!.equals(prior[path]!)])),
-        downloadIsSource: served["/Book.epub/Book.epub"]!.equals(await readFile(EPUB)),
+        downloadIsSource: served["/_catalog/Book.epub/Book.epub"]!.equals(await readFile(EPUB)),
         priorTitles: titles(prior["/opds"]!).sort(),
         root: { status: root.status, location: root.location },
         resyncWithoutCredentials: challenge.status,
@@ -277,11 +291,35 @@ describe("startup readiness through the production server and nginx", () => {
       // #and releasing the extraction completes verification without losing availability
       await s.holdUnzip(false);
       const after = await completed(s);
-      expect({ facts: summary(after), download: (await get("/Book.epub/Book.epub")).body.equals(await readFile(EPUB)) }).toEqual({
+      expect({ facts: summary(after), download: (await get("/_catalog/Book.epub/Book.epub")).body.equals(await readFile(EPUB)) }).toEqual({
         facts: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: [] },
         download: true,
       });
       expect((await resync("")).status).toBe(202);
+    });
+  });
+
+  test("a catalogue feed held mid-write returns 503 with Retry-After, then publishes at the same URL", async () => {
+    // #given a fresh nested folder whose feed publication is held at the atomic temporary file
+    await withScenario("catalog-feed-hold", {}, async (s) => {
+      await mkdir(join(s.src, "Nested"));
+      await s.setHolds(["/data/Nested/feed.xml.tmp"]);
+
+      // #when the write is in progress
+      await s.compose("up", "-d");
+      await until("held nested feed", () => s.entered("entered-_data_Nested_feed.xml.tmp"));
+      const during = await get("/_catalog/Nested/feed.xml");
+
+      // #and publication is released
+      await s.setHolds([]);
+      await completed(s);
+      const after = await get("/_catalog/Nested/feed.xml");
+
+      // #then clients receive a retryable transient response followed by the XML feed
+      expect({
+        during: { status: during.status, retryAfter: during.retryAfter },
+        after: { status: after.status, xml: after.body.toString("utf8").includes("<feed") },
+      }).toEqual({ during: { status: 503, retryAfter: "5" }, after: { status: 200, xml: true } });
     });
   });
 
@@ -327,7 +365,7 @@ describe("startup readiness through the production server and nginx", () => {
         },
         done: summary(done),
         finalTitles: titles(final.body),
-        download: (await get("/Book.epub/Book.epub")).body.equals(await readFile(EPUB)),
+        download: (await get("/_catalog/Book.epub/Book.epub")).body.equals(await readFile(EPUB)),
       }).toEqual({
         feedOnly: {
           facts: { available: false, availableFrom: null, verifying: true, completed: false, errors: [] },
@@ -457,7 +495,7 @@ describe("startup readiness through the production server and nginx", () => {
         admission: { status: admission.status, body: admission.body.toString() },
         retried: summary(retried),
         stillRunning: again?.state,
-        downloadAfterRetry: (await get("/Book.epub/Book.epub")).body.equals(await readFile(EPUB)),
+        downloadAfterRetry: (await get("/_catalog/Book.epub/Book.epub")).body.equals(await readFile(EPUB)),
       }).toEqual({
         failed: { available: true, availableFrom: "prior-output", verifying: false, completed: false, errors: ["pass"] },
         served: Object.fromEntries(paths.map((path) => [path, true])),
