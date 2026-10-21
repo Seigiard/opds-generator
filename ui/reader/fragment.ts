@@ -8,6 +8,8 @@ const INVALID: FragmentResult = { kind: "invalid" };
 /** Any segment made purely of dots — literal or once-more-encoded (`.`, `..`, `%2e%2e`, `.%2e`) — is traversal. */
 const DOT_SEGMENT = /^(\.|%2e)+$/i;
 
+const CATALOG_PREFIX = "/_catalog/";
+
 /**
  * Validate the reader fragment before any fetch or link construction (R15, KTD-1).
  * The fragment is attacker-influenceable (a forged link): only a same-origin,
@@ -19,6 +21,8 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
   const raw = rawHash.startsWith("#") ? rawHash.slice(1) : rawHash;
 
   if (!raw.startsWith("/")) return INVALID;
+
+  if (!raw.startsWith(CATALOG_PREFIX)) return INVALID;
 
   if (raw.startsWith("//")) return INVALID;
 
@@ -34,7 +38,9 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
 
   if (decoded.includes("\\")) return INVALID;
 
-  const segments = decoded.slice(1).split("/");
+  if (!decoded.startsWith(CATALOG_PREFIX)) return INVALID;
+
+  const segments = decoded.slice(CATALOG_PREFIX.length).split("/");
 
   if (segments.length < 2) return INVALID;
 
@@ -62,7 +68,7 @@ export function parseFragment(rawHash: string, viewable: ReadonlySet<string>, bo
   const filename = isLegacyFileLeaf ? parent : leaf;
 
   const encoded = segments.map(encodeURIComponent);
-  const fetchPath = `/${encoded.join("/")}`;
+  const fetchPath = `${CATALOG_PREFIX}${encoded.join("/")}`;
 
   // Belt and braces on top of the string rules: the rebuilt path must resolve inside
   // the origin it is given to, byte-identical, or it never reaches fetch().

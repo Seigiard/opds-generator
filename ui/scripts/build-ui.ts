@@ -191,7 +191,7 @@ async function buildReader(): Promise<void> {
   const css = await Bun.file(join(readerDir, "reader.css")).text();
   const readerCssResult = await postcss(pipeline).process(css, { from: undefined });
 
-  const page = template.replace("__FOLIATE_BASE__", `/static/${foliateDirName}`).replace("__READER_CSS__", readerCssResult.css);
+  const page = template.replace("__FOLIATE_BASE__", `/_app/${foliateDirName}`).replace("__READER_CSS__", readerCssResult.css);
 
   await Bun.write(join(staticDir, "read.html"), page);
   console.log(`build:ui → ${join(staticDir, "read.html")}`);

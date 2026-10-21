@@ -3,6 +3,6 @@
  * Book covers extractor and per-book entry/link output; folder covers feed.xml, index.html and folder _entry.xml.
  */
 export const PROCESSING_VERSIONS = {
-  book: "2",
-  folder: "2",
+  book: "3",
+  folder: "3",
 } as const;

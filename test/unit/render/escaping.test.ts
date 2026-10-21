@@ -46,7 +46,7 @@ describe("escaping contract (hostile cassette)", () => {
     const scripts = flattenElements(html).filter((el) => el.tag === "script");
     // #then no data-derived <script> boundary is produced — exactly the progressive-enhancement bundle
     expect(scripts).toHaveLength(1);
-    expect(scripts[0]?.attrs.src).toBe("/static/main.js");
+    expect(scripts[0]?.attrs.src).toBe("/_app/main.js");
     expect(scripts[0]?.text).toBe("");
     // and the popup close control is a pure :target anchor, no checkbox/JS trigger
     expect(html).toContain('<a class="popup__close-button" href="#">');
@@ -172,12 +172,12 @@ describe("exported components auto-escape and guard hrefs", () => {
     const downloads = String(
       renderDownloads(
         bookEntry({
-          acquisitions: [{ href: "/hostile/preescaped.epub/file", type: "application/epub+zip" }],
+          acquisitions: [{ href: "/_catalog/hostile/preescaped.epub/file", type: "application/epub+zip" }],
         }),
       ),
     );
 
-    expect(downloads).toContain('href="/static/read.html#/hostile/preescaped.epub/file"');
+    expect(downloads).toContain('href="/_app/read.html#/_catalog/hostile/preescaped.epub/file"');
   });
 
   // Control-char obfuscation: browsers drop C0/DEL bytes before scheme resolution, reconstituting javascript:.

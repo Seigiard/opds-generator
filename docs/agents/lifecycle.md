@@ -26,10 +26,10 @@ The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, recon
 
 nginx on port 80 is external. Bun on port 3000 is localhost-only. Bun serves `POST /events/books` for the `/books` watcher and proxied `POST /resync[?force=1]`; its resync responses follow the contract below.
 
-- Routing is selected by URL, not content negotiation. Browsers use `/` to redirect to `/index.html` and `/<folder>/` for `index.html`. Readers use `/opds` for root `feed.xml` as 200 XML and `/<folder>/feed.xml` for folders. `/static/*` maps to `/app/static`; downloads and covers map to `/data/*`.
+- Routing is selected by URL, not content negotiation. Browsers use `/` to redirect to `/index.html` and `/<folder>/` for `index.html`. Readers use `/opds` for root `feed.xml` as 200 XML and `/_catalog/<folder>/feed.xml` for folders. `/_app/*` maps to `/app/static`; `/_catalog/*` maps to `/data/*` for downloads, covers and feeds.
 - During initial synchronization or a cascade, folder URLs and missing `index.html` or `feed.xml` return 503 through `@check_initializing`.
 - `/resync` requires `ADMIN_USER` and `ADMIN_TOKEN`. Without them, `entrypoint.sh` removes the auth block through `AUTH_ENABLED`.
-- `healthcheck.sh` is the image and Compose health check. It runs inside the container because Bun's status endpoint is local. It needs `"available":true` from `/status` and nginx 200 responses for `/feed.xml` and `/index.html`. It uses `wget` because Alpine has no `curl`. A feed alone is unhealthy.
+- `healthcheck.sh` is the image and Compose health check. It runs inside the container because Bun's status endpoint is local. It needs `"available":true` from `/status` and nginx 200 responses for `/_catalog/feed.xml` and `/index.html`. It uses `wget` because Alpine has no `curl`. A feed alone is unhealthy.
 
 ## Scans and reconciliation
 

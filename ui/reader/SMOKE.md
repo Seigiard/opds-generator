@@ -6,10 +6,10 @@ Run it and record the results in the PR description before shipping.
 
 Two tiers, two environments — **do not conflate them**:
 
-| Tier               | Environment                                          | Proves                                                    | CSP present?           |
-| ------------------ | ---------------------------------------------------- | --------------------------------------------------------- | ---------------------- |
-| Rendering          | `bun run dev:ui` → http://localhost:5173/reader.html | pagination, TOC, position, chrome, PDF fidelity           | **No**                 |
-| Security (AE3/AE6) | docker dev server → `/static/read.html#/<book>`      | scripted content blocked, negative-content matrix blocked | **Yes (nginx header)** |
+| Tier               | Environment                                            | Proves                                                    | CSP present?           |
+| ------------------ | ------------------------------------------------------ | --------------------------------------------------------- | ---------------------- |
+| Rendering          | `bun run dev:ui` → http://localhost:5173/reader.html   | pagination, TOC, position, chrome, PDF fidelity           | **No**                 |
+| Security (AE3/AE6) | docker dev server → `/_app/read.html#/_catalog/<book>` | scripted content blocked, negative-content matrix blocked | **Yes (nginx header)** |
 
 The Vite playground serves **no CSP header**, so it can only exercise foliate's iframe
 sandbox — which is _not_ the control. Confirmed during U6: the `scripted.epub` inline
@@ -71,7 +71,7 @@ fallback decision (Goal Capsule) — do not ship PDF half-working.
 
 Place `scripted.epub` and `csp-matrix.epub` into the `/books` dir the docker dev server
 watches, let them sync, then open each via its catalog **View** link (or
-`/static/read.html#/<folder>/<book>`). Run the whole tier in **both a Chromium engine and
+`/_app/read.html#/_catalog/<folder>/<book>`). Run the whole tier in **both a Chromium engine and
 a WebKit engine** — the sandbox-escape foliate warns about is WebKit-specific (bug 218086).
 
 AE3 — scripted EPUB (`scripted.epub`, and `epub-test`):
@@ -101,7 +101,7 @@ Malicious-font PDF:
 
 ## Recorded results — 2026-07-15 (automated, docker dev server, CSP active)
 
-Driven by Playwright against `http://localhost:8080/static/read.html` (real nginx CSP),
+Driven by Playwright against `http://localhost:8080/_app/read.html` (real nginx CSP),
 both engines. Fixtures: `scripted.epub`, `csp-matrix.epub`, and a real **73-page** technical
 PDF ("Next.js Performance Optimization", embedded fonts/images/code) as the complex-PDF case.
 

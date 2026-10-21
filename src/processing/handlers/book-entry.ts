@@ -35,12 +35,12 @@ export function bookEntryXml(relativePath: string, name: string, meta: BookMetad
   if (meta.rights) entry.setRights(meta.rights);
 
   if (hasCover) {
-    entry.addImage(`/${encodedPath}/cover.jpg`);
-    entry.addThumbnail(`/${encodedPath}/thumb.jpg`);
+    entry.addImage(`/_catalog/${encodedPath}/cover.jpg`);
+    entry.addThumbnail(`/_catalog/${encodedPath}/thumb.jpg`);
   }
 
   const encodedFilename = encodeURIComponent(name);
-  entry.addAcquisition(`/${encodedPath}/${encodedFilename}`, mimeType, "open-access");
+  entry.addAcquisition(`/_catalog/${encodedPath}/${encodedFilename}`, mimeType, "open-access");
 
   return entry.toXml({ prettyPrint: true });
 }

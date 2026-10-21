@@ -21,7 +21,7 @@ function interleave(items: Fragment[], separator: string): Fragment[] {
 
 /** Reader links point at feed.xml; browsers need the folder URL nginx resolves to index.html. */
 function browserHref(feedHref: string): string {
-  const folderUrl = feedHref.replace(/feed\.xml$/, "");
+  const folderUrl = feedHref.replace(/feed\.xml$/, "").replace(/^\/_catalog\//, "/");
 
   return folderUrl === "" ? "/" : folderUrl;
 }
@@ -67,11 +67,11 @@ export function formatFromMime(type: string): string {
   return "Download";
 }
 
-const FAVICON_LINKS = frag`<link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />`;
+const FAVICON_LINKS = frag`<link rel="icon" type="image/png" href="/_app/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/_app/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/_app/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/_app/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/_app/favicon/site.webmanifest" />`;
 
 export function renderHtml(model: FeedModel): string {
   let bookIndex = 0;
@@ -87,7 +87,7 @@ export function renderHtml(model: FeedModel): string {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${model.title}</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/_app/style.css" />
     ${FAVICON_LINKS}
   </head>
   <body>
@@ -95,7 +95,7 @@ export function renderHtml(model: FeedModel): string {
     <main class="books-grid" data-element=".card__title a">
 ${cards}
     </main>
-    <script src="/static/main.js"></script>
+    <script src="/_app/main.js"></script>
   </body>
 </html>
 `);
@@ -239,7 +239,7 @@ export function renderDownloads(entry: FeedEntry): Fragment {
       // must never carry a scheme or external host (R15 first line of defense).
       if (!VIEWABLE_FORMATS.has(label.toLowerCase()) || !href.startsWith("/")) return download;
 
-      return frag`${download} <a href="${`/static/read.html#${href}`}" class="popup__view-btn">View</a>`;
+      return frag`${download} <a href="${`/_app/read.html#${href}`}" class="popup__view-btn">View</a>`;
     }),
     "\n                  ",
   );

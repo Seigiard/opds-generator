@@ -78,7 +78,7 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
   const rawFolderName = relativePath.split("/").pop() || "Catalog";
   const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
-  const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+  const selfHref = relativePath === "" ? `/_catalog/${FEED_FILE}` : `/_catalog/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
   const model = buildFeedModel({
     id: feedId,
@@ -86,7 +86,7 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
     updated: new Date().toISOString(),
     kind: feedKind,
     selfHref,
-    startHref: `/${FEED_FILE}`,
+    startHref: `/_catalog/${FEED_FILE}`,
     fragments: entries,
   });
 
