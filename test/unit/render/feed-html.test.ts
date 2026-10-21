@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 import { XMLValidator } from "fast-xml-parser";
 import { parseFeed } from "../../../src/render/parse-feed.ts";
-import { renderDocument, renderHtml, formatFromMime } from "../../../src/render/feed-html.ts";
+import { renderHtml, formatFromMime } from "../../../src/render/feed-html.ts";
 import { BOOK_EXTENSIONS, VIEWABLE_FORMATS } from "../../../src/types.ts";
 import { parseFragment } from "../../../ui/reader/fragment.ts";
 import type { FeedModel } from "../../../src/render/feed-model.ts";
@@ -147,29 +147,6 @@ describe("renderHtml", () => {
       .filter((href) => href?.startsWith("#book-"));
 
     for (let i = 1; i <= bookCount; i++) expect(cardTargets).toContain(`#book-${i}`);
-  });
-
-  test("references app-prefixed assets and no unpkg runtime scripts", async () => {
-    const roots = parseHtml(renderDocument(parseFeed(await readFeed("root.xml")), []));
-    const scripts = allElements(roots).filter((el) => el.tag === "script");
-    const styles = allElements(roots).filter((el) => el.tag === "link" && el.attrs.rel === "stylesheet");
-    const icons = allElements(roots).filter((el) => el.tag === "link" && el.attrs.rel?.includes("icon"));
-
-    expect({
-      scripts: scripts.map((script) => script.attrs.src),
-      styles: styles.map((style) => style.attrs.href),
-      icons: icons.map((icon) => icon.attrs.href),
-    }).toEqual({
-      scripts: ["/_app/main.js"],
-      styles: ["/_app/style.css"],
-      icons: [
-        "/_app/favicon/favicon-96x96.png",
-        "/_app/favicon/favicon.svg",
-        "/_app/favicon/favicon.ico",
-        "/_app/favicon/apple-touch-icon.png",
-      ],
-    });
-    expect(scripts.some((s) => (s.attrs.src ?? "").includes("unpkg.com"))).toBe(false);
   });
 
   test("R7: the fragment keeps the grid navigation hook", async () => {

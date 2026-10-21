@@ -27,9 +27,7 @@ async function waitFor(path: string, maxWaitMs = 45000): Promise<void> {
 
 async function waitForServer(): Promise<void> {
   await waitFor("/opds");
-  // index.html is written by the cascade after feed.xml — wait for the browser view too
-  await waitFor("/index.html");
-  await waitFor("/test/");
+  await waitFor("/_catalog/test/feed.xml");
 }
 
 // Decode the handful of HTML entities that appear in escaped attribute values, as a
@@ -201,8 +199,7 @@ describe("nginx integration", () => {
     test("GET /_app/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
       const response = await fetch(`${BASE_URL}/_app/style.css`);
       expect(response.status).toBe(200);
-      // Unversioned asset URLs must revalidate: "immutable" left browsers on
-      // day-old CSS/JS mismatched with freshly regenerated index.html.
+      // Unversioned asset URLs must revalidate so the shell and its CSS/JS stay on the same build.
       expect(response.headers.get("cache-control") || "").toContain("no-cache");
       expect(response.headers.get("etag")).toBeTruthy();
     });

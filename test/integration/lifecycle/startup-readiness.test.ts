@@ -45,25 +45,15 @@ async function facts(url: string) {
 }
 
 test("a cold start reports availability at the root minimum while held book work is still pending", async () => {
-  // #given an empty output, a real book, a held root browser page and a held book download link
+  // #given an empty output, a real book and a held book download link
   const { root, sourcePath, outputPath, deps } = await tree();
   await copyFile(fixture, join(sourcePath, "Book.fb2"));
-  const rootPage = { entered: gate(), release: gate(), held: true };
   const link = { entered: gate(), release: gate() };
 
   const heldDeps = {
     ...deps,
     fs: {
       ...deps.fs,
-      atomicWrite: async (path: string, content: string) => {
-        if (rootPage.held && path === join(outputPath, "index.html")) {
-          rootPage.held = false;
-          rootPage.entered.open();
-          await rootPage.release.promise;
-        }
-
-        await deps.fs.atomicWrite(path, content);
-      },
       symlink: async (target: string, path: string) => {
         if (path === join(outputPath, "Book.fb2", "Book.fb2")) {
           link.entered.open();
@@ -82,23 +72,13 @@ test("a cold start reports availability at the root minimum while held book work
   try {
     const started = runtime.start();
 
-    // #when the root feed exists but its browser page is still held
-    await rootPage.entered.promise;
-
-    const feedOnly = {
-      facts: await facts(url),
-      feed: await present(join(outputPath, "feed.xml")),
-      page: await present(join(outputPath, "index.html")),
-    };
-
-    // #and the page is released while the book's download link stays held
-    rootPage.release.open();
+    // #when the root feed is published while the book's download link stays held
     await link.entered.promise;
 
     const minimum = {
       facts: await facts(url),
       feed: await present(join(outputPath, "feed.xml")),
-      page: await present(join(outputPath, "index.html")),
+      generatedPage: await present(join(outputPath, "index.html")),
       bookEntry: await present(join(outputPath, "Book.fb2", "entry.xml")),
     };
 
@@ -107,25 +87,22 @@ test("a cold start reports availability at the root minimum while held book work
     await started;
     const completed = await facts(url);
 
-    // #then readiness needs both root files, ignores pending book work, and completion is a separate fact
+    // #then the root feed alone provides readiness, and completion is a separate fact
     expect({
-      feedOnly,
       minimum,
       completed,
       titles: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries.map((entry) => entry.title),
     }).toEqual({
-      feedOnly: { facts: { available: false, availableFrom: null, verifying: true, completed: false, errors: 0 }, feed: true, page: false },
       minimum: {
         facts: { available: true, availableFrom: "minimum-publication", verifying: true, completed: false, errors: 0 },
         feed: true,
-        page: true,
+        generatedPage: false,
         bookEntry: false,
       },
       completed: { available: true, availableFrom: "minimum-publication", verifying: false, completed: true, errors: 0 },
       titles: ["Test Book"],
     });
   } finally {
-    rootPage.release.open();
     link.release.open();
     server.stop(true);
     await runtime.stop();
@@ -141,7 +118,7 @@ test("a warm start reports prior output while a held verification is active, the
   await first.start();
   await first.stop();
   const priorFeed = await readFile(join(outputPath, "feed.xml"));
-  const priorPage = await readFile(join(outputPath, "index.html"));
+  await rm(join(outputPath, "index.html"), { force: true });
   await utimes(join(sourcePath, "Book.fb2"), new Date(), new Date("2031-01-01T00:00:00Z"));
   const link = { entered: gate(), release: gate() };
 
@@ -169,7 +146,7 @@ test("a warm start reports prior output while a held verification is active, the
     const verifying = {
       facts: await facts(url),
       feedKept: (await readFile(join(outputPath, "feed.xml"))).equals(priorFeed),
-      pageKept: (await readFile(join(outputPath, "index.html"))).equals(priorPage),
+      generatedPage: await present(join(outputPath, "index.html")),
     };
 
     link.release.open();
@@ -181,7 +158,7 @@ test("a warm start reports prior output while a held verification is active, the
       verifying: {
         facts: { available: true, availableFrom: "prior-output", verifying: true, completed: false, errors: 0 },
         feedKept: true,
-        pageKept: true,
+        generatedPage: false,
       },
       completed: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
     });
@@ -193,54 +170,55 @@ test("a warm start reports prior output while a held verification is active, the
   }
 });
 
-test("a cold start whose root page cannot be published never becomes available and fails the startup", async () => {
-  // #given an empty output and a root browser page that cannot be written
+test("a cold start prunes a stale root index without delaying feed availability", async () => {
+  // #given a stale generated page and a real book whose download publication is held
   const { root, sourcePath, outputPath, deps } = await tree();
+  await mkdir(outputPath);
+  await Bun.write(join(outputPath, "index.html"), "legacy browser page");
   await copyFile(fixture, join(sourcePath, "Book.fb2"));
-  const fatal: unknown[] = [];
+  const link = { entered: gate(), release: gate() };
 
-  const failingDeps = {
+  const heldDeps = {
     ...deps,
     fs: {
       ...deps.fs,
-      atomicWrite: async (path: string, content: string) => {
-        if (path === join(outputPath, "index.html")) throw new Error("Root page denied");
-        await deps.fs.atomicWrite(path, content);
+      symlink: async (target: string, path: string) => {
+        if (path === join(outputPath, "Book.fb2", "Book.fb2")) {
+          link.entered.open();
+          await link.release.promise;
+        }
+
+        await deps.fs.symlink(target, path);
       },
     },
   };
 
-  const runtime = createLiveEngineLifecycle(failingDeps, { onFatal: (cause) => fatal.push(cause) });
+  const runtime = createLiveEngineLifecycle(heldDeps);
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createCatalogueHttpHandler(runtime) });
+  const url = server.url.href.slice(0, -1);
 
   try {
-    // #when the first pass runs
-    const outcome = await runtime.start().then(
-      () => "started",
-      (cause: unknown) => String(cause),
-    );
+    // #when the root feed is published and later book work is still held
+    const started = runtime.start();
+    await link.entered.promise;
 
-    const status = await (await fetch(`${server.url.href}status`)).json();
+    const observation = {
+      facts: await facts(url),
+      feed: await present(join(outputPath, "feed.xml")),
+      generatedPage: await present(join(outputPath, "index.html")),
+    };
 
-    // #then startup rejected, no readiness was ever reported and the remaining book was not published
-    expect({
-      rejectedWithRootFailure: outcome.includes("Root page denied"),
-      fatal: fatal.length,
-      available: status.available,
-      verifying: status.verifying,
-      completed: status.completed,
-      errors: status.errors.map((error: { source: string }) => error.source),
-      bookPublished: await present(join(outputPath, "Book.fb2", "entry.xml")),
-    }).toEqual({
-      rejectedWithRootFailure: true,
-      fatal: 1,
-      available: false,
-      verifying: false,
-      completed: false,
-      errors: ["pass"],
-      bookPublished: false,
+    link.release.open();
+    await started;
+
+    // #then the old page is gone and the root feed is the available minimum
+    expect(observation).toEqual({
+      facts: { available: true, availableFrom: "minimum-publication", verifying: true, completed: false, errors: 0 },
+      feed: true,
+      generatedPage: false,
     });
   } finally {
+    link.release.open();
     server.stop(true);
     await runtime.stop();
     await rm(root, { recursive: true, force: true });
@@ -307,7 +285,7 @@ test("a warm start whose source cannot be read keeps the prior catalogue availab
   await first.start();
   await first.stop();
   const priorFeed = await readFile(join(outputPath, "feed.xml"));
-  const priorPage = await readFile(join(outputPath, "index.html"));
+  await rm(join(outputPath, "index.html"), { force: true });
   const moved = join(root, "moved-source");
   await rename(sourcePath, moved);
   const fatal: unknown[] = [];
@@ -317,7 +295,13 @@ test("a warm start whose source cannot be read keeps the prior catalogue availab
 
   try {
     // #when verification fails, the process stays up, and the source returns before a resync
-    await runtime.start();
+    const startup = await runtime.start().then(
+      () => "started",
+      () => "rejected",
+    );
+
+    // #then the root feed alone was enough to enter recoverable prior-output mode
+    expect(startup).toBe("started");
     const failed = await (await fetch(`${url}/status`)).json();
 
     const afterFailure = {
@@ -328,7 +312,6 @@ test("a warm start whose source cannot be read keeps the prior catalogue availab
       errors: failed.errors.map((error: { source: string }) => error.source),
       fatal: fatal.length,
       feedKept: (await readFile(join(outputPath, "feed.xml"))).equals(priorFeed),
-      pageKept: (await readFile(join(outputPath, "index.html"))).equals(priorPage),
     };
 
     await rename(moved, sourcePath);
@@ -351,7 +334,6 @@ test("a warm start whose source cannot be read keeps the prior catalogue availab
         errors: ["pass"],
         fatal: 0,
         feedKept: true,
-        pageKept: true,
       },
       resync: 202,
       retried: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },

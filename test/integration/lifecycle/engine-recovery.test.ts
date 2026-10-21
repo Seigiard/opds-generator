@@ -972,17 +972,17 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
 });
 
 test("successful folder deletion clears that folder's retained publication error", async () => {
-  // #given a published folder whose later folder page publication fails
+  // #given a published folder whose later feed publication fails
   const { root, sourcePath, outputPath, deps } = await tree();
   await mkdir(join(sourcePath, "Fiction"));
-  let failPage = false;
+  let failFeed = false;
 
   const faultyDeps = {
     ...deps,
     fs: {
       ...deps.fs,
       atomicWrite: async (path: string, content: string) => {
-        if (failPage && path === join(outputPath, "Fiction", "index.html")) throw new Error("Folder page denied");
+        if (failFeed && path === join(outputPath, "Fiction", "feed.xml")) throw new Error("Folder feed denied");
 
         await deps.fs.atomicWrite(path, content);
       },
@@ -995,11 +995,11 @@ test("successful folder deletion clears that folder's retained publication error
         openEngineCatalogue(faultyDeps).pipe(
           Effect.flatMap((session) =>
             io(async () => {
-              failPage = true;
+              failFeed = true;
               await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: join(outputPath, "Fiction") })]));
               await Effect.runPromise(session.awaitCompletion);
               const failed = await Effect.runPromise(session.status);
-              failPage = false;
+              failFeed = false;
               await rm(join(sourcePath, "Fiction"), { recursive: true });
 
               // #when the folder is confirmed deleted and its output cleanup succeeds
@@ -1034,12 +1034,12 @@ test("successful folder deletion clears that folder's retained publication error
 });
 
 test("root folder publication failure clears when cascades refresh the same output under a normalized path", async () => {
-  // #given an output root configured with a trailing slash and a transient root write failure
+  // #given an output root configured with a trailing slash and a transient root feed failure
   const { root, sourcePath, outputPath, deps } = await tree();
   const dataPath = `${outputPath}/`;
   await mkdir(join(sourcePath, "Fiction"));
   await copyFile(fixture, join(sourcePath, "Fiction", "Book.fb2"));
-  let failRootPage = false;
+  let failRootFeed = false;
 
   const faultyDeps = {
     ...deps,
@@ -1047,7 +1047,7 @@ test("root folder publication failure clears when cascades refresh the same outp
     fs: {
       ...deps.fs,
       atomicWrite: async (path: string, content: string) => {
-        if (failRootPage && path === join(outputPath, "index.html")) throw new Error("Root page denied");
+        if (failRootFeed && path === join(outputPath, "feed.xml")) throw new Error("Root feed denied");
 
         await deps.fs.atomicWrite(path, content);
       },
@@ -1060,11 +1060,11 @@ test("root folder publication failure clears when cascades refresh the same outp
         openEngineCatalogue(faultyDeps).pipe(
           Effect.flatMap((session) =>
             io(async () => {
-              failRootPage = true;
+              failRootFeed = true;
               await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: dataPath })]));
               await Effect.runPromise(session.awaitCompletion);
               const failed = await Effect.runPromise(session.status);
-              failRootPage = false;
+              failRootFeed = false;
 
               // #when a successful root refresh uses the normalized join()/dirname() spelling
               await Effect.runPromise(session.submit([CatalogueEvent.FolderMetaSyncRequested({ path: outputPath })]));

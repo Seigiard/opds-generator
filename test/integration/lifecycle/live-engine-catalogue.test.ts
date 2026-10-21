@@ -71,13 +71,20 @@ test("HTTP watcher input publishes a real book without a manual resync", async (
     });
 
     await waitFor(async () => (await titles(outputPath)).includes("Test Book"));
-    // #then the real fixture's metadata, browser link and acquisition target are published
+    // #then the real fixture's metadata and acquisition target are published without a generated page
     expect({
       admission,
       titles: await titles(outputPath),
-      browserDownload: (await readFile(join(outputPath, "index.html"), "utf8")).includes('href="/_catalog/Book.fb2/Book.fb2"'),
+      acquisition: parseFeed(await readFile(join(outputPath, "feed.xml"), "utf8")).entries[0]?.acquisitions?.[0]?.href,
+      generatedPage: await Bun.file(join(outputPath, "index.html")).exists(),
       downloadMatches: (await readFile(join(outputPath, "Book.fb2", "Book.fb2"))).equals(await readFile(fixture)),
-    }).toEqual({ admission: { status: 202, text: "OK" }, titles: ["Test Book"], browserDownload: true, downloadMatches: true });
+    }).toEqual({
+      admission: { status: 202, text: "OK" },
+      titles: ["Test Book"],
+      acquisition: "/_catalog/Book.fb2/Book.fb2",
+      generatedPage: false,
+      downloadMatches: true,
+    });
   } finally {
     server.stop(true);
     await runtime.stop();
@@ -179,7 +186,8 @@ test("HTTP resync while busy retains results and preserves forced follow-up afte
       requests,
       final: (await titles(outputPath)).sort(),
       forcedUnchangedBook: (await stat(secondEntry)).mtimeMs !== ancient.getTime(),
-      browserAvailable: await Bun.file(join(outputPath, "index.html")).exists(),
+      feedAvailable: await Bun.file(join(outputPath, "feed.xml")).exists(),
+      generatedPage: await Bun.file(join(outputPath, "index.html")).exists(),
       latestDownload: (await readFile(join(outputPath, "First.fb2", "First.fb2"), "utf8")).includes(
         "<book-title>Current Book</book-title>",
       ),
@@ -194,7 +202,8 @@ test("HTTP resync while busy retains results and preserves forced follow-up afte
       ],
       final: ["Current Book", "Test Book"],
       forcedUnchangedBook: true,
-      browserAvailable: true,
+      feedAvailable: true,
+      generatedPage: false,
       latestDownload: true,
     });
   } finally {
