@@ -294,8 +294,8 @@ describe("nginx integration", () => {
       });
     });
 
-    test("GET /nonexistent.file returns 404 (non-directory miss)", async () => {
-      const response = await fetch(`${BASE_URL}/nonexistent.file`, { redirect: "manual" });
+    test("GET /_catalog/nonexistent.file returns 404 (non-directory catalogue miss)", async () => {
+      const response = await fetch(`${BASE_URL}/_catalog/nonexistent.file`, { redirect: "manual" });
       expect(response.status).toBe(404);
     });
 
