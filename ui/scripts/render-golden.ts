@@ -1,7 +1,8 @@
 import { readdir, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { parseFeed } from "../../src/render/parse-feed.ts";
-import { renderHtml } from "../../src/render/feed-html.ts";
+import { browserHref, renderHtml } from "../../src/render/feed-html.ts";
+import { breadcrumbsFor } from "../../src/render/breadcrumbs.ts";
 
 const feedsDir = join(import.meta.dir, "..", "..", "test", "fixtures", "feeds");
 
@@ -16,7 +17,8 @@ const feeds = (await readdir(feedsDir)).filter((name) => name.endsWith(".xml")).
 
 for (const name of feeds) {
   const xml = await Bun.file(join(feedsDir, name)).text();
-  const html = renderHtml(parseFeed(xml));
+  const model = parseFeed(xml);
+  const html = renderHtml(model, breadcrumbsFor(browserHref(model.selfHref)));
   const outPath = join(goldenDir, basename(name, ".xml") + ".html");
   await Bun.write(outPath, html);
   console.log(`render:golden → ${outPath}`);

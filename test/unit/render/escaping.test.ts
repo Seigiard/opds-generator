@@ -20,9 +20,9 @@ const ALL_CASSETTES = [
 
 const readFeed = (name: string) => Bun.file(join(FEEDS_DIR, name)).text();
 
-const renderCassette = async (name: string) => renderHtml(parseFeed(await readFeed(name)));
+const renderCassette = async (name: string) => renderHtml(parseFeed(await readFeed(name)), []);
 
-const stripDoctype = (html: string) => html.replace(/^<!DOCTYPE html>\s*/i, "");
+const asXmlDocument = (fragment: string) => `<fragment>${fragment.replace(/^<!DOCTYPE html>\s*/i, "")}</fragment>`;
 
 const hrefLikeAttrs = (html: string) => collectAttributes(html).filter((a) => a.name === "href" || a.name === "src");
 
@@ -33,24 +33,19 @@ describe("escaping contract (hostile cassette)", () => {
       const html = await renderCassette(name);
       // #then the output must first be well-formed — a swallowed attribute breakout would
       // otherwise vanish from the parsed tree and pass the handler query silently
-      expect(XMLValidator.validate(stripDoctype(html)), `${name} must be well-formed`).toBe(true);
+      expect(XMLValidator.validate(asXmlDocument(html)), `${name} must be well-formed`).toBe(true);
       // and no rendered element carries an inline event-handler attribute
       const handlers = collectAttributes(html).filter((a) => /^on/i.test(a.name));
       expect(handlers, `${name} must have no on* attributes`).toEqual([]);
     }
   });
 
-  test("zero-JS invariant: the only <script> is the bundled main.js, popup stays :target-only", async () => {
+  test("zero-JS invariant: the fragment contains no script elements", async () => {
     // #given the hostile cassette injects </script> in title, author, and summary
     const html = await renderCassette("hostile.xml");
     const scripts = flattenElements(html).filter((el) => el.tag === "script");
-    // #then no data-derived <script> boundary is produced — exactly the progressive-enhancement bundle
-    expect(scripts).toHaveLength(1);
-    expect(scripts[0]?.attrs.src).toBe("/_app/main.js");
-    expect(scripts[0]?.text).toBe("");
-    // and the popup close control is a pure :target anchor, no checkbox/JS trigger
-    expect(html).toContain('<a class="popup__close-button" href="#">');
-    expect(html).not.toContain('type="checkbox"');
+    // #then neither shell scripts nor data-derived script boundaries are present
+    expect(scripts).toEqual([]);
   });
 
   test("R2: markup-injection probes never become live elements", async () => {
@@ -86,7 +81,7 @@ describe("escaping contract (hostile cassette)", () => {
     for (const name of ALL_CASSETTES) {
       const html = await renderCassette(name);
       // #then the rendered document stays well-formed markup
-      expect(XMLValidator.validate(stripDoctype(html)), `${name} must be well-formed`).toBe(true);
+      expect(XMLValidator.validate(asXmlDocument(html)), `${name} must be well-formed`).toBe(true);
     }
   });
 
@@ -206,7 +201,7 @@ describe("exported components auto-escape and guard hrefs", () => {
   }
 });
 
-describe("renderHeader home link guards a hostile startHref", () => {
+describe("renderHeader home link is path-derived", () => {
   const model = (startHref: string): FeedModel => ({
     id: "urn:x",
     title: "T",
@@ -217,14 +212,12 @@ describe("renderHeader home link guards a hostile startHref", () => {
     entries: [],
   });
 
-  test("plain javascript: startHref renders the home link inert", () => {
-    const roots = parseHtml(renderHtml(model("javascript:alert(1)")));
-    expect(byClass(roots, "header__home")[0]?.attrs.href).toBe("#");
-  });
-
-  test("control-char-obfuscated startHref renders the home link inert", () => {
-    const roots = parseHtml(renderHtml(model("java\tscript:alert(1)")));
+  test("a hostile feed startHref cannot influence the static home target", () => {
+    // #given a hostile feed startHref and one path-derived crumb
+    const roots = parseHtml(renderHtml(model("javascript:alert(1)"), [{ label: "x", href: "/x/" }]));
+    // #when the header is inspected
     const home = byClass(roots, "header__home")[0];
-    expect(home?.attrs.href).toBe("#");
+    // #then the home target remains the browser root
+    expect(home?.attrs.href).toBe("/");
   });
 });
