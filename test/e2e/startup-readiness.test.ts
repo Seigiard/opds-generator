@@ -276,7 +276,11 @@ describe("startup readiness through the production server and nginx", () => {
         served: Object.fromEntries(paths.map((path) => [path, served[path]!.equals(prior[path]!)])),
         downloadIsSource: served["/_catalog/Book.epub/Book.epub"]!.equals(await readFile(EPUB)),
         priorTitles: titles(prior["/opds"]!).sort(),
-        root: { status: root.status, location: root.location },
+        root: {
+          status: root.status,
+          location: root.location,
+          shell: root.body.toString("utf8").includes('<div id="app"></div>'),
+        },
         resyncWithoutCredentials: challenge.status,
       }).toEqual({
         gracefulStop: { code: 0, exit: 0 },
@@ -285,7 +289,7 @@ describe("startup readiness through the production server and nginx", () => {
         served: Object.fromEntries(paths.map((path) => [path, true])),
         downloadIsSource: true,
         priorTitles: ["Nested", "Test Book"],
-        root: { status: 302, location: "/index.html" },
+        root: { status: 200, location: null, shell: true },
         resyncWithoutCredentials: 401,
       });
       // #and releasing the extraction completes verification without losing availability
@@ -323,24 +327,25 @@ describe("startup readiness through the production server and nginx", () => {
     });
   });
 
-  test("a cold start reports availability at the root minimum while remaining book work is held", async () => {
-    // #given a fresh output, a real book, a held root browser page and a held extraction
+  test("a cold start serves the shell before the root feed and reports availability after the minimum publishes", async () => {
+    // #given a fresh output, a real book, a held root feed and a held extraction
     await withScenario("cold", {}, async (s) => {
       await copyFile(EPUB, join(s.src, "Book.epub"));
-      await s.setHolds(["/data/index.html.tmp"]);
+      await s.setHolds(["/data/feed.xml.tmp"]);
       await s.holdUnzip(true);
-      // #when the first pass has written the root feed but not the root page
+      // #when the first pass is still publishing the root feed
       await s.compose("up", "-d");
-      await until("held root page", () => s.entered("entered-_data_index.html.tmp"));
+      await until("held root feed", () => s.entered("entered-_data_feed.xml.tmp"));
 
-      const feedOnly = {
+      const beforeMinimum = {
         facts: await s.status(),
         opds: (await get("/opds")).status,
+        root: await get("/"),
         page: (await get("/index.html")).status,
         health: await s.health(),
       };
 
-      // #and the page is published while the book extraction is still held
+      // #and the root feed publishes while the book extraction is still held
       await s.setHolds([]);
       await until("availability", async () => (await s.status())?.available);
       await until("held extraction", () => s.entered("unzip-entered"));
@@ -352,26 +357,34 @@ describe("startup readiness through the production server and nginx", () => {
       await s.holdUnzip(false);
       const done = await completed(s);
       const final = await get("/opds");
-      // #then readiness needs the root feed and page, ignores pending book work, and completion is separate
+      // #then the static shell is always available, readiness waits for the catalogue minimum, and completion is separate
       expect({
-        feedOnly: { facts: summary(feedOnly.facts), opds: feedOnly.opds, page: feedOnly.page, health: feedOnly.health },
+        beforeMinimum: {
+          facts: summary(beforeMinimum.facts),
+          opds: beforeMinimum.opds,
+          rootStatus: beforeMinimum.root.status,
+          rootIsShell: beforeMinimum.root.body.toString("utf8").includes('<div id="app"></div>'),
+          page: beforeMinimum.page,
+          health: beforeMinimum.health,
+        },
         minimum: {
           facts: summary(minimum),
           health: minimumHealth,
           feedStatus: feed.status,
           feedTitles: titles(feed.body),
           pageStatus: page.status,
-          pageIsBrowserView: page.body.toString("utf8").includes('<main class="books-grid"'),
+          pageIsShell: page.body.toString("utf8").includes('<div id="app"></div>'),
         },
         done: summary(done),
         finalTitles: titles(final.body),
         download: (await get("/_catalog/Book.epub/Book.epub")).body.equals(await readFile(EPUB)),
       }).toEqual({
-        feedOnly: {
+        beforeMinimum: {
           facts: { available: false, availableFrom: null, verifying: true, completed: false, errors: [] },
-          opds: 200,
-          page: 503,
-          // A served feed alone is not health: the root page is part of the declared minimum.
+          opds: 503,
+          rootStatus: 200,
+          rootIsShell: true,
+          page: 200,
           health: 1,
         },
         minimum: {
@@ -380,7 +393,7 @@ describe("startup readiness through the production server and nginx", () => {
           feedStatus: 200,
           feedTitles: [],
           pageStatus: 200,
-          pageIsBrowserView: true,
+          pageIsShell: true,
         },
         done: { available: true, availableFrom: "minimum-publication", verifying: false, completed: true, errors: [] },
         finalTitles: ["Test Book"],
@@ -396,38 +409,41 @@ describe("startup readiness through the production server and nginx", () => {
       await mkdir(join(s.data, "index.html"));
       // #when the first pass runs
       await s.compose("up", "-d");
-      const seen = { available: false, pageServed: false };
+      const seen = { available: false, shellServed: false };
 
       const exited = await until("container exit", async () => {
         const facts = await s.status();
 
         if (facts?.available) seen.available = true;
 
-        if ((await get("/index.html").catch(() => undefined))?.status === 200) seen.pageServed = true;
+        if ((await get("/index.html").catch(() => undefined))?.status === 200) seen.shellServed = true;
         const state = await s.container();
 
         return state?.state === "exited" ? state : undefined;
       });
 
-      // #then the container failed and no usable deployment was ever reported
-      expect({ exitCode: exited.exitCode, seen }).toEqual({ exitCode: 1, seen: { available: false, pageServed: false } });
+      // #then the shell stays static and reachable, but the failed catalogue is never reported available
+      expect({ exitCode: exited.exitCode, seen }).toEqual({ exitCode: 1, seen: { available: false, shellServed: true } });
 
       // #and a restart against the same unusable DATA still fails instead of treating the page directory as prior output
       await s.compose("up", "-d");
-      const restartSeen = { available: false, pageServed: false };
+      const restartSeen = { available: false, shellServed: false };
 
       const restarted = await until("container exit after restart", async () => {
         const facts = await s.status();
 
         if (facts?.available) restartSeen.available = true;
 
-        if ((await get("/index.html").catch(() => undefined))?.status === 200) restartSeen.pageServed = true;
+        if ((await get("/index.html").catch(() => undefined))?.status === 200) restartSeen.shellServed = true;
         const state = await s.container();
 
         return state?.state === "exited" ? state : undefined;
       });
 
-      expect({ exitCode: restarted.exitCode, seen: restartSeen }).toEqual({ exitCode: 1, seen: { available: false, pageServed: false } });
+      expect({ exitCode: restarted.exitCode, seen: restartSeen }).toEqual({
+        exitCode: 1,
+        seen: { available: false, shellServed: true },
+      });
     });
   });
 
