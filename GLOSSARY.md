@@ -8,15 +8,19 @@ Builds an OPDS catalogue and a browser view from a directory of locally stored e
 The files and folders from which the catalogue is built. The service has read-only access; changes can occur while it processes them.
 
 **Derived representation**:
-The catalogue and browser view produced from the source tree, including their supporting metadata and images.
+The catalogue produced from the source tree, including its supporting metadata and images.
+
+**Browser view**:
+The catalogue as a person sees it in a browser. It is rendered in the browser from the catalogue and is not part of the derived representation.
+_Avoid_: HTML output, index page
 
 ## Sync lifecycle
 
 The shared synchronization engine owns the lifecycle. These terms are the independent facts `GET /status` reports.
 
 **Minimum**:
-The root feed and root browser page. A deployment is usable once both exist.
-_Avoid_: Seed feed
+The root feed. A deployment is usable once it exists.
+_Avoid_: Seed feed, root page
 
 **Available**:
 A usable minimum is in the catalogue: it existed before this run (**prior output**) or this run published it. Deployment health means available. It does not wait for verification.
