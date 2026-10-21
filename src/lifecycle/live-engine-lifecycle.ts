@@ -24,8 +24,8 @@ const STOPPED: LiveStatus<EventType> = {
  * periodic timer, the retry of a failed first pass and admission while that pass runs; this adapter only
  * translates HTTP input and the process lifetime.
  *
- * A failed first pass is fatal only while no usable root feed and page exist. With usable output the process
- * stays up, serves it, reports the failure in `status()` and the engine retries on a request or reconcile tick.
+ * A failed first pass is fatal only while no usable root feed exists. With usable output the process stays up,
+ * serves it, reports the failure in `status()` and the engine retries on a request or reconcile tick.
  */
 export function createLiveEngineLifecycle(
   deps: HandlerDeps,

@@ -2,12 +2,12 @@
 
 Code: `src/render/feed-html.ts`, `ui/styles`, `ui/gridnav`.
 
-Generated feed and entry links use `/_catalog/`. Generated pages load assets from `/_app/`; their folder cards keep the browser URL (`/<folder>/`).
+Generated feed and entry links use `/_catalog/`. The static shell at `static/index.html` is served on `/` and every folder path. It fetches `/_catalog/<path>/feed.xml`, parses the feed in the browser and renders the `renderHtml` fragment. Folder cards keep the browser URL (`/<folder>/`).
 
 ## Model and build
 
-- `FeedModel` is the one source per folder. The `folder-meta-sync` cascade builds it once and writes `feed.xml` (`renderXml`) and then `index.html` (`renderHtml`). HTML is rendered at sync time. There is no browser XSLT.
-- Preview with `bun run dev:ui`. Then run `bun run build:ui`. If existing `index.html`, `feed.xml` or `_entry.xml` output must change, bump `PROCESSING_VERSIONS.folder` in `src/processing-versions.ts`; a restart or ordinary pass then rebuilds stale folders. `POST /resync?force=1` also reprocesses everything.
+- `FeedModel` is the one source per folder. The `folder-meta-sync` cascade builds it once and writes `feed.xml` (`renderXml`) and `_entry.xml` for non-root folders. The shell fetches and parses the feed, then renders the `renderHtml(model, crumbs)` fragment in the browser. There is no browser XSLT.
+- Preview with `bun run dev:ui`. Then run `bun run build:ui`. Markup and CSS changes do not need a processing-version bump. Bump `PROCESSING_VERSIONS.folder` when feed or entry links, or `_entry.xml`, change; a restart or ordinary pass then rebuilds stale folders. `POST /resync?force=1` also reprocesses everything.
 - `test/golden/` is byte-exact and `.prettierignore`'d. Every markup change needs `bun run render:golden` and a commit of the goldens.
 - `ui/styles/variations.css` cycles through four fixed cover proportions and colors. Each card and its popup share the same variant.
 - Book popups use hash + CSS `:target` and work without JS. `main.js` is progressive enhancement only.

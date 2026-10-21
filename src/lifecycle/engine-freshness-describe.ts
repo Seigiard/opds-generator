@@ -31,7 +31,7 @@ export const describeFreshness =
         sourcePaths: [source],
         resultKind: "folder" as const,
         processingVersion: options.processingVersions?.folder ?? PROCESSING_VERSIONS.folder,
-        outputPaths: [join(source, "feed.xml"), join(source, "index.html"), ...(source ? [join(source, "_entry.xml")] : [])],
+        outputPaths: [join(source, "feed.xml"), ...(source ? [join(source, "_entry.xml")] : [])],
       };
     }
 
