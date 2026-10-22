@@ -91,8 +91,7 @@ describe("bookSync handler", () => {
   test("returns empty array for non-BookCreated events", async () => {
     const event: EventType = { _tag: "FolderCreated", parent: FILES_DIR, name: "Fiction" };
     const result = await bookSync(event, deps);
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toEqual([]);
+    expect(result).toEqual([]);
   });
 
   test("cancellation preserves the previous entry and does not create a download link", async () => {
@@ -117,13 +116,13 @@ describe("bookSync handler", () => {
     };
 
     // #when
-    const result = await bookSync(bookCreatedEvent("test.epub"), cancellableDeps);
+    const result = bookSync(bookCreatedEvent("test.epub"), cancellableDeps);
     // #then
+    await expect(result).rejects.toBe(reason);
     expect({
-      error: result._unsafeUnwrapErr(),
       entry: await Bun.file(join(bookDir, "entry.xml")).text(),
       linkExists: await Bun.file(join(bookDir, "test.epub")).exists(),
-    }).toEqual({ error: reason, entry: "previous entry", linkExists: false });
+    }).toEqual({ entry: "previous entry", linkExists: false });
   });
 
   test("rewrites links in a kept entry after extraction fails", async () => {
@@ -193,9 +192,8 @@ describe("bookSync handler", () => {
     };
 
     // #when
-    const result = await bookSync(bookCreatedEvent("test.txt"), cancellingDeps);
+    await bookSync(bookCreatedEvent("test.txt"), cancellingDeps);
     // #then
-    expect(result.isOk()).toBe(true);
     expect(await readlink(join(DATA_DIR, "test.txt", "test.txt"))).toBe(bookPath);
   });
 
@@ -291,7 +289,7 @@ describe("bookSync handler", () => {
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>Test Book</title>"),
       author: entry.includes("<name>Test Author</name>"),
       issued: entry.includes("<dc:issued>2025</dc:issued>"),
@@ -328,7 +326,7 @@ describe("bookSync handler", () => {
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>Test Book</title>"),
       author: entry.includes("<name>Test Author</name>"),
       issued: entry.includes("<dc:issued>2025</dc:issued>"),
@@ -367,7 +365,7 @@ describe("bookSync handler", () => {
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>Test Book</title>"),
       author: entry.includes("<name>Test Author</name>"),
       issued: entry.includes("<dc:issued>2021-09</dc:issued>"),
@@ -495,7 +493,7 @@ describe("bookSync handler", () => {
     const bookDir = join(DATA_DIR, "My_Broken_Novel.epub");
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>My Broken Novel</title>"),
       cover: entry.includes('rel="http://opds-spec.org/image"'),
       link: await readlink(join(bookDir, "My_Broken_Novel.epub")),
@@ -522,7 +520,7 @@ describe("bookSync handler", () => {
       const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
       const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
       expect({
-        cascade: result._unsafeUnwrap(),
+        cascade: result,
         title: entry.includes("<title>Test Book</title>"),
         author: entry.includes("<name>Test Author</name>"),
         cover: entry.includes('rel="http://opds-spec.org/image"'),
@@ -555,7 +553,7 @@ describe("bookSync handler", () => {
     const bookDir = join(DATA_DIR, name);
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>My Plain Notes</title>"),
       cover: entry.includes('rel="http://opds-spec.org/image"'),
       link: await readlink(join(bookDir, name)),
@@ -594,7 +592,7 @@ describe("bookSync handler", () => {
       const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
       const thumb = await sharp(join(bookDir, "thumb.jpg")).metadata();
       expect({
-        cascade: result._unsafeUnwrap(),
+        cascade: result,
         title: entry.includes("<title>Test Book</title>"),
         author: entry.includes("<name>Test Author</name>"),
         language: entry.includes("<dc:language>en</dc:language>"),
@@ -627,7 +625,7 @@ describe("bookSync handler", () => {
     const bookDir = join(DATA_DIR, "My_Broken_Tale.fbz");
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>My Broken Tale</title>"),
       cover: entry.includes('rel="http://opds-spec.org/image"'),
       link: await readlink(join(bookDir, "My_Broken_Tale.fbz")),
@@ -702,20 +700,27 @@ describe("bookSync handler", () => {
 
       // #when the stop arrives mid-read
       controller.abort(reason);
-      const beforeRelease = await Promise.race([result.then(() => "settled"), Bun.sleep(100).then(() => "waiting")]);
+
+      const beforeRelease = await Promise.race([
+        result.then(
+          () => "settled",
+          () => "settled",
+        ),
+        Bun.sleep(100).then(() => "waiting"),
+      ]);
+
       held.release();
-      const outcome = await result;
 
       // #then the handler waited for the read, ended as stopped, and left the previous entry without a link
+      await expect(result).rejects.toBe(reason);
       expect({
         beforeRelease,
-        error: outcome._unsafeUnwrapErr(),
         entry: await Bun.file(join(bookDir, "entry.xml")).text(),
         linkExists: await lstat(join(bookDir, name)).then(
           () => true,
           () => false,
         ),
-      }).toEqual({ beforeRelease: "waiting", error: reason, entry: "previous entry", linkExists: false });
+      }).toEqual({ beforeRelease: "waiting", entry: "previous entry", linkExists: false });
     } finally {
       held.release();
       held.restore();
@@ -793,7 +798,7 @@ Pages:          7
     const bookDir = join(DATA_DIR, "My_Broken_Report.pdf");
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
     expect({
-      cascade: result._unsafeUnwrap(),
+      cascade: result,
       title: entry.includes("<title>My Broken Report</title>"),
       cover: entry.includes('rel="http://opds-spec.org/image"'),
       link: await readlink(join(bookDir, "My_Broken_Report.pdf")),

@@ -259,11 +259,11 @@ async function buildHandlerChain(tmpDir: string): Promise<Op> {
 
     try {
       await Bun.write(join(folderPath, bookFile), await Bun.file(join(FIXTURES_DIR, bookFile)).arrayBuffer());
-      (await runAsPromiseHandler(folderSyncEffect, { _tag: "FolderCreated", parent: filesDir, name: folderName }, deps))._unsafeUnwrap();
+      await runAsPromiseHandler(folderSyncEffect, { _tag: "FolderCreated", parent: filesDir, name: folderName }, deps);
       const book: EventType = { _tag: "BookCreated", parent: folderPath, name: bookFile };
-      (await runAsPromiseHandler(bookSyncEffect, book, deps))._unsafeUnwrap();
-      (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps))._unsafeUnwrap();
-      (await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: dataDir }, deps))._unsafeUnwrap();
+      await runAsPromiseHandler(bookSyncEffect, book, deps);
+      await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: folderDataPath }, deps);
+      await runAsPromiseHandler(folderMetaSyncEffect, { _tag: "FolderMetaSyncRequested", path: dataDir }, deps);
       // A handler that silently skips the book or its cover must not pass the gate by avoiding the workload.
       await stat(join(folderDataPath, bookFile, "entry.xml"));
       await stat(join(folderDataPath, bookFile, "cover.jpg"));
