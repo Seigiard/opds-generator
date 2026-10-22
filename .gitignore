@@ -47,3 +47,8 @@ docs/superpowers
 
 # playwright MCP session artifacts
 .playwright-mcp/
+
+# revmux: keep the shared review profile, ignore local runs
+!.revmux/
+.revmux/*
+!.revmux/profile.md
