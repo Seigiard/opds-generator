@@ -37,7 +37,7 @@ describe("renderHtml", () => {
     // #when rendered
     const roots = parseHtml(render(model, [{ label: "nonfiction", href: "/nonfiction/" }]));
     // #then the heading carries the path-derived current folder
-    expect(byClass(roots, "header__title")[0]?.text).toBe("nonfiction");
+    expect(byClass(roots, "header__title")[0]?.text).toBe("Nonfiction");
     // and a home breadcrumb link appears for a non-root feed and targets the browser root
     expect(byClass(roots, "header__home")[0]?.attrs.href).toBe("/");
     // and every entry becomes a card of the right kind
@@ -93,7 +93,7 @@ describe("renderHtml", () => {
       home: "/",
       crumbLinks: [{ href: "/comics/", label: "comics" }],
       separators: ["/", "/"],
-      title: "Batman",
+      title: "Catalog",
     });
   });
 

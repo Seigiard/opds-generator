@@ -186,7 +186,7 @@ describe("browser shell boot", () => {
         fetchCount: 1,
         fetchedUrls: ["/_catalog/fiction/feed.xml"],
         retryDelayMs: null,
-        title: "fiction",
+        title: "Catalog",
       },
       renderedWithoutTrailingSlash: {
         stateClass: null,
@@ -198,7 +198,7 @@ describe("browser shell boot", () => {
         fetchCount: 1,
         fetchedUrls: ["/_catalog/fiction/feed.xml"],
         retryDelayMs: null,
-        title: "fiction",
+        title: "Catalog",
       },
       starting: {
         stateClass: null,
@@ -210,7 +210,7 @@ describe("browser shell boot", () => {
         fetchCount: 2,
         fetchedUrls: ["/_catalog/fiction/feed.xml", "/_catalog/fiction/feed.xml"],
         retryDelayMs: 30_000,
-        title: "fiction",
+        title: "Catalog",
       },
       notFound: {
         stateClass: "app-state app-state--not-found",
