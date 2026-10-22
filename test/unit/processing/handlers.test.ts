@@ -11,7 +11,6 @@ import { createEffectFileSystemTestDouble } from "../../helpers/effect-file-syst
 import type { HandlerDeps } from "../../../src/context.ts";
 import type { EventType } from "../../../src/processing/types.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
-import type { Result } from "neverthrow";
 
 // Mock tracking
 interface MockFs {
@@ -116,7 +115,7 @@ const asyncDeps: HandlerDeps = {
 };
 
 const asCleanupHandler =
-  (handler: EffectHandler): ((event: EventType, handlerDeps: HandlerDeps) => Promise<Result<readonly EventType[], Error>>) =>
+  (handler: EffectHandler): ((event: EventType, handlerDeps: HandlerDeps) => Promise<readonly EventType[]>) =>
   (event, handlerDeps) =>
     runAsPromiseHandler(handler, event, handlerDeps);
 
@@ -134,18 +133,14 @@ describe("Processing Handlers", () => {
 
   describe("folderCleanup", () => {
     test("removes data directory for deleted folder", async () => {
-      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
-
-      expect(result.isOk()).toBe(true);
+      await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), asyncDeps);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/Author");
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
     });
 
     test("handles nested folder paths correctly", async () => {
-      const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"), asyncDeps);
-
-      expect(result.isOk()).toBe(true);
+      await folderCleanup(folderDeletedEvent("/test/books/Fiction/SciFi/", "Isaac Asimov"), asyncDeps);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/SciFi/Isaac Asimov");
     });
   });
@@ -159,7 +154,7 @@ describe("Processing Handlers", () => {
       // #when
       const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "Book.epub"), deps);
       // #then
-      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+      expect({ events: result, rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
     });
 
     test("folderCleanup keeps the data when the folder exists in the books directory", async () => {
@@ -168,51 +163,45 @@ describe("Processing Handlers", () => {
       // #when
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "Author"), deps);
       // #then
-      expect({ events: result._unsafeUnwrap(), rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
+      expect({ events: result, rm: mockFs.rmCalls }).toEqual({ events: [], rm: [] });
     });
   });
 
   describe("folderSync", () => {
     test("creates data directory for new folder", async () => {
-      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
-      expect(result.isOk()).toBe(true);
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(mockFs.mkdirCalls.some((c) => c.path === "/test/data/Fiction")).toBe(true);
     });
 
     test("creates _entry.xml for non-root folders", async () => {
-      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
-      expect(result.isOk()).toBe(true);
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeDefined();
       expect(entryWrite?.content).toContain("<entry");
     });
 
     test("does not create _entry.xml for root folder", async () => {
-      const result = await folderSync(folderCreatedEvent("/test/books/", ""), asyncDeps);
-      expect(result.isOk()).toBe(true);
+      await folderSync(folderCreatedEvent("/test/books/", ""), asyncDeps);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite).toBeUndefined();
     });
 
     test("includes the prefixed subsection link in _entry.xml", async () => {
-      const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
-      expect(result.isOk()).toBe(true);
+      await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
       expect(entryWrite?.content).toContain('href="/_catalog/Fiction/feed.xml"');
     });
 
     test("returns cascade event to generate root feed.xml", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", ""), asyncDeps);
-      expect(result.isOk()).toBe(true);
-      const cascades = result._unsafeUnwrap();
+      const cascades = result;
       expect(cascades).toHaveLength(1);
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data" });
     });
 
     test("returns cascade events to generate the folder feed.xml and list the folder in its parent", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
-      expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual([
+      expect(result).toEqual([
         { _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" },
         { _tag: "FolderMetaSyncRequested", path: "/test/data" },
       ]);
@@ -252,7 +241,7 @@ describe("Processing Handlers", () => {
     test("submits BookCreated and FolderCreated for what is already inside", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books", "Copy"), depsWithTree());
 
-      const cascades = result._unsafeUnwrap();
+      const cascades = result;
       expect(cascades).toContainEqual({ _tag: "BookCreated", parent: "/test/books/Copy", name: "a.epub" });
       expect(cascades).toContainEqual({ _tag: "FolderCreated", parent: "/test/books/Copy", name: "Nested" });
       expect(cascades.filter((e) => e._tag === "BookCreated")).toHaveLength(1);
@@ -261,15 +250,13 @@ describe("Processing Handlers", () => {
     test("skips a book that already has its entry", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books", "Copy"), depsWithTree(["/test/data/Copy/a.epub/entry.xml"]));
 
-      expect(result._unsafeUnwrap().some((e) => e._tag === "BookCreated")).toBe(false);
+      expect(result.some((e) => e._tag === "BookCreated")).toBe(false);
     });
   });
 
   describe("bookCleanup", () => {
     test("removes data directory for deleted book", async () => {
-      const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
-
-      expect(result.isOk()).toBe(true);
+      await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
       expect(mockFs.rmCalls).toHaveLength(1);
       expect(mockFs.rmCalls[0]!.path).toBe("/test/data/Fiction/book.epub");
       expect(mockFs.rmCalls[0]!.options?.recursive).toBe(true);
@@ -277,9 +264,7 @@ describe("Processing Handlers", () => {
 
     test("returns cascade event to regenerate parent feed", async () => {
       const result = await bookCleanup(bookDeletedEvent("/test/books/Fiction/", "book.epub"), asyncDeps);
-
-      expect(result.isOk()).toBe(true);
-      const cascades = result._unsafeUnwrap();
+      const cascades = result;
       expect(cascades).toHaveLength(1);
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
@@ -288,17 +273,14 @@ describe("Processing Handlers", () => {
   describe("folderCleanup cascade", () => {
     test("returns cascade event to regenerate parent feed for nested folders", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/Fiction/", "SciFi"), asyncDeps);
-
-      expect(result.isOk()).toBe(true);
-      const cascades = result._unsafeUnwrap();
+      const cascades = result;
       expect(cascades).toHaveLength(1);
       expect(cascades[0]).toEqual({ _tag: "FolderMetaSyncRequested", path: "/test/data/Fiction" });
     });
 
     test("returns a root refresh for top-level folder deletion, so the root feed drops the folder", async () => {
       const result = await folderCleanup(folderDeletedEvent("/test/books/", "Fiction"), asyncDeps);
-      expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+      expect(result).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
     });
   });
 
@@ -321,6 +303,6 @@ describe("Processing Handlers", () => {
     const result = await runAsPromiseHandler(folderCleanupEffect, folderDeletedEvent("/test/books/", "Fiction"), asyncDeps, effectFs);
 
     // #then
-    expect(result._unsafeUnwrap()).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
+    expect(result).toEqual([{ _tag: "FolderMetaSyncRequested", path: "/test/data" }]);
   });
 });

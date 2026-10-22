@@ -73,8 +73,7 @@ describe("folderMetaSync handler", () => {
   test("returns empty array for non-FolderMetaSyncRequested events", async () => {
     const event: EventType = { _tag: "BookCreated", parent: DATA_DIR, name: "book.epub" };
     const result = await folderMetaSync(event, deps);
-    expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toEqual([]);
+    expect(result).toEqual([]);
   });
 
   test("creates only feed.xml in the empty root folder", async () => {
@@ -135,8 +134,8 @@ describe("folderMetaSync handler", () => {
     const result = await folderMetaSync(folderMetaSyncEvent(DATA_DIR), blockedRemoval);
 
     // #then feed publication succeeds and the cleanup failure is visible
-    expect({ ok: result.isOk(), feed: await Bun.file(join(DATA_DIR, "feed.xml")).exists(), warnings: warnings.length }).toEqual({
-      ok: true,
+    expect({ events: result, feed: await Bun.file(join(DATA_DIR, "feed.xml")).exists(), warnings: warnings.length }).toEqual({
+      events: [],
       feed: true,
       warnings: 1,
     });
