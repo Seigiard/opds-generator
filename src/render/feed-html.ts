@@ -1,19 +1,12 @@
-import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { VIEWABLE_FORMATS } from "../types.ts";
 import type { Crumb } from "./breadcrumbs.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
+import { frag } from "./frag.ts";
+import { renderHeader } from "./header.ts";
+import { safeHref } from "./safe-href.ts";
 
 type Fragment = HtmlEscapedString | string;
-
-/** Sync-narrowed hono/html tag: auto-escapes interpolated values. An async interpolation would make hono return a Promise — forbidden by R10, enforced here at runtime. */
-const frag = (strings: TemplateStringsArray, ...values: unknown[]): HtmlEscapedString => {
-  const result = html(strings, ...values);
-
-  if (result instanceof Promise) throw new Error("frag: async interpolation forbidden (R10)");
-
-  return result;
-};
 
 /** Interleave fragments with a literal separator instead of `.join()`, which would strip the escaped marker (KTD-3). */
 function interleave(items: Fragment[], separator: string): Fragment[] {
@@ -25,23 +18,6 @@ export function browserHref(feedHref: string): string {
   const folderUrl = feedHref.replace(/feed\.xml$/, "").replace(/^\/_catalog\//, "/");
 
   return folderUrl === "" ? "/" : folderUrl;
-}
-
-/**
- * Auto-escaping neutralizes markup, not schemes; drop anything but http(s)/relative/fragment to `#` (KTD-4, R11).
- * Strip ASCII control chars first: browsers ignore C0/DEL bytes when resolving a scheme, so `java\tscript:` would
- * reconstitute to `javascript:` after the naive scheme regex let it through raw.
- */
-function safeHref(href: string): string {
-  // oxlint-disable-next-line no-control-regex -- deliberate: strip C0/DEL bytes that browsers ignore during scheme resolution
-  const trimmed = href.trim().replace(/[\u0000-\u001F\u007F]/g, "");
-
-  if (trimmed.startsWith("#") || trimmed.startsWith("/")) return trimmed;
-  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
-
-  if (scheme) return scheme[1]!.toLowerCase() === "http" || scheme[1]!.toLowerCase() === "https" ? trimmed : "#";
-
-  return trimmed;
 }
 
 export function formatFromMime(type: string): string {
@@ -84,36 +60,6 @@ function renderFragment(model: FeedModel, crumbs: Crumb[], cards: Fragment[]): H
     <main class="books-grid" data-element=".card__title a">
 ${cards}
     </main>`;
-}
-
-function renderHeader(model: FeedModel, crumbs: Crumb[]): HtmlEscapedString {
-  const home =
-    crumbs.length === 0
-      ? ""
-      : frag`
-        <a class="header__home" href="/" aria-label="Home">
-          <svg xmlns="http://www.w3.org/2000/svg" class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-          </svg>
-        </a>
-        <span class="header__separator">/</span>`;
-
-  const crumbLinks = crumbs.slice(0, -1).flatMap((crumb, index) => {
-    const link = frag`<a href="${safeHref(crumb.href)}">${crumb.label}</a>`;
-
-    return index === 0 ? [link] : [frag`<span class="header__separator">/</span>`, link];
-  });
-
-  const title = model.title;
-  const titleSeparator = crumbs.length > 1 ? frag`<span class="header__separator">/</span>` : "";
-
-  return frag`<header class="header">
-      <div class="header__left">
-        <nav class="header__breadcrumb">${home}${crumbLinks}${titleSeparator}
-        </nav>
-        <h1 class="header__title">${title}</h1>
-      </div>
-    </header>`;
 }
 
 export function renderCover(entry: FeedEntry, src: string | undefined, lazy: boolean): HtmlEscapedString {

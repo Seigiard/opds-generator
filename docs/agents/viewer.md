@@ -12,6 +12,15 @@ Generated feed and entry links use `/_catalog/`. The static shell at `static/ind
 - `ui/styles/variations.css` cycles through four fixed cover proportions and colors. Each card and its popup share the same variant.
 - JavaScript is required: `main.js` boots the shell, renders the catalogue and opens dialogs with `showModal()`.
   Without JavaScript, only the `<noscript>` link to `/opds` is available.
+- The shell waits 300 ms before showing loading feedback. A slower feed gets a
+  header and card skeleton built from the regular header, grid, card, and cover
+  variants; a fast feed renders directly without a loading flash. Starting,
+  not-found, and error states remain status-specific.
+- After rendering a folder, the shell low-priority prefetches up to 20 folder
+  `feed.xml` links. It skips prefetching only when
+  `navigator.connection?.saveData === true`, and never prefetches covers or book
+  files. Nginx sends `Cache-Control: max-age=30`; the browser may reuse a feed
+  for 30 s, so a subsequent folder navigation can reuse it.
 
 ## Escaping
 

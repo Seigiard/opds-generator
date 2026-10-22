@@ -145,6 +145,20 @@ http {
             add_header Cache-Control "public, must-revalidate";
         }
 
+        # Feed responses are short-lived cache entries so the browser can reuse
+        # shell prefetches during ordinary folder navigation.
+        location = /_catalog/feed.xml {
+            alias /data/feed.xml;
+            add_header Cache-Control "max-age=30";
+            error_page 404 = @check_initializing;
+        }
+
+        location ~ ^/_catalog/(?<catalog_feed_path>.+)/feed\.xml$ {
+            alias /data/$catalog_feed_path/feed.xml;
+            add_header Cache-Control "max-age=30";
+            error_page 404 = @check_initializing;
+        }
+
         location ~ ^/_catalog/(?<catalog_xml_path>.*\.xml)$ {
             alias /data/$catalog_xml_path;
             add_header Cache-Control "no-cache";
