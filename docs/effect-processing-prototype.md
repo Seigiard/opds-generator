@@ -22,7 +22,7 @@ The prototype used `describe.each` to run both variants. After #37 the kept suit
 | `test/unit/processing/processor-shutdown.test.ts` (new)         | 2                 | 0 failures |
 | `test/integration/memory-leak-handler.test.ts`                  | 2                 | 0 failures |
 
-The cascade suite runs the real Effect handlers through the Effect processor. Test-only Promise handlers are lifted in `test/helpers/effect-test-handlers.ts` when a suite needs a small fake handler.
+The cascade suite runs the real Effect handlers through the Effect processor. The former test-only Promise-handler lifting (`testEffectHandler`/`toEffectTestHandlers`/`TestHandlerFailed`) was removed. `runAsPromiseHandler` now resolves with the handler events on success, rejects with `signal.reason` when the caller's signal interrupts the run, and rejects with the squashed cause for any other failure.
 
 ## Numbers
 
@@ -111,8 +111,8 @@ Effect.runPromise(tempDir);
 
 - Cancellation moves out of the error channel. The plain `bookSync` returns the abort reason as a `Result` err, and every fallback `catch` in the extraction path must rethrow it. In the Effect `bookSync` cancellation is interruption, and the extraction fallback is a plain `catchTag("ExtractionFailed")`.
 - `ExtractionFailed` is recovered inside `bookSync`, so the handler's error type is exactly `BookStatFailed | BookDataDirFailed | EntryPublishFailed`.
-- A thrown test Promise handler becomes a defect (`Cause.hasDies`) and logs "Unexpected handler throw". An `err` result from the test adapter becomes `TestHandlerFailed` and logs "Handler failed".
-- `runAsPromiseHandler` returns the abort reason as the error when the run was interrupted by the caller's signal. The cancellation test of `bookSync` expects exactly this.
+- A thrown test Promise handler becomes a defect (`Cause.hasDies`) and logs "Unexpected handler throw". The test-only Promise-handler lifting (`testEffectHandler`/`toEffectTestHandlers`/`TestHandlerFailed`) was removed.
+- `runAsPromiseHandler` resolves with the handler events on success, rejects with `signal.reason` when the caller's signal interrupts the run, and rejects with the squashed cause for any other failure. The cancellation test of `bookSync` expects exactly this.
 
 ## Promise boundary inventory
 
