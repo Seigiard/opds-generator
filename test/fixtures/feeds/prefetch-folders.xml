@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:opds:catalog:prefetch</id>
+  <title>Prefetch folders</title>
+  <updated>2026-10-22T00:00:00Z</updated>
+  <link rel="self" href="/_catalog/prefetch/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="/_catalog/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-01</id>
+    <title>Folder 01</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-01/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-02</id>
+    <title>Folder 02</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-02/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-03</id>
+    <title>Folder 03</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-03/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-04</id>
+    <title>Folder 04</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-04/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-05</id>
+    <title>Folder 05</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-05/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-06</id>
+    <title>Folder 06</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-06/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-07</id>
+    <title>Folder 07</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-07/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-08</id>
+    <title>Folder 08</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-08/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-09</id>
+    <title>Folder 09</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-09/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-10</id>
+    <title>Folder 10</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-10/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-11</id>
+    <title>Folder 11</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-11/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-12</id>
+    <title>Folder 12</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-12/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-13</id>
+    <title>Folder 13</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-13/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-14</id>
+    <title>Folder 14</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-14/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-15</id>
+    <title>Folder 15</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-15/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-16</id>
+    <title>Folder 16</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-16/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-17</id>
+    <title>Folder 17</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-17/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-18</id>
+    <title>Folder 18</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-18/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-19</id>
+    <title>Folder 19</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-19/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-20</id>
+    <title>Folder 20</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-20/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:catalog:prefetch/folder-21</id>
+    <title>Folder 21</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="subsection" href="/_catalog/prefetch/folder-21/feed.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+  <entry>
+    <id>urn:opds:book:prefetch/unprefetched.epub</id>
+    <title>Unprefetched Book</title>
+    <updated>2026-10-22T00:00:00Z</updated>
+    <link rel="http://opds-spec.org/image" href="/_catalog/prefetch/unprefetched.epub/cover.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/prefetch/unprefetched.epub/file" type="application/epub+zip"/>
+  </entry>
+</feed>

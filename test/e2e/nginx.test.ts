@@ -97,11 +97,11 @@ describe("nginx integration", () => {
       );
     });
 
-    test("GET /_catalog/test/feed.xml returns XML with no-cache", async () => {
+    test("GET /_catalog/test/feed.xml returns XML cached for 30 seconds", async () => {
       const response = await fetch(`${BASE_URL}/_catalog/test/feed.xml`);
       expect(response.status).toBe(200);
       expect((response.headers.get("content-type") || "").toLowerCase()).toContain("xml");
-      expect(response.headers.get("cache-control") || "").toContain("no-cache");
+      expect(response.headers.get("cache-control")).toBe("max-age=30");
     });
 
     test("GET /_catalog/no-such-folder/feed.xml returns 404 after the root catalogue exists", async () => {
@@ -191,6 +191,26 @@ describe("nginx integration", () => {
   });
 
   describe("catalogue feeds", () => {
+    test("root feeds cache for 30 seconds while non-feed catalogue XML revalidates", async () => {
+      // #given the root feed and a published book entry in the e2e catalogue
+      const paths = ["/_catalog/feed.xml", "/_catalog/test/Test%20Book%20-%20Test%20Author.epub/entry.xml"];
+
+      // #when their cache headers are requested from nginx
+      const responses = await Promise.all(paths.map(async (path) => ({ path, response: await fetch(`${BASE_URL}${path}`) })));
+
+      // #then only the root feed gets the short reusable cache entry
+      expect(
+        responses.map(({ path, response }) => ({
+          cacheControl: response.headers.get("cache-control"),
+          path,
+          status: response.status,
+        })),
+      ).toEqual([
+        { cacheControl: "max-age=30", path: "/_catalog/feed.xml", status: 200 },
+        { cacheControl: "no-cache", path: "/_catalog/test/Test%20Book%20-%20Test%20Author.epub/entry.xml", status: 200 },
+      ]);
+    });
+
     test("GET /_catalog/feed.xml returns 200 with XML content", async () => {
       const response = await fetch(`${BASE_URL}/_catalog/feed.xml`);
       expect(response.status).toBe(200);
