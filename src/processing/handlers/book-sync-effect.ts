@@ -58,8 +58,11 @@ export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType)
     const migratedEntry = rewriteBookEntryLinks(previousEntry, book.relativePath, event.name);
 
     yield* ownedPromise(
-      () => fs.atomicWrite(entryPath, migratedEntry),
-      (cause) => new EntryPublishFailed(failure(entryPath, cause)),
+      async () => {
+        await fs.symlink(book.filePath, join(book.dataDir, event.name));
+        await fs.atomicWrite(entryPath, migratedEntry);
+      },
+      (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
     );
 
     return [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(book.dataDir) })];
