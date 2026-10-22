@@ -7,7 +7,7 @@ Code: `src/lifecycle/`, `src/server.ts`, `src/catalogue-http.ts`. Package detail
 The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, reconciliation, dependency completion, freshness, retry after a failed first pass, and cooperative shutdown. OPDS owns domain work: extraction, rendering, source policy, and which outputs belong to which source. Nothing else in the process schedules passes or timers.
 
 - `createLiveEngineLifecycle` (`live-engine-lifecycle.ts`) is the only production lifecycle. It is a Promise-facing transport adapter over an Effect scope. It translates HTTP input and the process lifetime. It holds no scan state, queue or timer.
-- `startLiveEngineCatalogue` (`live-engine-catalogue.ts`) composes the production declaration: `engineOptions`, the periodic timer from `RECONCILE_INTERVAL`, and the `recovery` probe (root `feed.xml` and `index.html` already in DATA).
+- `startLiveEngineCatalogue` (`live-engine-catalogue.ts`) composes the production declaration: `engineOptions`, the periodic timer from `RECONCILE_INTERVAL`, and the `recovery` probe (root `feed.xml` already in DATA).
 - `server.ts` wires HTTP to the lifecycle, runs housekeeping (`legacy-data.ts`), and races `stop()` against the 8 s deadline.
 - The scope owns the output lease. The lease is held while the session is open, and released by scope close after owned work is joined. A failed first pass releases it while the session waits for a retry.
 
@@ -15,21 +15,21 @@ The packaged engine (`@seigiard/sync-engine`) owns scans, pass scheduling, recon
 
 `start()` returns at once to the engine; the promise resolves when the first pass finished, or failed while output was usable.
 
-- Without a usable root minimum (`feed.xml` and `index.html`), a failed first pass rejects `start()`. `onFatal` runs, `server.ts` stops and exits 1, and Docker restarts the container.
+- Without a usable root minimum (`feed.xml`), a failed first pass rejects `start()`. `onFatal` runs, `server.ts` stops and exits 1, and Docker restarts the container.
 - With a usable minimum (prior output, or published this run), the process stays up. nginx keeps serving. `GET /status` reports the failure. The engine retries on `POST /resync`, on a watcher notice, or at the next `RECONCILE_INTERVAL` tick. A zero interval leaves requests as the only trigger.
 - Cold start: the root minimum publishes first. Book and folder work follows and gates `completed`, not `available`.
 - A source read failure is never deletion. Cleanup needs a fresh observation of absence.
-- nginx learns "initializing" from files: missing `feed.xml` or `index.html` answers 503.
+- nginx learns "initializing" from files: a missing `feed.xml` answers 503.
 - The health check uses the minimum-readiness contract below. It does not wait for verification.
 
 ## HTTP and nginx boundary
 
 nginx on port 80 is external. Bun on port 3000 is localhost-only. Bun serves `POST /events/books` for the `/books` watcher and proxied `POST /resync[?force=1]`; its resync responses follow the contract below.
 
-- Routing is selected by URL, not content negotiation. Browsers use `/` to redirect to `/index.html` and `/<folder>/` for `index.html`. Readers use `/opds` for root `feed.xml` as 200 XML and `/<folder>/feed.xml` for folders. `/static/*` maps to `/app/static`; downloads and covers map to `/data/*`.
-- During initial synchronization or a cascade, folder URLs and missing `index.html` or `feed.xml` return 503 through `@check_initializing`.
+- Routing is selected by URL, not content negotiation. Browsers receive the static shell on `/` and every folder path with its CSP. Readers use `/opds` for root `feed.xml` as 200 XML and `/_catalog/<folder>/feed.xml` for folders. `/_app/*` maps to `/app/static`; `/_catalog/*` maps to `/data/*` for downloads, covers and feeds.
+- During initial synchronization or a cascade, a missing `feed.xml` returns 503 through `@check_initializing`.
 - `/resync` requires `ADMIN_USER` and `ADMIN_TOKEN`. Without them, `entrypoint.sh` removes the auth block through `AUTH_ENABLED`.
-- `healthcheck.sh` is the image and Compose health check. It runs inside the container because Bun's status endpoint is local. It needs `"available":true` from `/status` and nginx 200 responses for `/feed.xml` and `/index.html`. It uses `wget` because Alpine has no `curl`. A feed alone is unhealthy.
+- `healthcheck.sh` is the image and Compose health check. It runs inside the container because Bun's status endpoint is local. It needs `"available":true` from `/status` and an nginx 200 response for `/_catalog/feed.xml`. It uses `wget` because Alpine has no `curl`. The root feed is the minimum; a feed alone is healthy.
 
 ## Scans and reconciliation
 
@@ -56,11 +56,11 @@ nginx on port 80 is external. Bun on port 3000 is localhost-only. Bun serves `PO
 
 Bun serves `GET /status` on localhost:3000 only. nginx does not proxy it (`test/e2e/nginx.test.ts` pins that). Engine fields: `state`, `pass`, `followUp`, `failure`, `work`. Independent facts beside them:
 
-| Fact                         | Meaning                                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `available`, `availableFrom` | A usable minimum is in DATA. `prior-output`: both root files existed before verification. `minimum-publication`: this run wrote them. |
-| `verifying`                  | The first pass is opening, or a pass is active or pending.                                                                            |
-| `completed`                  | Required work drained and nothing is verifying.                                                                                       |
-| `errors`                     | `{ source: "work" \| "pass", message }`. `work`: typed failures retained after completion. `pass`: a failed pass or first pass.       |
+| Fact                         | Meaning                                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `available`, `availableFrom` | A usable minimum is in DATA. `prior-output`: the root feed existed before verification. `minimum-publication`: this run wrote it. |
+| `verifying`                  | The first pass is opening, or a pass is active or pending.                                                                        |
+| `completed`                  | Required work drained and nothing is verifying.                                                                                   |
+| `errors`                     | `{ source: "work" \| "pass", message }`. `work`: typed failures retained after completion. `pass`: a failed pass or first pass.   |
 
 `entrypoint.sh` exits with the status of a Bun process that dies on its own (1 when Bun reports 0). A requested shutdown still exits 0. `test/e2e/startup-readiness.test.ts` pins the container exit code.

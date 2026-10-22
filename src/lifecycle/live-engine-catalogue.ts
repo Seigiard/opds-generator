@@ -2,7 +2,7 @@ import { openLiveSynchronization, startLiveSynchronization, type LiveOptions } f
 import { Effect } from "effect";
 import { join } from "node:path";
 import type { HandlerDeps } from "../context.ts";
-import { FEED_FILE, INDEX_FILE } from "../constants.ts";
+import { FEED_FILE } from "../constants.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../effect-file-system.ts";
 import { ownedPromise } from "../utils/owned-promise.ts";
 import { CatalogueDeps } from "../processing/effect-handler.ts";
@@ -12,8 +12,8 @@ import { engineOptions, type EngineCatalogueOptions } from "./initial-engine-cat
 type LiveCatalogueOptions = EngineCatalogueOptions & { readonly reconcileIntervalMs?: number };
 
 /**
- * The production declaration of the live session. The minimum is the root feed and root page: when both already
- * exist, a failed verification keeps serving them and is retried by the engine; without them it is fatal.
+ * The production declaration of the live session. The root feed is the minimum: when it already exists, a failed
+ * verification keeps serving it and is retried by the engine; without it the failure is fatal.
  */
 function liveOptions(deps: HandlerDeps, options: LiveCatalogueOptions): LiveOptions<EventType, Error, CatalogueDeps | EffectFileSystem> {
   const existingFile = async (path: string): Promise<boolean> => {
@@ -29,10 +29,7 @@ function liveOptions(deps: HandlerDeps, options: LiveCatalogueOptions): LiveOpti
     reconcileIntervalMs: options.reconcileIntervalMs ?? deps.config.reconcileInterval * 1000,
     recovery: {
       existing: ownedPromise(
-        async () =>
-          (
-            await Promise.all([existingFile(join(deps.config.dataPath, FEED_FILE)), existingFile(join(deps.config.dataPath, INDEX_FILE))])
-          ).every(Boolean),
+        async () => await existingFile(join(deps.config.dataPath, FEED_FILE)),
         (cause) => new Error(String(cause)),
       ).pipe(Effect.orElseSucceed(() => false)),
     },

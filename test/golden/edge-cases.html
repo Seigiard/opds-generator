@@ -1,18 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Edge &amp; Corner Cases</title>
-    <link rel="stylesheet" href="/static/style.css" />
-    <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />
-  </head>
-  <body>
-    <header class="header">
+<header class="header">
       <div class="header__left">
         <nav class="header__breadcrumb">
         <a class="header__home" href="/" aria-label="Home">
@@ -20,6 +6,7 @@
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
           </svg>
         </a>
+        <span class="header__separator">/</span>
         </nav>
         <h1 class="header__title">Edge &amp; Corner Cases</h1>
       </div>
@@ -60,7 +47,7 @@
                   <span>TXT · 1.2 KB</span>
                 </div>
                 <div class="popup__downloads">
-                  <a href="/edge/no-cover.txt/file" class="popup__download-btn">TXT</a>
+                  <a href="/_catalog/edge/no-cover.txt/file" class="popup__download-btn">TXT</a>
                 </div>
               </div>
             </div>
@@ -70,7 +57,7 @@
       <div>
         <article class="card card--book">
           <div class="book" aria-hidden="true">
-            <div class="book__cover"><img src="/edge/no-author.epub/thumb.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" loading="lazy" /></div>
+            <div class="book__cover"><img src="/_catalog/edge/no-author.epub/thumb.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" loading="lazy" /></div>
           </div>
           <div class="card__info">
             <h3 class="card__title"><a href="#book-2">Tom &amp; Jerry: &lt;Adventures&gt;</a></h3>
@@ -79,7 +66,7 @@
         <dialog class="popup" id="book-2" aria-labelledby="book-2-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
-              <div class="book"><div class="book__cover"><img src="/edge/no-author.epub/cover.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" /></div></div>
+              <div class="book"><div class="book__cover"><img src="/_catalog/edge/no-author.epub/cover.jpg" alt="Tom &amp; Jerry: &lt;Adventures&gt;" /></div></div>
             </div>
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>
@@ -92,7 +79,7 @@
                   <span>EPUB · 4.0 MB</span>
                 </div>
                 <div class="popup__downloads">
-                  <a href="/edge/no-author.epub/file" class="popup__download-btn">EPUB</a> <a href="/static/read.html#/edge/no-author.epub/file" class="popup__view-btn">View</a>
+                  <a href="/_catalog/edge/no-author.epub/file" class="popup__download-btn">EPUB</a> <a href="/_app/read.html#/_catalog/edge/no-author.epub/file" class="popup__view-btn">View</a>
                 </div>
               </div>
             </div>
@@ -100,6 +87,3 @@
         </dialog>
       </div>
     </main>
-    <script src="/static/main.js"></script>
-  </body>
-</html>

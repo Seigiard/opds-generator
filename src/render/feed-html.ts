@@ -1,6 +1,7 @@
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { VIEWABLE_FORMATS } from "../types.ts";
+import type { Crumb } from "./breadcrumbs.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
 
 type Fragment = HtmlEscapedString | string;
@@ -20,8 +21,8 @@ function interleave(items: Fragment[], separator: string): Fragment[] {
 }
 
 /** Reader links point at feed.xml; browsers need the folder URL nginx resolves to index.html. */
-function browserHref(feedHref: string): string {
-  const folderUrl = feedHref.replace(/feed\.xml$/, "");
+export function browserHref(feedHref: string): string {
+  const folderUrl = feedHref.replace(/feed\.xml$/, "").replace(/^\/_catalog\//, "/");
 
   return folderUrl === "" ? "/" : folderUrl;
 }
@@ -67,13 +68,7 @@ export function formatFromMime(type: string): string {
   return "Download";
 }
 
-const FAVICON_LINKS = frag`<link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />`;
-
-export function renderHtml(model: FeedModel): string {
+export function renderHtml(model: FeedModel, crumbs: Crumb[]): string {
   let bookIndex = 0;
 
   const cards = interleave(
@@ -81,43 +76,42 @@ export function renderHtml(model: FeedModel): string {
     "\n",
   );
 
-  return String(frag`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${model.title}</title>
-    <link rel="stylesheet" href="/static/style.css" />
-    ${FAVICON_LINKS}
-  </head>
-  <body>
-    ${renderHeader(model)}
-    <main class="books-grid" data-element=".card__title a">
-${cards}
-    </main>
-    <script src="/static/main.js"></script>
-  </body>
-</html>
-`);
+  return String(renderFragment(model, crumbs, cards));
 }
 
-function renderHeader(model: FeedModel): HtmlEscapedString {
-  const isRoot = model.selfHref === model.startHref;
+function renderFragment(model: FeedModel, crumbs: Crumb[], cards: Fragment[]): HtmlEscapedString {
+  return frag`${renderHeader(model, crumbs)}
+    <main class="books-grid" data-element=".card__title a">
+${cards}
+    </main>`;
+}
 
-  const home = isRoot
-    ? ""
-    : frag`
-        <a class="header__home" href="${safeHref(browserHref(model.startHref))}" aria-label="Home">
+function renderHeader(model: FeedModel, crumbs: Crumb[]): HtmlEscapedString {
+  const home =
+    crumbs.length === 0
+      ? ""
+      : frag`
+        <a class="header__home" href="/" aria-label="Home">
           <svg xmlns="http://www.w3.org/2000/svg" class="header__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
           </svg>
-        </a>`;
+        </a>
+        <span class="header__separator">/</span>`;
+
+  const crumbLinks = crumbs.slice(0, -1).flatMap((crumb, index) => {
+    const link = frag`<a href="${safeHref(crumb.href)}">${crumb.label}</a>`;
+
+    return index === 0 ? [link] : [frag`<span class="header__separator">/</span>`, link];
+  });
+
+  const title = model.title;
+  const titleSeparator = crumbs.length > 1 ? frag`<span class="header__separator">/</span>` : "";
 
   return frag`<header class="header">
       <div class="header__left">
-        <nav class="header__breadcrumb">${home}
+        <nav class="header__breadcrumb">${home}${crumbLinks}${titleSeparator}
         </nav>
-        <h1 class="header__title">${model.title}</h1>
+        <h1 class="header__title">${title}</h1>
       </div>
     </header>`;
 }
@@ -239,7 +233,7 @@ export function renderDownloads(entry: FeedEntry): Fragment {
       // must never carry a scheme or external host (R15 first line of defense).
       if (!VIEWABLE_FORMATS.has(label.toLowerCase()) || !href.startsWith("/")) return download;
 
-      return frag`${download} <a href="${`/static/read.html#${href}`}" class="popup__view-btn">View</a>`;
+      return frag`${download} <a href="${`/_app/read.html#${href}`}" class="popup__view-btn">View</a>`;
     }),
     "\n                  ",
   );

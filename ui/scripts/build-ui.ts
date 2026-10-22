@@ -17,6 +17,8 @@ const outPath = join(staticDir, "style.css");
 
 const mainEntry = join(uiDir, "gridnav", "main.ts");
 
+const shellSource = join(uiDir, "gridnav", "index.html");
+
 const pipeline = [
   autoprefixer(),
   postcssNesting({ edition: "2021", noIsPseudoSelector: true }),
@@ -35,6 +37,11 @@ async function buildCss(): Promise<void> {
   const result = await postcss(pipeline).process(source, { from: undefined });
   await Bun.write(outPath, result.css);
   console.log(`build:ui → ${outPath}`);
+}
+
+async function buildShell(): Promise<void> {
+  await Bun.write(join(staticDir, "index.html"), await Bun.file(shellSource).text());
+  console.log(`build:ui → ${join(staticDir, "index.html")}`);
 }
 
 async function buildJs(): Promise<void> {
@@ -191,11 +198,13 @@ async function buildReader(): Promise<void> {
   const css = await Bun.file(join(readerDir, "reader.css")).text();
   const readerCssResult = await postcss(pipeline).process(css, { from: undefined });
 
-  const page = template.replace("__FOLIATE_BASE__", `/static/${foliateDirName}`).replace("__READER_CSS__", readerCssResult.css);
+  const page = template.replace("__FOLIATE_BASE__", `/_app/${foliateDirName}`).replace("__READER_CSS__", readerCssResult.css);
 
   await Bun.write(join(staticDir, "read.html"), page);
   console.log(`build:ui → ${join(staticDir, "read.html")}`);
 }
+
+await buildShell();
 
 await buildCss();
 

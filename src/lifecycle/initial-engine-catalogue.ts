@@ -33,7 +33,7 @@ export function openEngineCatalogue(deps: HandlerDeps, options: EngineCatalogueO
 }
 
 export interface EngineCatalogueOptions {
-  /** Runs once, after the root feed and browser page exist, before the remaining catalogue work. */
+  /** Runs once, after the root feed exists, before the remaining catalogue work. */
   readonly onMinimum?: Effect.Effect<void>;
   readonly check?: "metadata" | "content";
   readonly processingVersions?: { readonly book?: string; readonly folder?: string };
@@ -66,7 +66,7 @@ export function engineOptions(
       const removed = yield* orphanedOutputs(deps, entries);
 
       return {
-        // The root feed and page are the minimum a deployment is usable with. Book entries join it as work completes.
+        // The root feed is the minimum a deployment is usable with. Book entries join it as work completes.
         minimum: [root],
         work: [
           ...removed,

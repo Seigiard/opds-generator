@@ -77,49 +77,68 @@ describe("folderMetaSync handler", () => {
     expect(result._unsafeUnwrap()).toEqual([]);
   });
 
-  test("creates feed.xml in empty folder", async () => {
+  test("creates only feed.xml in the empty root folder", async () => {
+    // #given an empty root output folder
+    // #when folder metadata is published
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
-    const feedPath = join(DATA_DIR, "feed.xml");
 
-    const exists = await stat(feedPath)
-      .then(() => true)
-      .catch(() => false);
-
-    expect(exists).toBe(true);
+    // #then the root contains only its data feed
+    expect((await readdir(DATA_DIR)).sort()).toEqual(["feed.xml"]);
   });
 
-  describe("browser page publication failure", () => {
-    const failingHtml: HandlerDeps = {
+  test("creates feed.xml and _entry.xml, but no browser page, in a nested folder", async () => {
+    // #given an empty nested source and output folder
+    const nestedPath = join(DATA_DIR, "Nested");
+    await mkdir(nestedPath, { recursive: true });
+    await mkdir(join(FILES_DIR, "Nested"), { recursive: true });
+
+    // #when folder metadata is published
+    await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
+
+    // #then the nested folder contains only its two data artifacts
+    expect((await readdir(nestedPath)).sort()).toEqual(["_entry.xml", "feed.xml"]);
+  });
+
+  test("removes a stale generated index.html during an ordinary sync", async () => {
+    // #given output left by the document-generating version
+    await Bun.write(join(DATA_DIR, "index.html"), "legacy browser page");
+
+    // #when the same folder is synchronized normally
+    await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
+
+    // #then only the current data artifact remains
+    expect((await readdir(DATA_DIR)).sort()).toEqual(["feed.xml"]);
+  });
+
+  test("logs a stale index.html removal failure without failing the sync", async () => {
+    // #given a stale browser page that the filesystem refuses to remove
+    const stalePage = join(DATA_DIR, "index.html");
+    await Bun.write(stalePage, "legacy browser page");
+    const warnings: string[] = [];
+
+    const blockedRemoval: HandlerDeps = {
       ...deps,
+      logger: {
+        ...deps.logger,
+        warn: (_component, message) => warnings.push(message),
+      },
       fs: {
         ...deps.fs,
-        atomicWrite: async (path, content) => {
-          if (path.endsWith("index.html")) throw new Error("index.html cannot be written");
-          await deps.fs.atomicWrite(path, content);
+        rm: async (path, options) => {
+          if (path === stalePage) throw Object.assign(new Error("index.html cannot be removed"), { code: "EACCES" });
+          await deps.fs.rm(path, options);
         },
       },
     };
 
-    test("a root page failure fails the handler instead of reporting a feed-only minimum", async () => {
-      const result = await folderMetaSync(folderMetaSyncEvent(DATA_DIR), failingHtml);
+    // #when the folder is synchronized
+    const result = await folderMetaSync(folderMetaSyncEvent(DATA_DIR), blockedRemoval);
 
-      expect(result.isErr()).toBe(true);
-      expect(result._unsafeUnwrapErr().message).toContain("index.html cannot be written");
-    });
-
-    test("a nested page failure leaves the parent without a reference to the folder", async () => {
-      const nestedPath = join(DATA_DIR, "Nested");
-      await mkdir(nestedPath, { recursive: true });
-      await mkdir(join(FILES_DIR, "Nested"), { recursive: true });
-
-      const result = await folderMetaSync(folderMetaSyncEvent(nestedPath), failingHtml);
-
-      const entry = await stat(join(nestedPath, "_entry.xml")).then(
-        () => true,
-        () => false,
-      );
-
-      expect({ failed: result.isErr(), entry }).toEqual({ failed: true, entry: false });
+    // #then feed publication succeeds and the cleanup failure is visible
+    expect({ ok: result.isOk(), feed: await Bun.file(join(DATA_DIR, "feed.xml")).exists(), warnings: warnings.length }).toEqual({
+      ok: true,
+      feed: true,
+      warnings: 1,
     });
   });
 
@@ -136,17 +155,18 @@ describe("folderMetaSync handler", () => {
     expect(content).toContain("kind=navigation");
   });
 
-  test("includes self link in feed", async () => {
+  test("root feed links self and start through the catalogue prefix", async () => {
+    // #given the root catalogue folder
     await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
-    const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
-    expect(content).toContain('rel="self"');
-    expect(content).toContain("/feed.xml");
-  });
 
-  test("includes start link in feed", async () => {
-    await folderMetaSync(folderMetaSyncEvent(DATA_DIR), deps);
+    // #when its feed is read
     const content = await readFile(join(DATA_DIR, "feed.xml"), "utf-8");
-    expect(content).toContain('rel="start"');
+
+    // #then both public links identify the prefixed root feed
+    expect({
+      self: content.includes('rel="self" href="/_catalog/feed.xml"'),
+      start: content.includes('rel="start" href="/_catalog/feed.xml"'),
+    }).toEqual({ self: true, start: true });
   });
 
   test("includes folder entries from subfolders", async () => {
@@ -231,16 +251,24 @@ describe("folderMetaSync handler", () => {
     expect(pos4).toBeLessThan(pos5);
   });
 
-  test("handles nested folder path", async () => {
+  test("nested feed and folder entry link through the catalogue prefix", async () => {
+    // #given a nested source and output folder
     const nestedPath = join(DATA_DIR, "Fiction", "SciFi");
     const sourceFolder = join(FILES_DIR, "Fiction", "SciFi");
     await mkdir(nestedPath, { recursive: true });
     await mkdir(sourceFolder, { recursive: true });
 
+    // #when folder metadata is published
     await folderMetaSync(folderMetaSyncEvent(nestedPath), deps);
-    const content = await readFile(join(nestedPath, "feed.xml"), "utf-8");
-    expect(content).toContain("SciFi");
-    expect(content).toContain('href="/Fiction/SciFi/feed.xml"');
+    const feed = await readFile(join(nestedPath, "feed.xml"), "utf-8");
+    const entry = await readFile(join(nestedPath, "_entry.xml"), "utf-8");
+
+    // #then both representations expose the same prefixed feed URL
+    expect({
+      self: feed.includes('rel="self" href="/_catalog/Fiction/SciFi/feed.xml"'),
+      start: feed.includes('rel="start" href="/_catalog/feed.xml"'),
+      subsection: entry.includes('rel="subsection" href="/_catalog/Fiction/SciFi/feed.xml"'),
+    }).toEqual({ self: true, start: true, subsection: true });
   });
 
   describe("_entry.xml count updates", () => {

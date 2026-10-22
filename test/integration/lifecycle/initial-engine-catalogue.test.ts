@@ -88,25 +88,23 @@ test("packaged engine publishes a TXT book, its root catalogue and a working dow
     await Effect.runPromise(initialEngineCatalogue(deps));
     // #then public artifacts and the download resolve to the independent example
     const feedFile = Bun.file(join(outputPath, "feed.xml"));
-    const htmlFile = Bun.file(join(outputPath, "index.html"));
     const entryFile = Bun.file(join(outputPath, "First Book.txt", "entry.xml"));
     const feed = (await feedFile.exists()) ? parseFeed(await feedFile.text()) : null;
-    const html = (await htmlFile.exists()) ? await htmlFile.text() : "";
     const entry = (await entryFile.exists()) ? parseFeed(`<feed>${await entryFile.text()}</feed>`).entries[0] : null;
     const download = join(outputPath, "First Book.txt", "First Book.txt");
     expect({
       titles: feed?.entries.map((item) => item.title) ?? [],
       entryTitle: entry?.title ?? null,
       acquisition: entry?.acquisitions?.[0]?.href ?? null,
-      browserDownload: html.includes('href="/First%20Book.txt/First%20Book.txt"'),
+      generatedPage: await Bun.file(join(outputPath, "index.html")).exists(),
       downloadTarget: (await Bun.file(download).exists()) ? await readlink(download) : null,
       downloadBytes: (await Bun.file(download).exists()) ? await readFile(download, "utf8") : null,
       sourceBytes: await readFile(join(sourcePath, "First Book.txt"), "utf8"),
     }).toEqual({
       titles: ["First Book"],
       entryTitle: "First Book",
-      acquisition: "/First%20Book.txt/First%20Book.txt",
-      browserDownload: true,
+      acquisition: "/_catalog/First%20Book.txt/First%20Book.txt",
+      generatedPage: false,
       downloadTarget: join(sourcePath, "First Book.txt"),
       downloadBytes: "Independent source bytes.\n",
       sourceBytes: "Independent source bytes.\n",

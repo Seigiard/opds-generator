@@ -109,7 +109,7 @@ export function initGlobal(): void {
 
 /**
  * Wire the (re)rendered viewer markup under `root`: grid navigation and per-dialog
- * listeners live on elements the playground replaces on each cassette, so this re-runs.
+ * listeners live on elements the viewer replaces on each render, so this re-runs.
  * Esc does not close the dialog directly — its cancel event is converted into a history
  * navigation so Esc/close-button/Back share one close path and the hash never desyncs.
  * The close listener re-syncs if the UA force-closes the dialog (Chrome two-Esc).

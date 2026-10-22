@@ -54,7 +54,7 @@ function nextVersion(version: string): string {
 test("a released engine package update alone keeps OPDS publications fresh", async () => {
   // #given OPDS output and freshness state created by the released 0.4.0 package
   const { root, outputPath, deps } = await tree();
-  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
   const completedHandlers: string[] = [];
 
   const countedDeps = {
@@ -92,11 +92,13 @@ test("a released engine package update alone keeps OPDS publications fresh", asy
         mtimes: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs)),
         completedHandlers,
         titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+        generatedPages: await Promise.all(["Fiction/index.html", "index.html"].map((path) => Bun.file(join(outputPath, path)).exists())),
       }).toEqual({
         status: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
         mtimes: artifacts.map(() => ancient.getTime()),
         completedHandlers: [],
         titles: ["Test Book"],
+        generatedPages: [false, false],
       });
     } finally {
       await runtime.stop();
@@ -110,7 +112,7 @@ test("a released engine package update alone keeps OPDS publications fresh", asy
 test("a fresh packaged engine instance reuses real book and folder publications", async () => {
   // #given the existing independent FB2 fixture and deliberately dated successful artifacts
   const { root, outputPath, deps } = await tree();
-  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps));
@@ -123,7 +125,13 @@ test("a fresh packaged engine instance reuses real book and folder publications"
       mtimes: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs)),
       titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
       downloadMatchesFixture: (await readFile(join(outputPath, "Fiction", "Book.fb2", "Book.fb2"))).equals(await readFile(fixture)),
-    }).toEqual({ mtimes: artifacts.map(() => ancient.getTime()), titles: ["Test Book"], downloadMatchesFixture: true });
+      generatedPages: await Promise.all(["Fiction/index.html", "index.html"].map((path) => Bun.file(join(outputPath, path)).exists())),
+    }).toEqual({
+      mtimes: artifacts.map(() => ancient.getTime()),
+      titles: ["Test Book"],
+      downloadMatchesFixture: true,
+      generatedPages: [false, false],
+    });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -132,7 +140,7 @@ test("a fresh packaged engine instance reuses real book and folder publications"
 test("the application default processing versions rebuild results from an older release", async () => {
   // #given old application processing versions and independently dated published artifacts
   const { root, outputPath, deps } = await tree();
-  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
   const completedHandlers: string[] = [];
 
   const countedDeps = {
@@ -148,6 +156,8 @@ test("the application default processing versions rebuild results from an older 
 
   try {
     await Effect.runPromise(initialEngineCatalogue(deps, { processingVersions: { book: "0", folder: "0" } }));
+    await Bun.write(join(outputPath, "Fiction", "index.html"), "legacy nested page");
+    await Bun.write(join(outputPath, "index.html"), "legacy root page");
 
     for (const path of artifacts) await utimes(join(outputPath, path), ancient, ancient);
 
@@ -165,11 +175,13 @@ test("the application default processing versions rebuild results from an older 
         completedHandlers: completedHandlers.length > 0,
         rewritten: await Promise.all(artifacts.map(async (path) => (await stat(join(outputPath, path))).mtimeMs !== ancient.getTime())),
         titles: parseFeed(await readFile(join(outputPath, "Fiction", "feed.xml"), "utf8")).entries.map((entry) => entry.title),
+        generatedPages: await Promise.all(["Fiction/index.html", "index.html"].map((path) => Bun.file(join(outputPath, path)).exists())),
       }).toEqual({
         status: { available: true, availableFrom: "prior-output", verifying: false, completed: true, errors: 0 },
         completedHandlers: true,
-        rewritten: [true, true, true, true, true],
+        rewritten: [true, true, false, true],
         titles: ["Test Book"],
+        generatedPages: [false, false],
       });
     } finally {
       await runtime.stop();
@@ -183,7 +195,7 @@ test("the application default processing versions rebuild results from an older 
 test("an independently packed engine package upgrade alone preserves existing successful publications", async () => {
   // #given actual real-handler success recorded by the earlier installed package
   const { root, outputPath, deps } = await tree();
-  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const artifacts = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
   // Keep the generic external-state configuration stable across package versions.
   const configuration = { ...engineOptions(deps), statePath: undefined };
 
@@ -411,7 +423,7 @@ test("book and folder processing versions rebuild their own kinds and required d
       bookVersion: [true, true, false],
       folderVersion: [false, true, true],
       titles: ["Test Book"],
-      parent: [{ href: "/Fiction/feed.xml", summary: "📚 1" }],
+      parent: [{ href: "/_catalog/Fiction/feed.xml", summary: "📚 1" }],
       download: true,
     });
   } finally {

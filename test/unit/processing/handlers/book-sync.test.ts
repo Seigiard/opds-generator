@@ -126,6 +126,54 @@ describe("bookSync handler", () => {
     }).toEqual({ error: reason, entry: "previous entry", linkExists: false });
   });
 
+  test("rewrites links in a kept entry after extraction fails", async () => {
+    // #given a corrupt book and a previously published entry using the pre-/_catalog link scheme
+    const name = "Legacy Book.epub";
+    const bookDir = join(DATA_DIR, "shelf", name);
+    await mkdir(join(FILES_DIR, "shelf"), { recursive: true });
+    await mkdir(bookDir, { recursive: true });
+    await Bun.write(join(FILES_DIR, "shelf", name), "not an epub");
+    await Bun.write(
+      join(bookDir, "entry.xml"),
+      `<?xml version="1.0" encoding="UTF-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom">
+  <title>Legacy metadata title</title>
+  <author><name>Legacy metadata author</name></author>
+  <link rel="http://opds-spec.org/image" href="/shelf/Legacy%20Book.epub/cover.jpg"/>
+  <link rel="http://opds-spec.org/image/thumbnail" href="/shelf/Legacy%20Book.epub/thumb.jpg"/>
+  <link rel="http://opds-spec.org/acquisition/open-access" href="/shelf/Legacy%20Book.epub/Legacy%20Book.epub" type="application/epub+zip"/>
+</entry>`,
+    );
+    const sourcePath = join(FILES_DIR, "shelf", name);
+    await symlink(sourcePath, join(bookDir, "file"));
+
+    // #when extraction fails and the previous entry is retained
+    await bookSync(bookCreatedEvent(`shelf/${name}`), deps);
+
+    // #then metadata remains while every published link uses the current catalogue prefix
+    const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const downloadLink = join(bookDir, name);
+    const downloadLinkStat = await lstat(downloadLink).catch(() => undefined);
+    const downloadLinkTarget = await readlink(downloadLink).catch(() => undefined);
+    expect({
+      title: entry.includes("<title>Legacy metadata title</title>"),
+      author: entry.includes("<name>Legacy metadata author</name>"),
+      cover: entry.includes('href="/_catalog/shelf/Legacy%20Book.epub/cover.jpg"'),
+      thumbnail: entry.includes('href="/_catalog/shelf/Legacy%20Book.epub/thumb.jpg"'),
+      acquisition: entry.includes('href="/_catalog/shelf/Legacy%20Book.epub/Legacy%20Book.epub"'),
+      legacyLink: entry.includes('href="/shelf/'),
+      downloadLink: { isSymbolicLink: downloadLinkStat?.isSymbolicLink() ?? false, target: downloadLinkTarget },
+    }).toEqual({
+      title: true,
+      author: true,
+      cover: true,
+      thumbnail: true,
+      acquisition: true,
+      legacyLink: false,
+      downloadLink: { isSymbolicLink: true, target: sourcePath },
+    });
+  });
+
   test("finishes download publication when cancellation arrives during entry write", async () => {
     // #given
     const controller = new AbortController();
@@ -324,8 +372,13 @@ describe("bookSync handler", () => {
       author: entry.includes("<name>Test Author</name>"),
       issued: entry.includes("<dc:issued>2021-09</dc:issued>"),
       language: entry.includes("<dc:language>en</dc:language>"),
-      cover: entry.includes('rel="http://opds-spec.org/image"'),
-      thumbnail: entry.includes('rel="http://opds-spec.org/image/thumbnail"'),
+      cover: entry.includes('rel="http://opds-spec.org/image" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/cover.jpg"'),
+      thumbnail: entry.includes(
+        'rel="http://opds-spec.org/image/thumbnail" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/thumb.jpg"',
+      ),
+      acquisition: entry.includes(
+        'rel="http://opds-spec.org/acquisition/open-access" href="/_catalog/Test%20Book%20-%20Test%20Author.epub/Test%20Book%20-%20Test%20Author.epub"',
+      ),
       link: await readlink(join(bookDir, name)),
       thumbFormat: thumb.format,
     }).toEqual({
@@ -336,6 +389,7 @@ describe("bookSync handler", () => {
       language: true,
       cover: true,
       thumbnail: true,
+      acquisition: true,
       link: bookPath,
       thumbFormat: "jpeg",
     });

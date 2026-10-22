@@ -35,7 +35,7 @@ test("an ordinary live pass applies a changed book processing version to an equa
   // #given independently known metadata and dated successful real publications
   const { root, sourcePath, outputPath, deps } = await tree();
   const source = join(sourcePath, "Fiction", "Book.fb2");
-  const paths = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const paths = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
   const processingVersions = { book: "1" };
 
   try {
@@ -81,7 +81,7 @@ test("an ordinary live pass applies a changed book processing version to an equa
       sameStamp: true,
       entry: ["Next Book"],
       leaf: ["Next Book"],
-      rewritten: [true, true, true, false, false],
+      rewritten: [true, true, false, false],
       download: true,
     });
   } finally {
@@ -93,7 +93,7 @@ test("an ordinary live content check repairs an equal-stamp replacement without 
   // #given a real live catalogue with content checks and independently dated publications
   const { root, sourcePath, outputPath, deps } = await tree();
   const source = join(sourcePath, "Fiction", "Book.fb2");
-  const paths = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/index.html", "feed.xml", "index.html"];
+  const paths = ["Fiction/Book.fb2/entry.xml", "Fiction/feed.xml", "Fiction/_entry.xml", "feed.xml"];
 
   try {
     const result = await Effect.runPromise(
@@ -140,11 +140,11 @@ test("an ordinary live content check repairs an equal-stamp replacement without 
     // #then hashing repairs actual metadata and downloads, while warm checks and parent summaries retain their files
     expect(result).toEqual({
       admission: "started",
-      warm: [1577836800000, 1577836800000, 1577836800000, 1577836800000, 1577836800000],
+      warm: [1577836800000, 1577836800000, 1577836800000, 1577836800000],
       sameStamp: true,
       entry: ["Next Book"],
       leaf: ["Next Book"],
-      rewritten: [true, true, true, false, false],
+      rewritten: [true, true, false, false],
       download: true,
     });
   } finally {

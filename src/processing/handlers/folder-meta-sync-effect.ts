@@ -4,7 +4,6 @@ import { Entry } from "opds-ts/v1.2";
 import { EffectFileSystem } from "../../effect-file-system.ts";
 import { ENTRY_FILE, FEED_FILE, FOLDER_ENTRY_FILE, INDEX_FILE } from "../../constants.ts";
 import { buildFeedModel } from "../../render/feed-model.ts";
-import { renderHtml } from "../../render/feed-html.ts";
 import { renderXml } from "../../render/feed-xml.ts";
 import { extractAuthor, extractTitle, naturalSort, stripXmlDeclaration } from "../../utils/opds.ts";
 import { encodeUrlPath, formatFolderDescription, normalizeFilenameTitle } from "../../utils/processor.ts";
@@ -26,8 +25,6 @@ interface FailureProps {
 }
 
 class FolderFeedPublishFailed extends Data.TaggedError("FolderFeedPublishFailed")<FailureProps> {}
-
-class FolderBrowserPublishFailed extends Data.TaggedError("FolderBrowserPublishFailed")<FailureProps> {}
 
 class FolderEntryPublishFailed extends Data.TaggedError("FolderEntryPublishFailed")<FailureProps> {}
 
@@ -78,7 +75,7 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
   const rawFolderName = relativePath.split("/").pop() || "Catalog";
   const folderName = rawFolderName === "Catalog" ? rawFolderName : normalizeFilenameTitle(rawFolderName);
   const feedId = relativePath === "" ? "urn:opds:catalog:root" : `urn:opds:catalog:${relativePath}`;
-  const selfHref = relativePath === "" ? `/${FEED_FILE}` : `/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
+  const selfHref = relativePath === "" ? `/_catalog/${FEED_FILE}` : `/_catalog/${encodeUrlPath(relativePath)}/${FEED_FILE}`;
 
   const model = buildFeedModel({
     id: feedId,
@@ -86,7 +83,7 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
     updated: new Date().toISOString(),
     kind: feedKind,
     selfHref,
-    startHref: `/${FEED_FILE}`,
+    startHref: `/_catalog/${FEED_FILE}`,
     fragments: entries,
   });
 
@@ -100,13 +97,17 @@ export const publishFolderFeed = Effect.fnUntraced(function* (normalizedDir: str
     books: bookEntries.length,
   });
 
-  // The browser page is part of the usable publication: a parent must not reference a folder without it.
-  const browserOutputPath = join(normalizedDir, INDEX_FILE);
+  const staleBrowserOutputPath = join(normalizedDir, INDEX_FILE);
+  yield* fs.rm(staleBrowserOutputPath, { force: true }).pipe(
+    Effect.catch((cause) => {
+      logger.warn("FolderMetaSync", "Could not remove stale index.html", {
+        path: relativePath || "/",
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
 
-  yield* fs
-    .atomicWrite(browserOutputPath, renderHtml(model))
-    .pipe(Effect.mapError((cause) => new FolderBrowserPublishFailed(failure(browserOutputPath, cause))));
-  logger.debug("FolderMetaSync", "Generated index.html", { path: relativePath || "/" });
+      return Effect.void;
+    }),
+  );
 
   if (relativePath === "") return [];
 

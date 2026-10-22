@@ -185,7 +185,7 @@ describe("Event Logging E2E", () => {
     });
 
     test("folder data structure is created", async () => {
-      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, true)).toBe(true);
+      expect(await waitForUrl(`_catalog/${TEST_FOLDER}/feed.xml`, true)).toBe(true);
     });
   });
 
@@ -205,7 +205,12 @@ describe("Event Logging E2E", () => {
     });
 
     test("book1 data structure is created", async () => {
-      expect(await waitForUrl(`${TEST_FOLDER}/test-events-book1.pdf/entry.xml`, true)).toBe(true);
+      // #given book1 processing completed in the preceding event test
+      // #when
+      const entryCreated = await waitForUrl(`_catalog/${TEST_FOLDER}/test-events-book1.pdf/entry.xml`, true);
+
+      // #then
+      expect(entryCreated).toBe(true);
     });
 
     test("add book2 triggers BookCreated event", async () => {
@@ -223,7 +228,7 @@ describe("Event Logging E2E", () => {
       let xml = "";
 
       while (Date.now() < deadline) {
-        const response = await fetch(`${BASE_URL}/${TEST_FOLDER}/feed.xml`);
+        const response = await fetch(`${BASE_URL}/_catalog/${TEST_FOLDER}/feed.xml`);
 
         if (response.ok) {
           xml = await response.text();
@@ -301,24 +306,27 @@ describe("Event Logging E2E", () => {
     test(
       "copy folder runs its folder work and lists every copied book in the copy's feed",
       async () => {
+        // #given the source folder contains book2
         const before = getDockerTimestamp();
 
+        // #when the folder is copied through the watched books boundary
         await execInContainer(`cp -r "${BOOKS_DIR}/${TEST_FOLDER}" "${BOOKS_DIR}/${TEST_FOLDER}-copy"`);
 
         const logs = await waitForLogs(before, (l) => hasCompleted(l, "FolderMetaSyncRequested", `${TEST_FOLDER}-copy`));
 
+        // #then the copied output and its catalogue entry are published
         expect(findEvents(logs, "FolderMetaSyncRequested", `${TEST_FOLDER}-copy`).length).toBeGreaterThan(0);
 
         // inotifywait watches the new folder only after its create event, so the books copied
         // into it may raise no event of their own; the pass must still list them in the feed.
-        expect(await waitForUrl(`${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
-        expect(await waitForUrl(`${TEST_FOLDER}-copy/test-events-book2.pdf/entry.xml`, true)).toBe(true);
+        expect(await waitForUrl(`_catalog/${TEST_FOLDER}-copy/feed.xml`, true)).toBe(true);
+        expect(await waitForUrl(`_catalog/${TEST_FOLDER}-copy/test-events-book2.pdf/entry.xml`, true)).toBe(true);
 
         const deadline = Date.now() + 20000;
         let xml = "";
 
         while (Date.now() < deadline && !xml.includes("test-events-book2.pdf")) {
-          const response = await fetch(`${BASE_URL}/${TEST_FOLDER}-copy/feed.xml`);
+          const response = await fetch(`${BASE_URL}/_catalog/${TEST_FOLDER}-copy/feed.xml`);
 
           if (response.ok) xml = await response.text();
 
@@ -373,7 +381,7 @@ describe("Event Logging E2E", () => {
     );
 
     test("data structure is cleaned up", async () => {
-      expect(await waitForUrl(`${TEST_FOLDER}/feed.xml`, false)).toBe(true);
+      expect(await waitForUrl(`_catalog/${TEST_FOLDER}/feed.xml`, false)).toBe(true);
     });
   });
 });

@@ -24,8 +24,8 @@ export function parseFeed(xml: string): FeedModel {
     title: getString(feed.title) ?? "",
     updated: getString(feed.updated) ?? "",
     kind,
-    selfHref: self?.["@_href"] ?? "/feed.xml",
-    startHref: start?.["@_href"] ?? "/feed.xml",
+    selfHref: self?.["@_href"] ?? "/_catalog/feed.xml",
+    startHref: start?.["@_href"] ?? "/_catalog/feed.xml",
     entries: fragments.map(entryFromFragment),
   };
 }

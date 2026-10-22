@@ -102,18 +102,22 @@ docker compose up -d --build
 
 ## API
 
-| Endpoint               | Audience | Description                                              |
-| ---------------------- | -------- | -------------------------------------------------------- |
-| `GET /`                | Browser  | Redirect to /index.html (HTML catalog)                   |
-| `GET /{path}/`         | Browser  | Subcatalog rendered as HTML (index.html)                 |
-| `GET /opds`            | Reader   | Root catalog (OPDS feed, 200 XML)                        |
-| `GET /feed.xml`        | Reader   | Root catalog (OPDS feed)                                 |
-| `GET /{path}/feed.xml` | Reader   | Subcatalog feed                                          |
-| `GET /{book}/file`     | Both     | Download book file (symlink)                             |
-| `GET /static/*`        | Both     | Static assets (style.css, main.js, favicons)             |
-| `GET /resync`          | Admin    | Resync in place; `?force=1` reprocesses all (Basic Auth) |
+| Endpoint                        | Audience | Description                                              |
+| ------------------------------- | -------- | -------------------------------------------------------- |
+| `GET /`                         | Browser  | Shared browser shell                                     |
+| `GET /{path}/`                  | Browser  | Shared browser shell for a catalogue folder              |
+| `GET /opds`                     | Reader   | Root catalogue entry (OPDS feed, 200 XML)                |
+| `GET /_catalog/feed.xml`        | Reader   | Root catalogue feed                                      |
+| `GET /_catalog/{path}/feed.xml` | Reader   | Folder catalogue feed                                    |
+| `GET /_catalog/{path}/{book}`   | Both     | Download book file                                       |
+| `GET /_catalog/{path}/{book}/*` | Both     | Book cover and thumbnail assets                          |
+| `GET /_app/*`                   | Both     | Static shell and reader assets                           |
+| `GET /resync`                   | Admin    | Resync in place; `?force=1` reprocesses all (Basic Auth) |
 
-Browsers get server-rendered HTML (`index.html`, generated at sync time — no browser XSLT); OPDS readers get the `feed.xml` graph via `/opds`. Returns 503 with `Retry-After: 5` while the initial sync is still building a folder.
+The shell is served on `/` and folder paths. It fetches the `feed.xml` graph from `/opds` and
+`/_catalog/` for browser rendering. OPDS readers use `/opds` or the `/_catalog/` feeds. Static
+assets are under `/_app/`. A missing feed returns 503 with `Retry-After: 5` while initial
+synchronization is still publishing that folder.
 
 ## Directory Structure
 
@@ -126,10 +130,8 @@ Browsers get server-rendered HTML (`index.html`, generated at sync time — no b
 
 /data/                     # Mirror cache (auto-generated)
 ├── feed.xml               # Root feed (readers)
-├── index.html             # Root catalog (browsers, rendered at sync time)
 ├── fiction/
 │   ├── feed.xml           # Subcatalog feed
-│   ├── index.html         # Subcatalog HTML
 │   ├── _entry.xml         # Entry for parent feed
 │   └── Foundation.epub/
 │       ├── entry.xml

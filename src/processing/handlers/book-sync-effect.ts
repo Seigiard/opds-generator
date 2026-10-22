@@ -7,7 +7,7 @@ import { CatalogueDeps, CatalogueEvent } from "../effect-handler.ts";
 import { ownedPromise } from "../../utils/owned-promise.ts";
 import type { EventType } from "../types.ts";
 import { ENTRY_FILE, COVER_FILE, THUMB_FILE } from "../../constants.ts";
-import { bookEntryXml } from "./book-entry.ts";
+import { bookEntryXml, rewriteBookEntryLinks } from "./book-entry.ts";
 
 // `message` carries the cause's text: the logger writes an error's message and stack, never its `cause`.
 interface FailureProps {
@@ -21,6 +21,8 @@ class BookStatFailed extends Data.TaggedError("BookStatFailed")<FailureProps> {}
 class BookDataDirFailed extends Data.TaggedError("BookDataDirFailed")<FailureProps> {}
 
 class EntryPublishFailed extends Data.TaggedError("EntryPublishFailed")<FailureProps> {}
+
+class EntryReadFailed extends Data.TaggedError("EntryReadFailed")<FailureProps> {}
 
 /** Recovered inside `bookSync`: the book keeps its metadata and gets no cover. */
 class CoverSaveFailed extends Data.TaggedError("CoverSaveFailed")<FailureProps> {}
@@ -45,6 +47,23 @@ export const bookSyncEffect = Effect.fn("bookSync")(function* (event: EventType)
 
   if (book.entryXml === undefined) {
     logger.warn("BookSync", "Keeping previous entry after extraction failure", { path: book.relativePath, error: book.extractionError });
+
+    const entryPath = join(book.dataDir, ENTRY_FILE);
+
+    const previousEntry = yield* ownedPromise(
+      () => Bun.file(entryPath).text(),
+      (cause) => new EntryReadFailed(failure(entryPath, cause)),
+    );
+
+    const migratedEntry = rewriteBookEntryLinks(previousEntry, book.relativePath, event.name);
+
+    yield* ownedPromise(
+      async () => {
+        await fs.symlink(book.filePath, join(book.dataDir, event.name));
+        await fs.atomicWrite(entryPath, migratedEntry);
+      },
+      (cause) => new EntryPublishFailed(failure(book.dataDir, cause)),
+    );
 
     return [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(book.dataDir) })];
   }

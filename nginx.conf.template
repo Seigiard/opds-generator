@@ -21,20 +21,20 @@ http {
 
     # ETag enabled by default
 
+    # Convert a catalogue feed URI to its filesystem directory for the
+    # initializing discriminator. A missing directory must remain a steady
+    # state 404 once the root feed exists.
+    map $uri $catalog_data_path {
+        default /__not_a_catalog_directory__;
+        ~^/_catalog(?<catalog_path>/.*)/feed\.xml$ $catalog_path;
+    }
+
     server {
         listen 80;
         server_name _;
 
         # Use relative redirects (no host prefix)
         absolute_redirect off;
-
-        # Index file for directories (browsers get HTML)
-        index index.html;
-
-        # Root redirect to HTML for browsers
-        location = / {
-            return 302 /index.html;
-        }
 
         # /opds serves the root feed directly (200 XML), no 302: strict OPDS
         # readers reject the redirect's text/html body with "incorrect content".
@@ -52,12 +52,20 @@ http {
             error_page 404 = @check_initializing;
         }
 
-        # Static assets from /static folder
-        # ^~ so the .xml/image regex locations below cannot capture /static/* into /data
+        # Static assets from /_app folder
+        # ^~ so the .xml/image regex locations below cannot capture /_app/* into /data
         # no-cache (ETag revalidation): style.css/main.js have unversioned URLs, and a
         # deploy regenerates index.html against the NEW assets — "immutable" left
         # browsers on day-old CSS/JS with mismatched markup (popup dead).
-        location ^~ /static/ {
+        location = /_app/ {
+            return 404;
+        }
+
+        location = /_app/index.html {
+            return 404;
+        }
+
+        location ^~ /_app/ {
             alias /app/static/;
             add_header Cache-Control "no-cache";
         }
@@ -66,11 +74,11 @@ http {
         # This is the load-bearing script control for book content: foliate's blob:
         # iframes inherit it, and its own iframe sandbox provides no isolation
         # (allow-same-origin + allow-scripts, WebKit bug 218086). Never widen it and
-        # never add 'unsafe-eval'. Exact match beats the ^~ /static/ prefix above.
+        # never add 'unsafe-eval'. Exact match beats the ^~ /_app/ prefix above.
         # add_header REPLACES inherited headers, so no-cache must be re-declared here
         # or read.html ships with no Cache-Control and the stale-asset bug (see the
-        # comment on /static/ above) returns.
-        location = /static/read.html {
+        # comment on /_app/ above) returns.
+        location = /_app/read.html {
             alias /app/static/read.html;
             add_header Cache-Control "no-cache";
             add_header Content-Security-Policy "default-src 'none'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; connect-src 'self'; worker-src 'self'; frame-src blob:; img-src blob: data:; style-src 'unsafe-inline' blob: data:";
@@ -81,7 +89,7 @@ http {
         # so forever-caching is safe — unlike the unversioned URLs above.
         # The stock mime.types has no mjs mapping: pdf.mjs would serve as
         # octet-stream and fail the browser's strict module MIME check.
-        location ^~ /static/foliate- {
+        location ^~ /_app/foliate- {
             alias /app/static/foliate-;
             types {
                 application/javascript js mjs;
@@ -114,54 +122,77 @@ http {
 
         # AUTH_BLOCK_END
 
-        # Book downloads with Content-Disposition header for correct filename
-        location ~ ^(.+)/([^/]+\.(epub|pdf|mobi|azw|azw3|fb2|fbz|cbz|cbr|cb7|cbt|zip|djvu|txt))$ {
-            root /data;
-            try_files $uri =404;
+        # Bun-local lifecycle endpoints are not public nginx routes.
+        location = /events {
+            return 404;
+        }
 
-            # Force download with original filename
-            add_header Content-Disposition 'attachment; filename="$2"';
+        location = /status {
+            return 404;
+        }
 
-            # RATE_LIMIT will be 0 or value like "1m"
+        # Catalogue files from /_catalog. Regex locations use aliases so the route
+        # prefix is removed before resolving the path under /data.
+        location ~ ^/_catalog/(?<catalog_download_path>.+)/(?<catalog_download_file>[^/]+\.(epub|pdf|mobi|azw|azw3|fb2|fbz|cbz|cbr|cb7|cbt|zip|djvu|txt))$ {
+            alias /data/$catalog_download_path/$catalog_download_file;
+            add_header Content-Disposition 'attachment; filename="$catalog_download_file"';
             limit_rate ${RATE_LIMIT};
         }
 
-        # Images - cache 1 day, then validate with ETag
-        location ~ \.(jpg|jpeg|png|webp)$ {
-            root /data;
+        location ~ ^/_catalog/(?<catalog_image_path>.*\.(jpg|jpeg|png|webp))$ {
+            alias /data/$catalog_image_path;
             expires 1d;
             add_header Cache-Control "public, must-revalidate";
         }
 
-        # XML feeds - always validate freshness
-        location ~ \.xml$ {
-            root /data;
-            try_files $uri $uri/ =404;
+        location ~ ^/_catalog/(?<catalog_xml_path>.*\.xml)$ {
+            alias /data/$catalog_xml_path;
             add_header Cache-Control "no-cache";
             error_page 404 = @check_initializing;
         }
 
-        # Browser paths - folder URLs resolve to index.html
-        location / {
-            root /data;
-            try_files $uri $uri/index.html =404;
-
-            # 404: no index.html; 403: directory exists but index.html not written yet
+        location /_catalog/ {
+            alias /data/;
+            index index.html;
             error_page 404 = @check_initializing;
             error_page 403 = @check_initializing;
         }
 
+        # Every browser path not claimed by an app, catalogue or OPDS location
+        # receives the same static shell. Folder navigation uses ordinary links;
+        # the shell fetches the matching feed in the browser.
+        # The exact root block keeps the root contract explicit; both blocks
+        # intentionally serve the same no-cache shell and CSP.
+        location = / {
+            root /app/static;
+            try_files /index.html =404;
+            add_header Cache-Control "no-cache";
+            add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+        }
+
+        location / {
+            root /app/static;
+            try_files /index.html =404;
+            add_header Cache-Control "no-cache";
+            add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+        }
+
         location @check_initializing {
-            # feed.xml / index.html targets may be mid-write (cascade): 503.
-            if ($uri ~* (feed\.xml|index\.html)$) {
+            add_header Retry-After 5 always;
+
+            # Book output directories have entry.xml but never publish feed.xml.
+            # Their feed URL is a permanent miss, not a folder still being written.
+            if (-f /data$catalog_data_path/entry.xml) {
+                return 404;
+            }
+
+            # A missing catalogue feed is transient while its folder exists.
+            if (-d /data$catalog_data_path) {
                 return 503;
             }
-            # Folder URL whose directory exists but index.html is not written yet: mid-cascade, 503.
-            if (-d /data$uri) {
-                return 503;
-            }
-            # Root feed is seeded first during the initial sync (a resync never removes it); while it is
-            # absent nothing is built yet — everything is "initializing" (503).
+
+            # OPDS root and catalogue feeds are transient before the first
+            # publication, even when their target directory does not exist yet.
             if (!-f /data/feed.xml) {
                 return 503;
             }
@@ -174,7 +205,7 @@ http {
         location @initializing {
             default_type application/json;
             return 503 '{"status":"initializing","message":"Server is starting, please retry later"}';
-            add_header Retry-After 5;
+            add_header Retry-After 5 always;
         }
     }
 }

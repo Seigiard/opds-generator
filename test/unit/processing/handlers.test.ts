@@ -194,11 +194,11 @@ describe("Processing Handlers", () => {
       expect(entryWrite).toBeUndefined();
     });
 
-    test("includes subsection link in _entry.xml", async () => {
+    test("includes the prefixed subsection link in _entry.xml", async () => {
       const result = await folderSync(folderCreatedEvent("/test/books/", "Fiction"), asyncDeps);
       expect(result.isOk()).toBe(true);
       const entryWrite = mockFs.writeCalls.find((c) => c.path.endsWith("_entry.xml"));
-      expect(entryWrite?.content).toContain("Fiction/feed.xml");
+      expect(entryWrite?.content).toContain('href="/_catalog/Fiction/feed.xml"');
     });
 
     test("returns cascade event to generate root feed.xml", async () => {

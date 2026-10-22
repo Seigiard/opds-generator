@@ -2,6 +2,10 @@ import { describe, test, expect, beforeAll } from "bun:test";
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
+const SHELL_CSP =
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; " +
+  "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+
 // Wait for a URL to return 200
 async function waitFor(path: string, maxWaitMs = 45000): Promise<void> {
   const start = Date.now();
@@ -22,10 +26,8 @@ async function waitFor(path: string, maxWaitMs = 45000): Promise<void> {
 }
 
 async function waitForServer(): Promise<void> {
-  await waitFor("/feed.xml");
-  // index.html is written by the cascade after feed.xml — wait for the browser view too
-  await waitFor("/index.html");
-  await waitFor("/test/");
+  await waitFor("/opds");
+  await waitFor("/_catalog/test/feed.xml");
 }
 
 // Decode the handful of HTML entities that appear in escaped attribute values, as a
@@ -46,13 +48,7 @@ describe("nginx integration", () => {
     await waitForServer();
   });
 
-  describe("redirects", () => {
-    test("GET / redirects to /index.html (browsers get HTML)", async () => {
-      const response = await fetch(`${BASE_URL}/`, { redirect: "manual" });
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe("/index.html");
-    });
-
+  describe("OPDS entry", () => {
     test("GET /opds serves the root feed as XML (readers get feeds, no 302/html body)", async () => {
       const response = await fetch(`${BASE_URL}/opds`, { redirect: "manual" });
       expect(response.status).toBe(200);
@@ -65,30 +61,72 @@ describe("nginx integration", () => {
   });
 
   describe("browser HTML routing", () => {
-    test("GET /index.html returns 200 text/html", async () => {
-      const response = await fetch(`${BASE_URL}/index.html`);
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type") || "").toContain("text/html");
-      const body = await response.text();
-      expect(body).toContain("<!DOCTYPE html>");
-      expect(body).toContain('class="books-grid"');
+    test("root, index, existing folders and unknown folders return the no-cache shell with the exact CSP", async () => {
+      // #given browser paths with and without matching catalogue folders
+      const paths = ["/", "/index.html", "/test/", "/no-such-folder/"];
+
+      // #when every path is requested without following redirects
+      const facts = await Promise.all(
+        paths.map(async (path) => {
+          const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });
+          const body = await response.text();
+
+          return {
+            path,
+            status: response.status,
+            contentType: response.headers.get("content-type")?.includes("text/html"),
+            cacheControl: response.headers.get("cache-control"),
+            csp: response.headers.get("content-security-policy"),
+            hasApp: body.includes('<div id="app"></div>'),
+            hasMain: body.includes('<script type="module" src="/_app/main.js"></script>'),
+          };
+        }),
+      );
+
+      // #then every browser path returns the same shell contract
+      expect(facts).toEqual(
+        paths.map((path) => ({
+          path,
+          status: 200,
+          contentType: true,
+          cacheControl: "no-cache",
+          csp: SHELL_CSP,
+          hasApp: true,
+          hasMain: true,
+        })),
+      );
     });
 
-    test("GET /test/ returns 200 text/html (folder URL → index.html)", async () => {
-      const response = await fetch(`${BASE_URL}/test/`);
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type") || "").toContain("text/html");
-    });
-
-    test("GET /test/feed.xml still returns 200 XML (readers)", async () => {
-      const response = await fetch(`${BASE_URL}/test/feed.xml`);
+    test("GET /_catalog/test/feed.xml returns XML with no-cache", async () => {
+      const response = await fetch(`${BASE_URL}/_catalog/test/feed.xml`);
       expect(response.status).toBe(200);
       expect((response.headers.get("content-type") || "").toLowerCase()).toContain("xml");
+      expect(response.headers.get("cache-control") || "").toContain("no-cache");
+    });
+
+    test("GET /_catalog/no-such-folder/feed.xml returns 404 after the root catalogue exists", async () => {
+      // #given waitForServer established a complete root catalogue
+      // #when a feed below an absent catalogue directory is requested
+      const response = await fetch(`${BASE_URL}/_catalog/no-such-folder/feed.xml`, { redirect: "manual" });
+
+      // #then the miss is permanent rather than an initializing response
+      expect(response.status).toBe(404);
+    });
+
+    test("GET feed.xml inside a book output directory returns a steady-state 404", async () => {
+      // #given the production sync created a book directory, which has entry.xml but never feed.xml
+      const path = "/_catalog/test/Test%20Book%20-%20Test%20Author.epub/feed.xml";
+
+      // #when
+      const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });
+
+      // #then the permanent miss is not reported as an initializing folder feed
+      expect(response.status).toBe(404);
     });
 
     test("AE2: book download returns 200 with Content-Disposition", async () => {
       // discover an acquisition href from a real feed
-      const feed = await (await fetch(`${BASE_URL}/test/feed.xml`)).text();
+      const feed = await (await fetch(`${BASE_URL}/_catalog/test/feed.xml`)).text();
       const match = feed.match(/acquisition[^>]*href="([^"]+)"/);
       expect(match).not.toBeNull();
       const downloadUrl = match![1]!;
@@ -100,7 +138,7 @@ describe("nginx integration", () => {
 
   describe("byte-range delivery (reader streaming contract)", () => {
     async function discoverBookUrl(): Promise<string> {
-      const feed = await (await fetch(`${BASE_URL}/test/feed.xml`)).text();
+      const feed = await (await fetch(`${BASE_URL}/_catalog/test/feed.xml`)).text();
       const match = feed.match(/acquisition[^>]*href="([^"]+)"/);
       expect(match).not.toBeNull();
 
@@ -152,40 +190,50 @@ describe("nginx integration", () => {
     });
   });
 
-  describe("feed.xml", () => {
-    test("GET /feed.xml returns 200 with XML content", async () => {
-      const response = await fetch(`${BASE_URL}/feed.xml`);
+  describe("catalogue feeds", () => {
+    test("GET /_catalog/feed.xml returns 200 with XML content", async () => {
+      const response = await fetch(`${BASE_URL}/_catalog/feed.xml`);
       expect(response.status).toBe(200);
       const contentType = response.headers.get("content-type");
       expect(contentType).toContain("xml");
     });
 
     test("response includes charset utf-8", async () => {
-      const response = await fetch(`${BASE_URL}/feed.xml`);
+      const response = await fetch(`${BASE_URL}/_catalog/feed.xml`);
       expect(response.status).toBe(200);
       const contentType = response.headers.get("content-type") || "";
       expect(contentType.toLowerCase()).toContain("utf-8");
     });
   });
 
-  describe("static files", () => {
-    test("GET /static/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
-      const response = await fetch(`${BASE_URL}/static/style.css`);
+  describe("app files", () => {
+    test("GET /_app/ and /_app/index.html do not expose the browser shell", async () => {
+      // #given reserved application-asset paths that are not public shell routes
+      const paths = ["/_app/", "/_app/index.html"];
+
+      // #when
+      const statuses = await Promise.all(paths.map(async (path) => (await fetch(`${BASE_URL}${path}`, { redirect: "manual" })).status));
+
+      // #then
+      expect(statuses).toEqual([404, 404]);
+    });
+
+    test("GET /_app/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
+      const response = await fetch(`${BASE_URL}/_app/style.css`);
       expect(response.status).toBe(200);
-      // Unversioned asset URLs must revalidate: "immutable" left browsers on
-      // day-old CSS/JS mismatched with freshly regenerated index.html.
+      // Unversioned asset URLs must revalidate so the shell and its CSS/JS stay on the same build.
       expect(response.headers.get("cache-control") || "").toContain("no-cache");
       expect(response.headers.get("etag")).toBeTruthy();
     });
 
-    test("GET /static/favicon/*.png served from /app/static, not captured by the /data image regex", async () => {
-      const response = await fetch(`${BASE_URL}/static/favicon/favicon-96x96.png`);
+    test("GET /_app/favicon/*.png is served from /app/static, not captured by the /data image regex", async () => {
+      const response = await fetch(`${BASE_URL}/_app/favicon/favicon-96x96.png`);
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type") || "").toContain("image/png");
     });
 
-    test("GET /static/layout.xsl returns 404 (XSLT removed)", async () => {
-      const response = await fetch(`${BASE_URL}/static/layout.xsl`);
+    test("GET /_app/layout.xsl returns 404 (XSLT removed)", async () => {
+      const response = await fetch(`${BASE_URL}/_app/layout.xsl`);
       expect(response.status).toBe(404);
     });
   });
@@ -198,32 +246,31 @@ describe("nginx integration", () => {
       "img-src blob: data:; style-src 'unsafe-inline' blob: data:";
 
     async function foliateBase(): Promise<string> {
-      const html = await (await fetch(`${BASE_URL}/static/read.html`)).text();
+      const html = await (await fetch(`${BASE_URL}/_app/read.html`)).text();
       const match = html.match(/name="foliate-base" content="([^"]+)"/);
       expect(match).not.toBeNull();
 
       return match![1]!;
     }
 
-    test("R8: /static/read.html carries the exact KTD-6 policy and stays no-cache", async () => {
-      const response = await fetch(`${BASE_URL}/static/read.html`);
+    test("R8: /_app/read.html carries the exact KTD-6 policy, MIME and no-cache", async () => {
+      const response = await fetch(`${BASE_URL}/_app/read.html`);
       expect(response.status).toBe(200);
       expect(response.headers.get("content-security-policy")).toBe(READER_CSP);
       // add_header replaces inherited headers — this guards the no-cache re-declaration
       expect(response.headers.get("cache-control") || "").toContain("no-cache");
       expect(response.headers.get("content-type") || "").toContain("text/html");
+      expect(await response.text()).toContain('<script type="module" src="/_app/reader.js"></script>');
     });
 
-    test("R8: catalog and feed routes carry no CSP", async () => {
-      for (const path of ["/index.html", "/feed.xml", "/test/"]) {
-        const response = await fetch(`${BASE_URL}${path}`);
-        expect(response.status).toBe(200);
-        expect(response.headers.get("content-security-policy")).toBeNull();
-      }
+    test("catalogue data carries no shell CSP", async () => {
+      const response = await fetch(`${BASE_URL}/_catalog/feed.xml`);
+      expect({ status: response.status, csp: response.headers.get("content-security-policy") }).toEqual({ status: 200, csp: null });
     });
 
     test("R13: hashed foliate runtime is immutable-cacheable with module-safe MIME", async () => {
       const base = await foliateBase();
+      expect(base.startsWith("/_app/foliate-")).toBe(true);
 
       for (const file of ["/view.js", "/vendor/pdfjs/pdf.mjs", "/vendor/pdfjs/pdf.worker.mjs"]) {
         const response = await fetch(`${BASE_URL}${base}${file}`);
@@ -234,8 +281,8 @@ describe("nginx integration", () => {
       }
     });
 
-    test("unversioned static assets stay no-cache (main.js, reader.js)", async () => {
-      for (const file of ["/static/main.js", "/static/reader.js"]) {
+    test("unversioned app assets stay no-cache without the reader CSP", async () => {
+      for (const file of ["/_app/main.js", "/_app/style.css", "/_app/reader.js"]) {
         const response = await fetch(`${BASE_URL}${file}`);
         expect(response.status).toBe(200);
         expect(response.headers.get("cache-control") || "").toContain("no-cache");
@@ -245,16 +292,29 @@ describe("nginx integration", () => {
   });
 
   describe("directory index", () => {
-    test("GET /nonexistent.file returns 404 (non-directory miss)", async () => {
-      const response = await fetch(`${BASE_URL}/nonexistent.file`, { redirect: "manual" });
-      expect(response.status).toBe(404);
+    test("a top-level api catalogue folder remains browsable beside app routes", async () => {
+      // #given files/api contains a real book processed by the production image
+      // #when the browser folder and its catalogue feed are requested
+      const page = await fetch(`${BASE_URL}/api/`);
+      const feed = await fetch(`${BASE_URL}/_catalog/api/feed.xml`);
+      const xml = await feed.text();
+
+      // #then both public surfaces resolve and the feed lists that book
+      expect({
+        page: { status: page.status, html: page.headers.get("content-type")?.includes("text/html") },
+        feed: {
+          status: feed.status,
+          xml: feed.headers.get("content-type")?.includes("xml"),
+          hasBook: xml.includes("Test Book"),
+        },
+      }).toEqual({
+        page: { status: 200, html: true },
+        feed: { status: 200, xml: true, hasBook: true },
+      });
     });
 
-    test("GET /nonexistent-folder/ returns 404 once the catalog is built", async () => {
-      // Steady state (root feed exists): a folder that will never exist is a real
-      // 404, not a retry-forever 503. Mid-cascade states (dir exists, index.html
-      // pending) and cold start (no root feed yet) still answer 503.
-      const response = await fetch(`${BASE_URL}/nonexistent-folder/`, { redirect: "manual" });
+    test("GET /_catalog/nonexistent.file returns 404 (non-directory catalogue miss)", async () => {
+      const response = await fetch(`${BASE_URL}/_catalog/nonexistent.file`, { redirect: "manual" });
       expect(response.status).toBe(404);
     });
 
@@ -288,7 +348,7 @@ describe("nginx integration", () => {
 
   describe("initial sync", () => {
     test("creates root feed.xml with valid OPDS structure", async () => {
-      const response = await fetch(`${BASE_URL}/feed.xml`);
+      const response = await fetch(`${BASE_URL}/_catalog/feed.xml`);
       expect(response.status).toBe(200);
 
       const feedContent = await response.text();
@@ -301,11 +361,11 @@ describe("nginx integration", () => {
     });
   });
 
-  // R15 smoke: crawl the whole feed graph, every folder must render HTML and links must resolve
+  // R15 smoke: crawl the whole feed graph, every folder path must serve the shell and every catalogue link must resolve
   describe("R15 smoke", () => {
-    test("every folder renders index.html and internal links resolve", async () => {
+    test("every folder path serves the shell and internal links resolve", async () => {
       const visited = new Set<string>();
-      const queue: string[] = ["/feed.xml"];
+      const queue: string[] = ["/_catalog/feed.xml"];
       const assets = new Set<string>();
 
       while (queue.length > 0) {
@@ -318,44 +378,34 @@ describe("nginx integration", () => {
         expect(feedRes.status).toBe(200);
         const xml = await feedRes.text();
 
-        // the folder that owns this feed must serve an HTML index
-        const dir = feedPath.replace(/feed\.xml$/, "");
+        // the folder that owns this feed must serve the shared shell
+        const dir = feedPath.replace(/^\/_catalog/, "").replace(/feed\.xml$/, "");
         const htmlRes = await fetch(`${BASE_URL}${dir}`);
         expect(htmlRes.status).toBe(200);
         expect((htmlRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
-
-        // the links a browser actually clicks (folder cards, home) must resolve to HTML, not XML
         const html = await htmlRes.text();
+        expect(html).toContain('<div id="app"></div>');
+        expect(html).toContain('<script type="module" src="/_app/main.js"></script>');
 
-        const cardHrefs = [...html.matchAll(/class="card__title"><a href="([^"]+)"/g)].flatMap((m) =>
-          m[1]!.startsWith("#") ? [] : [m[1]!],
-        );
-
-        for (const href of cardHrefs) {
-          expect(href).not.toMatch(/feed\.xml$/);
-          const cardRes = await fetch(`${BASE_URL}${href}`);
+        for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) {
+          const feedHref = htmlDecode(m[1]!);
+          expect(feedHref.startsWith("/_catalog/")).toBe(true);
+          const browserHref = feedHref.replace(/^\/_catalog/, "").replace(/feed\.xml$/, "");
+          const cardRes = await fetch(`${BASE_URL}${browserHref}`);
           expect(cardRes.status).toBe(200);
           expect((cardRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
+          queue.push(feedHref);
         }
 
-        // Every generated View link must point at the shared reader page and carry a
-        // book path that actually resolves — a broken View button would 404 the book.
-        // The href is an HTML attribute, so entity-decode it the way a browser would
-        // before navigating (apostrophes render as &#39; in the markup).
-        for (const m of html.matchAll(/href="([^"]+)" class="popup__view-btn"/g)) {
-          const viewHref = htmlDecode(m[1]!);
-          expect(viewHref.startsWith("/static/read.html#/")).toBe(true);
-          const bookPath = viewHref.slice("/static/read.html#".length);
-          assets.add(bookPath);
+        for (const m of xml.matchAll(/opds-spec\.org\/image(?:\/thumbnail)?"\s+href="([^"]+)"/g)) {
+          expect(m[1]!.startsWith("/_catalog/")).toBe(true);
+          assets.add(m[1]!);
         }
 
-        for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) queue.push(m[1]!);
-        const image = xml.match(/opds-spec\.org\/image"\s+href="([^"]+)"/);
-
-        if (image) assets.add(image[1]!);
-        const acquisition = xml.match(/acquisition[^>]*href="([^"]+)"/);
-
-        if (acquisition) assets.add(acquisition[1]!);
+        for (const m of xml.matchAll(/acquisition[^>]*href="([^"]+)"/g)) {
+          expect(m[1]!.startsWith("/_catalog/")).toBe(true);
+          assets.add(m[1]!);
+        }
       }
 
       // a real library has several nested folders
@@ -486,7 +536,7 @@ describe("nginx integration", () => {
       const polled: number[] = [];
 
       for (let i = 0; i < 40; i++) {
-        polled.push((await fetch(`${BASE_URL}/feed.xml`)).status, (await fetch(`${BASE_URL}/index.html`)).status);
+        polled.push((await fetch(`${BASE_URL}/_catalog/feed.xml`)).status, (await fetch(`${BASE_URL}/_catalog/test/feed.xml`)).status);
         await new Promise((r) => setTimeout(r, 25));
       }
 

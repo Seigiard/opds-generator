@@ -11,6 +11,8 @@ services:
       - ./bunfig.toml:/app/bunfig.toml:ro
       # Reader-shell pure helpers (fragment validation) are unit-tested in docker too
       - ./ui/reader:/app/ui/reader:ro
+      # Browser feed parser is unit-tested in Docker too
+      - ./ui/gridnav:/app/ui/gridnav:ro
       # Vendored foliate-js: vendor-posture.test.ts pins its iframe sandbox posture
       - ./ui/vendor/foliate-js:/app/ui/vendor/foliate-js:ro
     environment:
