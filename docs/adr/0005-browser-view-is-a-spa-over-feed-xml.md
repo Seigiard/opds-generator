@@ -6,7 +6,7 @@ status: accepted
 
 The generator used to render `index.html` next to every `feed.xml`, so a change to the browser view's markup or styles meant bumping the folder processing version and rebuilding every folder in the catalogue. We decided that the generator writes data only: `feed.xml`, `_entry.xml`, covers and the `file` link. The browser view is one static shell in `static/`, served by nginx for every folder path, which fetches the folder's `feed.xml`, parses it with the browser's `DOMParser` into the same `FeedModel` the renderer already uses, and renders it with `renderHtml`. OPDS readers keep reading the same `feed.xml`; the feed is the one contract between the generator and the browser view.
 
-Served paths are split by prefix, as in TTRPG Map Viewer: `/_app/` for the shell, its assets and the reader, `/_catalog/` for the output tree, `/opds` for the OPDS root entry. Every other path is a folder path that serves the shell. Breadcrumbs come from the URL path segments, because a folder feed's title is the folder name. **Minimum** is the root feed alone.
+Served paths are split by prefix, as in TTRPG Map Viewer: `/_app/` for the shell, its assets and the reader, `/_catalog/` for the output tree, `/opds` for the OPDS root entry. Every other path is a folder path that serves the shell. Breadcrumbs come from the URL path segments, while the folder heading and tab title come from the feed title. **Minimum** is the root feed alone.
 
 ## Considered Options
 
