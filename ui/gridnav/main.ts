@@ -64,7 +64,7 @@ async function boot(): Promise<void> {
       const model = parseFeedDom(await response.text());
       const crumbs = breadcrumbsFor(pathname);
       app.innerHTML = renderHtml(model, crumbs);
-      document.title = crumbs.at(-1)?.label ?? model.title;
+      document.title = model.title;
       break;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not load this folder";

@@ -104,7 +104,7 @@ function renderHeader(model: FeedModel, crumbs: Crumb[]): HtmlEscapedString {
     return index === 0 ? [link] : [frag`<span class="header__separator">/</span>`, link];
   });
 
-  const title = crumbs.at(-1)?.label ?? model.title;
+  const title = model.title;
   const titleSeparator = crumbs.length > 1 ? frag`<span class="header__separator">/</span>` : "";
 
   return frag`<header class="header">
