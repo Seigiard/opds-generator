@@ -144,12 +144,17 @@ describe("bookSync handler", () => {
   <link rel="http://opds-spec.org/acquisition/open-access" href="/shelf/Legacy%20Book.epub/Legacy%20Book.epub" type="application/epub+zip"/>
 </entry>`,
     );
+    const sourcePath = join(FILES_DIR, "shelf", name);
+    await symlink(sourcePath, join(bookDir, "file"));
 
     // #when extraction fails and the previous entry is retained
     await bookSync(bookCreatedEvent(`shelf/${name}`), deps);
 
     // #then metadata remains while every published link uses the current catalogue prefix
     const entry = await readFile(join(bookDir, "entry.xml"), "utf-8");
+    const downloadLink = join(bookDir, name);
+    const downloadLinkStat = await lstat(downloadLink).catch(() => undefined);
+    const downloadLinkTarget = await readlink(downloadLink).catch(() => undefined);
     expect({
       title: entry.includes("<title>Legacy metadata title</title>"),
       author: entry.includes("<name>Legacy metadata author</name>"),
@@ -157,7 +162,16 @@ describe("bookSync handler", () => {
       thumbnail: entry.includes('href="/_catalog/shelf/Legacy%20Book.epub/thumb.jpg"'),
       acquisition: entry.includes('href="/_catalog/shelf/Legacy%20Book.epub/Legacy%20Book.epub"'),
       legacyLink: entry.includes('href="/shelf/'),
-    }).toEqual({ title: true, author: true, cover: true, thumbnail: true, acquisition: true, legacyLink: false });
+      downloadLink: { isSymbolicLink: downloadLinkStat?.isSymbolicLink() ?? false, target: downloadLinkTarget },
+    }).toEqual({
+      title: true,
+      author: true,
+      cover: true,
+      thumbnail: true,
+      acquisition: true,
+      legacyLink: false,
+      downloadLink: { isSymbolicLink: true, target: sourcePath },
+    });
   });
 
   test("finishes download publication when cancellation arrives during entry write", async () => {
