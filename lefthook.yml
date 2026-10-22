@@ -18,3 +18,8 @@ pre-commit:
     - name: typecheck
       glob: "**/*.ts"
       run: bun --bun tsc --noEmit
+
+pre-push:
+  jobs:
+    - name: knip
+      run: npx --no-install knip
