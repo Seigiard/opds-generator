@@ -20,6 +20,11 @@ available in the Vite playground.
       name.
 - [ ] Initializing state with retry: start with an empty `/data`; confirm the
       starting message appears, then confirm the feed renders after retry.
+- [ ] Slow network: throttle the feed request above 300 ms; confirm the shell
+      stays empty briefly, then shows the header and card skeleton until the
+      catalogue renders.
+- [ ] Folder prefetch: open a folder with subfolders and confirm the browser
+      prefetches their `feed.xml` responses, but not book files or covers.
 - [ ] Not-found state: open `/no-such-folder/`; confirm "Folder not found" and
       the home link.
 - [ ] Console: confirm there are no CSP violations.

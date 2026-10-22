@@ -336,6 +336,62 @@ body {
   }
 }
 
+/* Keep delayed feedback in the same grid and cover proportions as catalogue cards. */
+.card--skeleton {
+  pointer-events: none;
+}
+
+.card--skeleton .book {
+  transform: none;
+}
+
+.card--skeleton .book__cover {
+  background: color-mix(in srgb, var(--color-text-muted) 16%, var(--color-bg));
+  box-shadow: none;
+  outline: 0;
+}
+
+.card--skeleton .book__cover::before,
+.card--skeleton .book__cover::after {
+  display: none;
+}
+
+.card--skeleton .book::after {
+  background: color-mix(in srgb, var(--color-text-muted) 10%, var(--color-bg));
+  border-color: color-mix(in srgb, var(--color-text-muted) 20%, transparent);
+  box-shadow: none;
+}
+
+.skeleton__title,
+.skeleton__label {
+  background: color-mix(in srgb, var(--color-text-muted) 16%, var(--color-bg));
+  border-radius: 0.25rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton__title,
+  .skeleton__label {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+.skeleton__title {
+  width: min(18rem, 60vw);
+  height: 2.5rem;
+}
+
+.skeleton__label {
+  display: block;
+  width: 80%;
+  height: 1.25rem;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
 /* --- Popup --- */
 body:has(.popup[open]) {
   overflow: hidden;
