@@ -24,7 +24,10 @@ src/
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
 │   ├── feed-html.ts  # renderHtml(model, crumbs) → body fragment
+│   ├── frag.ts       # sync-narrowed hono/html fragment helper
+│   ├── header.ts     # shared folder header markup, also used by the shell skeleton
 │   ├── breadcrumbs.ts # Browser breadcrumb links for the shell
+│   ├── safe-href.ts  # safeHref scheme filter
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (fixtures and tests)
 ├── formats/         # Effect extractor per format; index.ts is the registry
 ├── logging/         # Flat JSON logger to stdout
