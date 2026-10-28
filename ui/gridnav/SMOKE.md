@@ -9,6 +9,8 @@ available in the Vite playground.
 - [ ] Breadcrumbs: breadcrumb links navigate to the expected folders; the page
       title includes the current folder, including a non-ASCII folder name.
 - [ ] Popup open: select a book card and confirm its popup opens.
+- [ ] Keyboard grid navigation: focus the page, use arrows/WASD to enter and move
+      through the card grid, and confirm movement stops at row and grid edges.
 - [ ] Popup close with Esc: press `Esc`; the popup closes and the URL hash is
       cleared.
 - [ ] Popup close with Back: open a popup, press the browser Back button, and

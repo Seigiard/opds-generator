@@ -1,6 +1,6 @@
 # Browser viewer
 
-Code: `src/render/feed-html.ts`, `src/render/frag.ts`, `src/render/shell-state.ts`, `ui/styles`, `ui/gridnav`, `ui/gridnav/folder-load.ts`, `ui/gridnav/popup-rules.ts`.
+Code: `src/render/feed-html.ts`, `src/render/frag.ts`, `src/render/shell-state.ts`, `ui/styles`, `ui/gridnav/gridnav.ts`, `ui/gridnav/viewer.ts`, `ui/gridnav/folder-load.ts`, `ui/gridnav/popup-rules.ts`.
 
 Generated feed and entry links use `/_catalog/`. The static shell at `static/index.html` is served on `/` and every folder path. It fetches `/_catalog/<path>/feed.xml`, parses the feed in the browser and renders the `renderHtml` fragment. Folder cards keep the browser URL (`/<folder>/`). Breadcrumbs come from URL path segments, while the folder heading and browser tab title come from the feed title.
 
