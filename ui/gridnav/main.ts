@@ -2,6 +2,7 @@ import { breadcrumbsFor } from "../../src/render/breadcrumbs.ts";
 import { renderHtml } from "../../src/render/feed-html.ts";
 import type { FeedModel } from "../../src/render/feed-model.ts";
 import { renderHeader } from "../../src/render/header.ts";
+import { applyCoverStyles, dropBrokenCovers } from "./cover-placeholder.ts";
 import { parseFeedDom } from "./parse-feed-dom.ts";
 import { initGlobal, wire } from "./viewer.ts";
 
@@ -91,6 +92,7 @@ async function boot(): Promise<void> {
 
   if (!app) return;
 
+  dropBrokenCovers();
   const pathname = browserPath(location.pathname);
   const crumbs = breadcrumbsFor(pathname);
   const loadingTimer = setTimeout(() => showSkeleton(app, crumbs), LOADING_DELAY_MS);
@@ -129,6 +131,7 @@ async function boot(): Promise<void> {
 
       const model = parseFeedDom(await response.text());
       app.innerHTML = renderHtml(model, crumbs);
+      applyCoverStyles(app);
       finishLoading();
       document.title = model.title;
       prefetchFolders(model);

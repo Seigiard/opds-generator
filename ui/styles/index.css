@@ -336,7 +336,7 @@ body {
   }
 }
 
-/* Keep delayed feedback in the same grid and cover proportions as catalogue cards. */
+/* Keep delayed feedback in the same grid and cover markup as catalogue cards. */
 .card--skeleton {
   pointer-events: none;
 }

@@ -4,6 +4,7 @@ import type { Crumb } from "./breadcrumbs.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
 import { frag } from "./frag.ts";
 import { renderHeader } from "./header.ts";
+import { coverRatioFromTitle, lqipFromTitle } from "./lqip.ts";
 import { safeHref } from "./safe-href.ts";
 
 type Fragment = HtmlEscapedString | string;
@@ -74,7 +75,7 @@ export function renderCover(entry: FeedEntry, src: string | undefined, lazy: boo
 
 function renderFolder(entry: FeedEntry): HtmlEscapedString {
   const href = safeHref(entry.href ? browserHref(entry.href) : "#");
-  const shelf = frag`<div class="book" aria-hidden="true"><div class="book__cover"><span>${entry.title}</span></div></div>`;
+  const shelf = frag`<div class="book" aria-hidden="true"><div class="book__cover" data-lqip="${lqipFromTitle(entry.title)}"><span>${entry.title}</span></div></div>`;
   const stack = interleave([shelf, shelf, shelf], "\n        ");
 
   const description = entry.summary
@@ -82,7 +83,7 @@ function renderFolder(entry: FeedEntry): HtmlEscapedString {
           <p class="card__description">${entry.summary}</p>`
     : "";
 
-  return frag`      <div>
+  return frag`      <div data-ratio="${coverRatioFromTitle(entry.title)}">
         <article class="card card--folder">
         ${stack}
         <div class="card__info">
@@ -110,13 +111,14 @@ function renderBook(entry: FeedEntry, index: number): HtmlEscapedString {
               <p class="popup__description">${entry.summary}</p>`
     : "";
 
+  const lqip = lqipFromTitle(entry.title);
   const cardCover = renderCover(entry, entry.thumbnail, true);
   const popupCover = renderCover(entry, entry.cover ?? entry.thumbnail, false);
 
-  return frag`      <div>
+  return frag`      <div data-ratio="${coverRatioFromTitle(entry.title)}">
         <article class="card card--book">
           <div class="book" aria-hidden="true">
-            <div class="book__cover">${cardCover}</div>
+            <div class="book__cover" data-lqip="${lqip}">${cardCover}</div>
           </div>
           <div class="card__info">
             <h3 class="card__title"><a href="#${popupId}">${entry.title}</a></h3>${author}
@@ -125,7 +127,7 @@ function renderBook(entry: FeedEntry, index: number): HtmlEscapedString {
         <dialog class="popup" id="${popupId}" aria-labelledby="${popupId}-title">
           <div class="popup__content">
             <div class="popup__cover" aria-hidden="true">
-              <div class="book"><div class="book__cover">${popupCover}</div></div>
+              <div class="book"><div class="book__cover" data-lqip="${lqip}">${popupCover}</div></div>
             </div>
             <div class="popup__info">
               <a class="popup__close-button" href="#"><span>Close</span></a>

@@ -28,14 +28,15 @@ src/
 │   ├── header.ts     # shared folder header markup, also used by the shell skeleton
 │   ├── breadcrumbs.ts # Browser breadcrumb links for the shell
 │   ├── safe-href.ts  # safeHref scheme filter
+│   ├── lqip.ts       # title → cover placeholder code (decoded by ui/styles/lqip.css) and cover ratio
 │   └── parse-feed.ts # parseFeed(xml) → FeedModel (fixtures and tests)
 ├── formats/         # Effect extractor per format; index.ts is the registry
 ├── logging/         # Flat JSON logger to stdout
 └── utils/           # archive (Effect dispatch over all archive types), zip, archive-type, image, process (Effect commands + temporary directories), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
-├── styles/          # CSS sources + four fixed cover variants → static/style.css
-├── gridnav/         # index.html shell + main.ts boot + parse-feed-dom.ts + viewer.ts + gridnav.ts → static/index.html, static/main.js
+├── styles/          # CSS sources + lqip.css title placeholder → static/style.css
+├── gridnav/         # index.html shell + main.ts boot + parse-feed-dom.ts + viewer.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/main.js
 ├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
 ├── vendor/          # foliate-js pinned git submodule + VENDOR.md
 ├── playground/      # Vite reader preview; the shell is served from gridnav/index.html
