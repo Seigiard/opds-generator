@@ -1,4 +1,4 @@
-/* Four fixed cover shapes, shared by each card and its popup. */
+/* Four fixed cover shapes for the loading skeleton; catalogue cards override --cover-ratio from data-ratio. */
 .books-grid > div:nth-child(4n + 1) {
   --cover-ratio: 225/350;
 }

@@ -4,7 +4,7 @@ import type { Crumb } from "./breadcrumbs.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
 import { frag } from "./frag.ts";
 import { renderHeader } from "./header.ts";
-import { lqipFromTitle } from "./lqip.ts";
+import { coverRatioFromTitle, lqipFromTitle } from "./lqip.ts";
 import { safeHref } from "./safe-href.ts";
 
 type Fragment = HtmlEscapedString | string;
@@ -83,7 +83,7 @@ function renderFolder(entry: FeedEntry): HtmlEscapedString {
           <p class="card__description">${entry.summary}</p>`
     : "";
 
-  return frag`      <div>
+  return frag`      <div data-ratio="${coverRatioFromTitle(entry.title)}">
         <article class="card card--folder">
         ${stack}
         <div class="card__info">
@@ -115,7 +115,7 @@ function renderBook(entry: FeedEntry, index: number): HtmlEscapedString {
   const cardCover = renderCover(entry, entry.thumbnail, true);
   const popupCover = renderCover(entry, entry.cover ?? entry.thumbnail, false);
 
-  return frag`      <div>
+  return frag`      <div data-ratio="${coverRatioFromTitle(entry.title)}">
         <article class="card card--book">
           <div class="book" aria-hidden="true">
             <div class="book__cover" data-lqip="${lqip}">${cardCover}</div>

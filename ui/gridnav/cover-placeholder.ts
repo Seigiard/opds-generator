@@ -1,10 +1,14 @@
 /**
- * Copy each cover's `data-lqip` code into `--lqip` for ui/styles/lqip.css. The shell CSP
- * (`style-src 'self'`) blocks the same value as a style attribute; CSSOM writes pass.
+ * Copy each cover's `data-lqip` code into `--lqip` for ui/styles/lqip.css, and each card's
+ * `data-ratio` into `--cover-ratio`. The shell CSP (`style-src 'self'`) blocks the same
+ * values as style attributes; CSSOM writes pass.
  */
-export function applyCoverPlaceholders(root: ParentNode): void {
+export function applyCoverStyles(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>("[data-lqip]").forEach((cover) => {
     cover.style.setProperty("--lqip", cover.dataset.lqip ?? "");
+  });
+  root.querySelectorAll<HTMLElement>("[data-ratio]").forEach((card) => {
+    card.style.setProperty("--cover-ratio", card.dataset.ratio ?? "");
   });
 }
 

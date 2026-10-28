@@ -2,7 +2,7 @@ import { breadcrumbsFor } from "../../src/render/breadcrumbs.ts";
 import { renderHtml } from "../../src/render/feed-html.ts";
 import type { FeedModel } from "../../src/render/feed-model.ts";
 import { renderHeader } from "../../src/render/header.ts";
-import { applyCoverPlaceholders, dropBrokenCovers } from "./cover-placeholder.ts";
+import { applyCoverStyles, dropBrokenCovers } from "./cover-placeholder.ts";
 import { parseFeedDom } from "./parse-feed-dom.ts";
 import { initGlobal, wire } from "./viewer.ts";
 
@@ -131,7 +131,7 @@ async function boot(): Promise<void> {
 
       const model = parseFeedDom(await response.text());
       app.innerHTML = renderHtml(model, crumbs);
-      applyCoverPlaceholders(app);
+      applyCoverStyles(app);
       finishLoading();
       document.title = model.title;
       prefetchFolders(model);
