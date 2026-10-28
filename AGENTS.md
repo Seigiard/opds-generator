@@ -36,8 +36,8 @@ src/
 └── utils/           # archive (Effect dispatch over all archive types), zip, archive-type, image, process (Effect commands + temporary directories), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
-├── styles/          # CSS sources + lqip.css title placeholder → static/style.css
-├── gridnav/         # index.html shell + main.ts boot + folder-load.ts + parse-feed-dom.ts + viewer.ts + popup-rules.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/main.js
+├── styles/          # CSS sources + lqip.css title placeholder → static/assets/style-<hash>.css
+├── gridnav/         # index.html shell + main.ts boot + folder-load.ts + parse-feed-dom.ts + viewer.ts + popup-rules.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/assets/main-<hash>.js
 ├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
 ├── vendor/          # foliate-js pinned git submodule + VENDOR.md
 ├── playground/      # Vite reader preview; the shell is served from gridnav/index.html

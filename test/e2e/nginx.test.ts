@@ -61,7 +61,7 @@ describe("nginx integration", () => {
   });
 
   describe("browser HTML routing", () => {
-    test("root, index, existing folders and unknown folders return the no-cache shell with the exact CSP", async () => {
+    test("root, index, existing folders and unknown folders return the no-cache shell with immutable content-hashed assets and the exact CSP", async () => {
       // #given browser paths with and without matching catalogue folders
       const paths = ["/", "/index.html", "/test/", "/no-such-folder/"];
 
@@ -70,6 +70,56 @@ describe("nginx integration", () => {
         paths.map(async (path) => {
           const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });
           const body = await response.text();
+          const scriptTags = [...body.matchAll(/<script\b[^>]*>/g)].map(([tag]) => tag);
+
+          const scripts = scriptTags.map((tag) => ({
+            href: tag.match(/\bsrc="([^"]+)"/)?.[1],
+            isModule: /\btype="module"/.test(tag),
+          }));
+
+          const stylesheets: string[] = [];
+
+          for (const [tag] of body.matchAll(/<link\b[^>]*>/g)) {
+            if (!/\brel="stylesheet"/.test(tag)) continue;
+
+            const href = tag.match(/\bhref="([^"]+)"/)?.[1];
+
+            if (href) stylesheets.push(href);
+          }
+
+          const referencedAssets = [
+            {
+              contentType: "javascript",
+              href: scripts[0]?.href,
+              name: /^\/_app\/assets\/main-([a-f0-9]{12})\.js$/,
+              role: "script",
+            },
+            {
+              contentType: "text/css",
+              href: stylesheets[0],
+              name: /^\/_app\/assets\/style-([a-f0-9]{12})\.css$/,
+              role: "stylesheet",
+            },
+          ].filter((asset): asset is typeof asset & { href: string } => asset.href !== undefined);
+
+          const assets = await Promise.all(
+            referencedAssets.map(async ({ contentType, href, name, role }) => {
+              const assetResponse = await fetch(`${BASE_URL}${href}`);
+              const nameMatch = href.match(name);
+              const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", await assetResponse.arrayBuffer()));
+              const hash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+              const cacheControl = assetResponse.headers.get("cache-control") || "";
+
+              return {
+                cacheControlIsImmutable: cacheControl.includes("max-age=31536000") && cacheControl.includes("immutable"),
+                contentHashMatchesName: nameMatch !== null && hash.startsWith(nameMatch[1]!),
+                contentType: (assetResponse.headers.get("content-type") || "").includes(contentType),
+                nameMatches: nameMatch !== null,
+                role,
+                status: assetResponse.status,
+              };
+            }),
+          );
 
           return {
             path,
@@ -78,7 +128,17 @@ describe("nginx integration", () => {
             cacheControl: response.headers.get("cache-control"),
             csp: response.headers.get("content-security-policy"),
             hasApp: body.includes('<div id="app"></div>'),
-            hasMain: body.includes('<script type="module" src="/_app/main.js"></script>'),
+            hasLegacyAssets: body.includes("/_app/main.js") || body.includes("/_app/style.css"),
+            scripts: {
+              allAreContentHashed: scripts.every(({ href }) => /^\/_app\/assets\/main-[a-f0-9]{12}\.js$/.test(href || "")),
+              allAreModules: scripts.every(({ isModule }) => isModule),
+              count: scripts.length,
+            },
+            stylesheets: {
+              allAreContentHashed: stylesheets.every((href) => /^\/_app\/assets\/style-[a-f0-9]{12}\.css$/.test(href || "")),
+              count: stylesheets.length,
+            },
+            assets,
           };
         }),
       );
@@ -92,7 +152,27 @@ describe("nginx integration", () => {
           cacheControl: "no-cache",
           csp: SHELL_CSP,
           hasApp: true,
-          hasMain: true,
+          hasLegacyAssets: false,
+          scripts: { allAreContentHashed: true, allAreModules: true, count: 1 },
+          stylesheets: { allAreContentHashed: true, count: 1 },
+          assets: [
+            {
+              cacheControlIsImmutable: true,
+              contentHashMatchesName: true,
+              contentType: true,
+              nameMatches: true,
+              role: "script",
+              status: 200,
+            },
+            {
+              cacheControlIsImmutable: true,
+              contentHashMatchesName: true,
+              contentType: true,
+              nameMatches: true,
+              role: "stylesheet",
+              status: 200,
+            },
+          ],
         })),
       );
     });
@@ -238,14 +318,6 @@ describe("nginx integration", () => {
       expect(statuses).toEqual([404, 404]);
     });
 
-    test("GET /_app/style.css returns 200 and revalidates (no stale immutable cache)", async () => {
-      const response = await fetch(`${BASE_URL}/_app/style.css`);
-      expect(response.status).toBe(200);
-      // Unversioned asset URLs must revalidate so the shell and its CSS/JS stay on the same build.
-      expect(response.headers.get("cache-control") || "").toContain("no-cache");
-      expect(response.headers.get("etag")).toBeTruthy();
-    });
-
     test("GET /_app/favicon/*.png is served from /app/static, not captured by the /data image regex", async () => {
       const response = await fetch(`${BASE_URL}/_app/favicon/favicon-96x96.png`);
       expect(response.status).toBe(200);
@@ -301,8 +373,8 @@ describe("nginx integration", () => {
       }
     });
 
-    test("unversioned app assets stay no-cache without the reader CSP", async () => {
-      for (const file of ["/_app/main.js", "/_app/style.css", "/_app/reader.js"]) {
+    test("unversioned reader assets stay no-cache without the reader CSP", async () => {
+      for (const file of ["/_app/reader.js"]) {
         const response = await fetch(`${BASE_URL}${file}`);
         expect(response.status).toBe(200);
         expect(response.headers.get("cache-control") || "").toContain("no-cache");
@@ -405,7 +477,7 @@ describe("nginx integration", () => {
         expect((htmlRes.headers.get("content-type") || "").toLowerCase()).toContain("text/html");
         const html = await htmlRes.text();
         expect(html).toContain('<div id="app"></div>');
-        expect(html).toContain('<script type="module" src="/_app/main.js"></script>');
+        expect(html).toMatch(/<script type="module" src="\/_app\/assets\/main-[a-f0-9]{12}\.js"><\/script>/);
 
         for (const m of xml.matchAll(/rel="subsection"\s+href="([^"]+)"/g)) {
           const feedHref = htmlDecode(m[1]!);

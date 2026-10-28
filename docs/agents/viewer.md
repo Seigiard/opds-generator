@@ -11,7 +11,7 @@ Generated feed and entry links use `/_catalog/`. The static shell at `static/ind
 - `test/golden/` is byte-exact and `.prettierignore`'d. Every markup change needs `bun run render:golden` and a commit of the goldens.
 - Each card wrapper carries `data-ratio`, a width/height ratio in 0.600–0.734 from the title hash (`coverRatioFromTitle` in `src/render/lqip.ts`). The shell copies it into `--cover-ratio`, so a book keeps its shape when the folder order changes; the card, its popup and a folder shelf inherit it. Skeleton cards have no title, so they all use the default `225/350` from `.book`.
 - Every `.book__cover` (book card, popup, folder shelf) carries `data-lqip`, a 20-bit code from the title (`src/render/lqip.ts`). The shell copies it into `--lqip` with `style.setProperty` (`applyCoverStyles`), because the shell CSP `style-src 'self'` blocks style attributes. `ui/styles/lqip.css` decodes it into a gradient placeholder behind the cover image, so it shows when there is no cover, while it loads, and after a load error (`ui/gridnav/cover-placeholder.ts` removes the broken `<img>`). Browsers without CSS `mod()`/`round()` get a flat colour.
-- JavaScript is required: `main.js` boots the shell, renders the catalogue and opens dialogs with `showModal()`.
+- JavaScript is required: the content-hashed `/_app/assets/main-<hash>.js` boots the shell, renders the catalogue and opens dialogs with `showModal()`.
   Without JavaScript, only the `<noscript>` link to `/opds` is available.
 - The shell waits 300 ms before showing loading feedback. A slower feed gets a
   header and card skeleton built from the regular header, grid, card, and cover

@@ -164,7 +164,7 @@ bun run test:e2e
 bun run fix
 
 # Viewer (browser UI) — sources live in ui/, artifacts in static/
-bun run build:ui       # regenerate static/style.css + static/main.js
+bun run build:ui       # regenerate static/assets/main-<hash>.js + static/assets/style-<hash>.css
 bun run dev:ui         # Vite preview of renderHtml against cassettes (HMR, no docker)
 bun run fixtures:pull  # refresh test/fixtures/feeds/ cassettes from ./data
 ```
