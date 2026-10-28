@@ -15,7 +15,7 @@ const mainPath = join(gridnavDir, "main.ts");
 
 const stylesDir = resolve(import.meta.dirname, "styles");
 
-const styleSources = ["reset.css", "index.css", "header.css", "variations.css"];
+const styleSources = ["reset.css", "index.css", "header.css", "variations.css", "lqip.css"];
 
 const feedsDir = resolve(repoRoot, "test", "fixtures", "feeds");
 
