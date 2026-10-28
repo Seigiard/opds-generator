@@ -1,43 +1,14 @@
-import { Gridnav } from "./gridnav.ts";
 import * as v from "valibot";
-
-const POPUP_HASH = /^#book-/;
+import { Gridnav } from "./gridnav.ts";
+import { decidePopup, isPopupHash, type PopupAction, type PopupInput, type PopupView } from "./popup-rules.ts";
 
 const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 function popupIsOpen(): boolean {
-  return POPUP_HASH.test(location.hash);
+  return isPopupHash(location.hash);
 }
 
-// A #book-N hash present at page load (deep link, reload) has no in-page history
-// entry behind it — history.back() would leave the site. Stamp that entry so
-// closePopup clears the hash in place instead; card-click entries carry null state.
-function stampEntryPopup(): void {
-  if (popupIsOpen()) history.replaceState({ popupEntry: true }, "");
-}
-
-// history.back() resolves asynchronously; block repeat Esc / double-click until
-// the resulting hashchange runs syncPopup, or the second back() leaves the folder.
-let closing = false;
-
-function closePopup(): void {
-  if (!popupIsOpen() || closing) return;
-
-  const state = v.safeParse(v.object({ popupEntry: v.optional(v.boolean()) }), history.state);
-
-  if (state.success && state.output.popupEntry) {
-    // A deep-link entry has nothing behind it. location.replace navigates without
-    // adding a history entry; empty-fragment navigation resets scroll, so restore it.
-    const { scrollX, scrollY } = window;
-    location.replace("#");
-    scrollTo(scrollX, scrollY);
-
-    return;
-  }
-
-  closing = true;
-  history.back();
-}
+let closePending = false;
 
 function popupDialog(id: string): HTMLDialogElement | null {
   const el = id ? document.getElementById(id) : null;
@@ -55,26 +26,65 @@ function restoreTrigger(dialogId: string): void {
   document.querySelector<HTMLElement>(`a[href="#${dialogId}"]`)?.focus();
 }
 
-function syncPopup(): void {
-  closing = false;
-  const target = popupDialog(location.hash.slice(1));
+function popupView(): PopupView {
+  const state = v.safeParse(v.object({ popupEntry: v.optional(v.boolean()) }), history.state);
   const open = openDialog();
+  const target = popupDialog(location.hash.slice(1));
 
-  if (open && open !== target) {
-    const closedId = open.id;
-    open.close();
+  return {
+    closePending,
+    deepLinkEntry: state.success && state.output.popupEntry === true,
+    hash: location.hash,
+    hashDialogId: target?.id ?? null,
+    openDialogId: open?.id ?? null,
+  };
+}
 
-    if (!target) restoreTrigger(closedId);
+function executePopupAction(action: PopupAction): void {
+  switch (action.kind) {
+    case "stamp-deep-link-entry":
+      // A #book-N hash present at page load (deep link, reload) has no in-page history
+      // entry behind it — history.back() would leave the site. Stamp that entry so
+      // close through replace clears the hash in place; card-click entries carry null state.
+      history.replaceState({ popupEntry: true }, "");
+      break;
+    case "close-through-back":
+      // history.back() resolves asynchronously; block repeat Esc / double-click until the
+      // resulting hashchange runs, or the second back() leaves the folder.
+      history.back();
+      break;
+    case "close-through-replace": {
+      // A deep-link entry has nothing behind it. location.replace navigates without
+      // adding a history entry; empty-fragment navigation resets scroll, so restore it.
+      const { scrollX, scrollY } = window;
+      location.replace("#");
+      scrollTo(scrollX, scrollY);
+      break;
+    }
+
+    case "close-dialog":
+      popupDialog(action.dialogId)?.close();
+      break;
+    case "restore-focus":
+      restoreTrigger(action.dialogId);
+      break;
+    case "show-dialog":
+      popupDialog(action.dialogId)?.showModal();
+      break;
   }
+}
 
-  if (target && !target.open) target.showModal();
+function handlePopup(input: PopupInput): void {
+  const decision = decidePopup(input, popupView());
+  closePending = decision.closePending;
+  decision.actions.forEach(executePopupAction);
 }
 
 let activeGrid: Gridnav | null = null;
 
 /** Attach document/window listeners once. They survive innerHTML swaps, so re-calling would leak duplicates. */
 export function initGlobal(): void {
-  window.addEventListener("hashchange", syncPopup);
+  window.addEventListener("hashchange", () => handlePopup({ kind: "hash-changed" }));
 
   // First arrow/WASD press anywhere on the page enters the grid at its first card.
   // Looks the grid up fresh each press so it keeps working after the playground re-renders.
@@ -102,7 +112,7 @@ export function initGlobal(): void {
 
     if (close) {
       e.preventDefault();
-      closePopup();
+      handlePopup({ kind: "close-requested" });
     }
   });
 }
@@ -122,13 +132,12 @@ export function wire(root: ParentNode = document): void {
   root.querySelectorAll<HTMLDialogElement>("dialog.popup").forEach((dialog) => {
     dialog.addEventListener("cancel", (e) => {
       e.preventDefault();
-      closePopup();
+      handlePopup({ kind: "close-requested" });
     });
     dialog.addEventListener("close", () => {
-      if (location.hash.slice(1) === dialog.id) closePopup();
+      handlePopup({ kind: "dialog-closed", dialogId: dialog.id });
     });
   });
 
-  stampEntryPopup();
-  syncPopup();
+  handlePopup({ kind: "render" });
 }
