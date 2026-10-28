@@ -6,12 +6,21 @@
 
 export type GridKey = "left" | "right" | "up" | "down";
 
+export interface KeyModifiers {
+  readonly altKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly isComposing: boolean;
+}
+
 export interface CardPosition {
   readonly x: number;
   readonly y: number;
 }
 
-export function gridKey(code: string): GridKey | null {
+export function gridKey(code: string, modifiers: KeyModifiers): GridKey | null {
+  if (modifiers.altKey || modifiers.ctrlKey || modifiers.metaKey || modifiers.isComposing) return null;
+
   switch (code) {
     case "ArrowRight":
     case "KeyD":

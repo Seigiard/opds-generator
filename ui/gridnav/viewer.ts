@@ -104,7 +104,7 @@ export function initGlobal(): void {
   window.addEventListener("hashchange", () => handlePopup({ kind: "hash-changed" }));
 
   document.addEventListener("keydown", (e) => {
-    const key = gridKey(e.code);
+    const key = gridKey(e.code, e);
 
     if (key === null || popupIsOpen()) return;
 

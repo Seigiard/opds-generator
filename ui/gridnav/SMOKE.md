@@ -10,7 +10,8 @@ available in the Vite playground.
       title includes the current folder, including a non-ASCII folder name.
 - [ ] Popup open: select a book card and confirm its popup opens.
 - [ ] Keyboard grid navigation: focus the page, use arrows/WASD to enter and move
-      through the card grid, and confirm movement stops at row and grid edges.
+      through the card grid, confirm movement stops at row and grid edges, and
+      confirm browser shortcuts with modifier keys still work.
 - [ ] Popup close with Esc: press `Esc`; the popup closes and the URL hash is
       cleared.
 - [ ] Popup close with Back: open a popup, press the browser Back button, and
