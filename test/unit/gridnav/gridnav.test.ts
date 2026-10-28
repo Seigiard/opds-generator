@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { gridKey, nextCard, type CardPosition } from "../../../ui/gridnav/gridnav.ts";
+import { gridKey, nextCard, type CardPosition, type KeyModifiers } from "../../../ui/gridnav/gridnav.ts";
+
+const noModifiers: KeyModifiers = {
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  isComposing: false,
+};
+
+const navigationCodes = ["ArrowRight", "KeyD", "ArrowLeft", "KeyA", "ArrowUp", "KeyW", "ArrowDown", "KeyS"];
 
 interface GridLayout {
   readonly cards: number;
@@ -20,10 +29,9 @@ function gridLayout(overrides: Partial<GridLayout> = {}): CardPosition[] {
 describe("gridKey", () => {
   test("maps arrow and WASD codes to directions", () => {
     // #given navigation key codes from the browser
-    const codes = ["ArrowRight", "KeyD", "ArrowLeft", "KeyA", "ArrowUp", "KeyW", "ArrowDown", "KeyS"];
 
     // #when each code is classified
-    const result = codes.map((code) => gridKey(code));
+    const result = navigationCodes.map((code) => gridKey(code, noModifiers));
 
     // #then each code has its defined movement direction
     expect(result).toEqual(["right", "right", "left", "left", "up", "up", "down", "down"]);
@@ -34,10 +42,25 @@ describe("gridKey", () => {
     const codes = ["Enter", "Tab", "KeyQ", ""];
 
     // #when each code is classified
-    const result = codes.map((code) => gridKey(code));
+    const result = codes.map((code) => gridKey(code, noModifiers));
 
     // #then none of them produces a grid movement
     expect(result).toEqual([null, null, null, null]);
+  });
+
+  test.each([
+    { name: "Alt", modifiers: { ...noModifiers, altKey: true } },
+    { name: "Ctrl", modifiers: { ...noModifiers, ctrlKey: true } },
+    { name: "Meta", modifiers: { ...noModifiers, metaKey: true } },
+    { name: "IME composition", modifiers: { ...noModifiers, isComposing: true } },
+  ])("ignores arrow and WASD codes with $name held", ({ modifiers }) => {
+    // #given browser shortcut or composition modifier state and navigation key codes
+
+    // #when each code is classified
+    const result = navigationCodes.map((code) => gridKey(code, modifiers));
+
+    // #then the browser shortcut is not classified as grid navigation
+    expect(result).toEqual([null, null, null, null, null, null, null, null]);
   });
 });
 
