@@ -94,6 +94,17 @@ the observed CI ceiling, still 2x below the historical real-leak signal (~7 KB/i
 `.clone`). The consensus metric (`min(slope, twoPoint)`) still gates: a genuine chain retention
 leak drives both estimators past 3. Re-tighten if chain metrics hold above 3 on a quiet run.
 
+### Issue #89 follow-up (2026-10-28) — full-chain warmup extended
+
+The CI failures after Bun 1.4.3 were a bounded allocator ramp, not application retention.
+`full-chain` now uses 1200 warmup operations; every other scenario keeps 300. The
+measured window, sample interval, RSS limit of 3 KB/iter, and object limit are unchanged.
+The `LEAK_PROBE_WARMUP` environment variable still overrides the default.
+
+This removes the ramp from the measured window without raising the leak threshold. See
+[memory-oracle-investigation.md](memory-oracle-investigation.md) for the diagnostic
+matrix, calibration result, and CI run links.
+
 ### Follow-up
 
 Items 1 and 2 are fixed; see the notes above for the CI-noise threshold adjustment on item 1.

@@ -299,6 +299,40 @@ had a handler-chain RSS red whose value was not captured.
   chain can pass CI; a long run (≥ 3000 operations, plateau check) is the tool for it.
 - Bounded growth is acceptable: a plateau after the ramp is not a leak.
 
+## Issue #89 — full-chain CI failures after the Bun update
+
+In October 2026, `full-chain` began failing on x86_64 GitHub runners while the same
+commits passed locally. The RSS minimum estimate moved from −3.9…−1.0 KB/iteration on
+Bun 1.4.2 to 2.0…4.4 KB/iteration on later Bun versions. The Docker base image floats,
+so the change reached CI through Bun 1.4.3 and 1.4.4; the application changes in that
+range did not run on the `full-chain` path.
+
+The diagnostic matrix identified a bounded allocator ramp that lasts beyond the original
+300-operation warmup on x86_64 with Bun 1.4.3+. In six Bun 1.4.4 x86_64 runs, clean
+probes with 300 warmup operations read 2.63–3.04 KB/iteration (one red); 900 warmup
+operations read −0.34–0.35 (zero red). A 5 KiB retained-memory control read 7.80–8.53
+KB/iteration after 300 warmup operations and 3.61–5.37 after 900 (six red in each
+group). JS-object growth stayed at 0.010 or less for clean runs and about 1.005–1.033
+for retained runs. The aarch64 clean probes were green at every warmup length.
+
+With 1200 warmup operations, x86_64 clean probes read −0.96–0.02 KB/iteration (zero
+red), while the 5 KiB retained control read 4.15–5.23 (six red). On aarch64, clean
+probes read −0.47–0.51 and the retained control read 7.30–8.50. The 1200-operation
+warmup was chosen over 900 because the clean margin was equal and the worst retained
+reading on x86_64 was higher (4.15 versus 3.61).
+
+The diagnostic runs are [round 1](https://github.com/Seigiard/opds-generator/actions/runs/40765642841)
+and [round 2](https://github.com/Seigiard/opds-generator/actions/runs/40766711510).
+
+The remedy is configuration, not a threshold change: `full-chain` now warms up for
+1200 operations before its unchanged 600-operation measured window. Every other
+scenario keeps the 300-operation warmup. Sampling every 12 operations and the RSS and
+object limits remain unchanged, and `LEAK_PROBE_WARMUP` still overrides the default.
+The existing calibration test continues to prove the red side with 64 KiB retained per
+`full-chain` operation; the diagnostic 5 KiB control also stayed red after the longer
+warmup. This removes the bounded ramp from the measured window without raising the
+3 KB/operation limit.
+
 ## Consumer gates batch 100 events — issue #25
 
 - `consumer-enqueue` and `consumer-enqueue-effect` run 100 events per measured operation and divide by 100, as `queue-cycle` does. The limit (1 KB RSS, 0.5 objects per event) is unchanged.

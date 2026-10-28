@@ -46,11 +46,13 @@ const VALID_PNG = Buffer.from([
 ]);
 
 // RSS rises 2-4 MB over the first 400-600 operations of a leak-free workload, then
-// plateaus; later, multi-MB releases follow. Calibration (issue #13) found warmup 300 +
-// 600 measured operations the only setting with no red on clean runs and a red on
-// retained memory at the chain limit; longer windows lose sensitivity because retained
-// blocks land in already-resident free pages.
-const WARMUP_ITERATIONS = Number(process.env.LEAK_PROBE_WARMUP ?? 300);
+// plateaus; later, multi-MB releases follow. On x86_64 runners with Bun 1.4.3+, the
+// bounded ramp can last past the original 300-operation warmup for full-chain, so that
+// scenario uses 1200 warmup operations. Other scenarios retain the 300-operation
+// warmup. LEAK_PROBE_WARMUP overrides either default for diagnostics and calibration.
+const scenario = process.argv[2];
+
+const WARMUP_ITERATIONS = Number(process.env.LEAK_PROBE_WARMUP ?? (scenario === "full-chain" ? 1200 : 300));
 
 const ITERATIONS = Number(process.env.LEAK_PROBE_ITERATIONS ?? 600);
 
@@ -365,8 +367,6 @@ function makeRetainer(): () => void {
     retained.push(new Uint8Array(RETAIN_KB * 1024).fill(1));
   };
 }
-
-const scenario = process.argv[2];
 
 if (!scenario) throw new Error("Usage: bun leak-probe.ts <scenario>");
 

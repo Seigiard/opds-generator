@@ -4,9 +4,9 @@ import * as v from "valibot";
 // Native retention limits per measured operation, unchanged since issue #12.
 export const MAX_LEAK_KB = 8;
 
-// full-chain on a loaded GitHub runner drifts both estimators to ~1-2.4 KB/iter (see
-// docs/known-flaky-tests.md §1). 3 keeps ≥25% margin over that ceiling while the
-// historical real-leak signal (sharp .clone) was ~7 KB/iter.
+// full-chain can show a bounded allocator ramp on x86_64 GitHub runners even after the
+// 300-operation warmup. The probe now warms that scenario for 1200 operations; keep
+// this limit at 3 while the historical real-leak signal (sharp .clone) was ~7 KB/iter.
 export const MAX_CHAIN_LEAK_KB = 3;
 
 export const MAX_HANDLER_LEAK_KB = 5;
