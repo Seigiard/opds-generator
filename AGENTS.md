@@ -35,7 +35,7 @@ src/
 └── utils/           # archive (Effect dispatch over all archive types), zip, archive-type, image, process (Effect commands + temporary directories), processor, opds, owned-promise (Effect↔Promise bridge)
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
-├── styles/          # CSS sources + skeleton cover proportions + lqip.css title placeholder → static/style.css
+├── styles/          # CSS sources + lqip.css title placeholder → static/style.css
 ├── gridnav/         # index.html shell + main.ts boot + parse-feed-dom.ts + viewer.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/main.js
 ├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
 ├── vendor/          # foliate-js pinned git submodule + VENDOR.md

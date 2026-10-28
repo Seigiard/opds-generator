@@ -5,7 +5,7 @@ import autoprefixer from "autoprefixer";
 import postcssNesting from "postcss-nesting";
 import cssnano from "cssnano";
 
-const STYLE_SOURCES = ["reset.css", "index.css", "header.css", "variations.css", "lqip.css"];
+const STYLE_SOURCES = ["reset.css", "index.css", "header.css", "lqip.css"];
 
 const uiDir = join(import.meta.dir, "..");
 
