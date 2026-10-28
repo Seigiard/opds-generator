@@ -2,17 +2,10 @@ import type { HtmlEscapedString } from "hono/utils/html";
 import { VIEWABLE_FORMATS } from "../types.ts";
 import type { Crumb } from "./breadcrumbs.ts";
 import type { FeedEntry, FeedModel } from "./feed-model.ts";
-import { frag } from "./frag.ts";
+import { frag, interleave, type Fragment } from "./frag.ts";
 import { renderHeader } from "./header.ts";
 import { coverRatioFromTitle, lqipFromTitle } from "./lqip.ts";
 import { safeHref } from "./safe-href.ts";
-
-type Fragment = HtmlEscapedString | string;
-
-/** Interleave fragments with a literal separator instead of `.join()`, which would strip the escaped marker (KTD-3). */
-function interleave(items: Fragment[], separator: string): Fragment[] {
-  return items.flatMap((item, i) => (i === 0 ? [item] : [separator, item]));
-}
 
 /** Reader links point at feed.xml; browsers need the folder URL nginx resolves to index.html. */
 export function browserHref(feedHref: string): string {

@@ -24,6 +24,7 @@ src/
 │   ├── feed-model.ts # FeedModel type + entryFromFragment/buildFeedModel
 │   ├── feed-xml.ts   # renderXml(model) → feed.xml
 │   ├── feed-html.ts  # renderHtml(model, crumbs) → body fragment
+│   ├── shell-state.ts # ShellState + renderShellState (skeleton/status states)
 │   ├── frag.ts       # sync-narrowed hono/html fragment helper
 │   ├── header.ts     # shared folder header markup, also used by the shell skeleton
 │   ├── breadcrumbs.ts # Browser breadcrumb links for the shell
@@ -36,7 +37,7 @@ src/
 
 ui/                  # Dev-only viewer sources — NOT copied into the Docker image
 ├── styles/          # CSS sources + lqip.css title placeholder → static/style.css
-├── gridnav/         # index.html shell + main.ts boot + parse-feed-dom.ts + viewer.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/main.js
+├── gridnav/         # index.html shell + main.ts boot + folder-load.ts + parse-feed-dom.ts + viewer.ts + gridnav.ts + cover-placeholder.ts → static/index.html, static/main.js
 ├── reader/          # In-browser reader shell → static/reader.js + read.html; SMOKE.md checklist
 ├── vendor/          # foliate-js pinned git submodule + VENDOR.md
 ├── playground/      # Vite reader preview; the shell is served from gridnav/index.html

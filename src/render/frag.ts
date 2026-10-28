@@ -9,3 +9,10 @@ export const frag = (strings: TemplateStringsArray, ...values: unknown[]): HtmlE
 
   return result;
 };
+
+export type Fragment = HtmlEscapedString | string;
+
+/** Interleave fragments with a literal separator instead of `.join()`, which would strip the escaped marker (KTD-3). */
+export function interleave(items: Fragment[], separator: string): Fragment[] {
+  return items.flatMap((item, i) => (i === 0 ? [item] : [separator, item]));
+}
