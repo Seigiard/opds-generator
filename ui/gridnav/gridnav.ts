@@ -4,111 +4,52 @@
   Arrow keys / WASD move focus; movement stops at grid edges (no wrap).
 */
 
-type Move = number | "up" | "down";
+export type GridKey = "left" | "right" | "up" | "down";
 
-export class Gridnav {
-  private list: HTMLElement;
-  private selector: string;
-  private items: HTMLElement[];
-  private keyMoves: Record<string, Move>;
+export interface CardPosition {
+  readonly x: number;
+  readonly y: number;
+}
 
-  constructor(list: HTMLElement, isBlocked: () => boolean = () => false) {
-    this.list = list;
-    this.selector = list.getAttribute("data-element") || ".card__title a";
-    this.items = Array.from(list.querySelectorAll<HTMLElement>(this.selector));
+export function gridKey(code: string): GridKey | null {
+  switch (code) {
+    case "ArrowRight":
+    case "KeyD":
+      return "right";
+    case "ArrowLeft":
+    case "KeyA":
+      return "left";
+    case "ArrowUp":
+    case "KeyW":
+      return "up";
+    case "ArrowDown":
+    case "KeyS":
+      return "down";
+    default:
+      return null;
+  }
+}
 
-    const amount = list.getAttribute("data-amount") ? Number(list.getAttribute("data-amount")) : null;
+export function nextCard(cards: readonly CardPosition[], current: number, key: GridKey): number | null {
+  if (current === -1) return cards.length > 0 ? 0 : null;
 
-    this.keyMoves = {
-      ArrowRight: 1,
-      KeyD: 1,
-      ArrowLeft: -1,
-      KeyA: -1,
-      ArrowUp: amount ? -amount : "up",
-      KeyW: amount ? -amount : "up",
-      ArrowDown: amount ? amount : "down",
-      KeyS: amount ? amount : "down",
-    };
+  const currentCard = cards[current];
 
-    this.isBlocked = isBlocked;
-    list.addEventListener("keydown", this.onKeydown);
+  if (!currentCard) return null;
+
+  if (key === "right" || key === "left") {
+    const next = current + (key === "right" ? 1 : -1);
+
+    return cards[next]?.y === currentCard.y ? next : null;
   }
 
-  private isBlocked: () => boolean;
+  const step = key === "down" ? 1 : -1;
 
-  destroy(): void {
-    this.list.removeEventListener("keydown", this.onKeydown);
+  for (let index = current + step; cards[index]; index += step) {
+    const card = cards[index]!;
+
+    if (card.x === currentCard.x && card.y !== currentCard.y) return index;
   }
 
-  private card(el: HTMLElement): HTMLElement {
-    return el.closest<HTMLElement>(".card") || el;
-  }
-
-  private position(el: HTMLElement) {
-    const card = this.card(el);
-
-    return { x: card.offsetLeft, y: card.offsetTop };
-  }
-
-  private focusWithScroll(el: HTMLElement): void {
-    const card = this.card(el);
-    const rect = card.getBoundingClientRect();
-    const isAbove = rect.top < 0;
-    const isBelow = rect.bottom > window.innerHeight;
-
-    if (!isAbove && !isBelow) {
-      el.focus();
-
-      return;
-    }
-
-    card.scrollIntoView({ block: isBelow ? "end" : "start", behavior: "smooth" });
-
-    if ("onscrollend" in window) {
-      window.addEventListener("scrollend", () => el.focus(), { once: true });
-    } else {
-      setTimeout(() => el.focus(), 300);
-    }
-  }
-
-  private onKeydown = (ev: KeyboardEvent): void => {
-    if (this.isBlocked()) return;
-    const target = ev.target;
-
-    if (!(target instanceof HTMLElement) || !target.matches(this.selector)) return;
-
-    const move = this.keyMoves[ev.code];
-
-    if (move === undefined) return;
-
-    const currentIndex = this.items.indexOf(target);
-
-    if (currentIndex === -1) return;
-
-    ev.preventDefault();
-
-    if (move !== "up" && move !== "down") {
-      const next = this.items[currentIndex + move];
-
-      if (!next) return;
-
-      // Horizontal steps stop at the row edge instead of wrapping to the next row.
-      if (Math.abs(move) === 1 && this.position(next).y !== this.position(target).y) return;
-      this.focusWithScroll(next);
-
-      return;
-    }
-
-    const pos = this.position(this.items[currentIndex]!);
-    const direction = move === "up" ? -1 : 1;
-
-    for (let i = currentIndex + direction; this.items[i]; i += direction) {
-      const targetPos = this.position(this.items[i]!);
-
-      if (targetPos.x === pos.x && targetPos.y !== pos.y) {
-        this.focusWithScroll(this.items[i]!);
-        break;
-      }
-    }
-  };
+  return null;
 }

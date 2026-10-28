@@ -1,8 +1,6 @@
 import * as v from "valibot";
-import { Gridnav } from "./gridnav.ts";
+import { gridKey, nextCard } from "./gridnav.ts";
 import { decidePopup, isPopupHash, type PopupAction, type PopupInput, type PopupView } from "./popup-rules.ts";
-
-const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 function popupIsOpen(): boolean {
   return isPopupHash(location.hash);
@@ -80,31 +78,72 @@ function handlePopup(input: PopupInput): void {
   decision.actions.forEach(executePopupAction);
 }
 
-let activeGrid: Gridnav | null = null;
+function focusWithScroll(el: HTMLElement): void {
+  const card = el.closest<HTMLElement>(".card") || el;
+  const rect = card.getBoundingClientRect();
+  const isAbove = rect.top < 0;
+  const isBelow = rect.bottom > window.innerHeight;
+
+  if (!isAbove && !isBelow) {
+    el.focus();
+
+    return;
+  }
+
+  card.scrollIntoView({ block: isBelow ? "end" : "start", behavior: "smooth" });
+
+  if ("onscrollend" in window) {
+    window.addEventListener("scrollend", () => el.focus(), { once: true });
+  } else {
+    setTimeout(() => el.focus(), 300);
+  }
+}
 
 /** Attach document/window listeners once. They survive innerHTML swaps, so re-calling would leak duplicates. */
 export function initGlobal(): void {
   window.addEventListener("hashchange", () => handlePopup({ kind: "hash-changed" }));
 
-  // First arrow/WASD press anywhere on the page enters the grid at its first card.
-  // Looks the grid up fresh each press so it keeps working after the playground re-renders.
   document.addEventListener("keydown", (e) => {
-    if (!NAV_KEYS.has(e.code) || popupIsOpen()) return;
+    const key = gridKey(e.code);
+
+    if (key === null || popupIsOpen()) return;
+
     const grid = document.querySelector<HTMLElement>(".books-grid");
 
     if (!grid) return;
+
     const selector = grid.getAttribute("data-element") || ".card__title a";
-    const target = e.target;
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>(selector));
+    const target = e.target instanceof Element ? e.target : null;
+    const current = target?.matches(selector) ? cards.findIndex((card) => card === target) : -1;
 
-    if (target instanceof Element && target.matches(selector)) return;
+    if (target?.matches(selector) && current === -1) return;
 
-    if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]")) return;
-    const first = grid.querySelector<HTMLElement>(selector);
+    if (current === -1 && target?.closest("input, textarea, select, [contenteditable]")) return;
 
-    if (first) {
-      e.preventDefault();
-      first.focus();
+    const positions = cards.map((el) => {
+      const card = el.closest<HTMLElement>(".card") || el;
+
+      return { x: card.offsetLeft, y: card.offsetTop };
+    });
+
+    const next = nextCard(positions, current, key);
+
+    if (current !== -1 || next !== null) e.preventDefault();
+
+    if (next === null) return;
+
+    const nextElement = cards[next];
+
+    if (!nextElement) return;
+
+    if (current === -1) {
+      nextElement.focus();
+
+      return;
     }
+
+    focusWithScroll(nextElement);
   });
 
   document.addEventListener("click", (e) => {
@@ -118,17 +157,13 @@ export function initGlobal(): void {
 }
 
 /**
- * Wire the (re)rendered viewer markup under `root`: grid navigation and per-dialog
- * listeners live on elements the viewer replaces on each render, so this re-runs.
+ * Wire the (re)rendered viewer markup under `root`: per-dialog listeners live on
+ * elements the viewer replaces on each render, so this re-runs.
  * Esc does not close the dialog directly — its cancel event is converted into a history
  * navigation so Esc/close-button/Back share one close path and the hash never desyncs.
  * The close listener re-syncs if the UA force-closes the dialog (Chrome two-Esc).
  */
 export function wire(root: ParentNode = document): void {
-  activeGrid?.destroy();
-  const grid = root.querySelector<HTMLElement>(".books-grid");
-  activeGrid = grid ? new Gridnav(grid, popupIsOpen) : null;
-
   root.querySelectorAll<HTMLDialogElement>("dialog.popup").forEach((dialog) => {
     dialog.addEventListener("cancel", (e) => {
       e.preventDefault();
