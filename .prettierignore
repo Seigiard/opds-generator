@@ -1,6 +1,5 @@
 # Generated build artifacts — written by build:ui (cssnano / Bun.build minify), never oxfmt
-static/main.js
-static/style.css
+static/assets/**
 static/reader.js
 static/read.html
 static/foliate-*/

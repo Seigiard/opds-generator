@@ -54,6 +54,12 @@
   }
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
 /* --- Global Styles --- */
 body {
   background-color: var(--color-bg);

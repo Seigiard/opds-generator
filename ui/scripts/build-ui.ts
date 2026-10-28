@@ -13,7 +13,7 @@ const stylesDir = join(uiDir, "styles");
 
 const staticDir = join(uiDir, "..", "static");
 
-const outPath = join(staticDir, "style.css");
+const assetsDir = join(staticDir, "assets");
 
 const mainEntry = join(uiDir, "gridnav", "main.ts");
 
@@ -25,7 +25,23 @@ const pipeline = [
   cssnano({ preset: ["default", { discardComments: false }] }),
 ];
 
-async function buildCss(): Promise<void> {
+async function writeHashedAsset(name: string, extension: string, contents: string | ArrayBuffer): Promise<string> {
+  const hash = new Bun.CryptoHasher("sha256").update(contents).digest("hex").slice(0, 12);
+  const fileName = `${name}-${hash}.${extension}`;
+
+  await Bun.write(join(assetsDir, fileName), contents);
+
+  return fileName;
+}
+
+async function resetShellAssets(): Promise<void> {
+  await rm(assetsDir, { force: true, recursive: true });
+  await mkdir(assetsDir, { recursive: true });
+  await rm(join(staticDir, "main.js"), { force: true });
+  await rm(join(staticDir, "style.css"), { force: true });
+}
+
+async function buildCss(): Promise<string> {
   let source = "";
 
   for (const file of STYLE_SOURCES) {
@@ -35,16 +51,31 @@ async function buildCss(): Promise<void> {
   // No formatter pass: the artifact stays cssnano-minified. A formatter here made
   // the build:ui:check freshness gate hostage to formatter version drift across machines.
   const result = await postcss(pipeline).process(source, { from: undefined });
-  await Bun.write(outPath, result.css);
-  console.log(`build:ui → ${outPath}`);
+  const fileName = await writeHashedAsset("style", "css", result.css);
+
+  console.log(`build:ui → ${join(assetsDir, fileName)}`);
+
+  return fileName;
 }
 
-async function buildShell(): Promise<void> {
-  await Bun.write(join(staticDir, "index.html"), await Bun.file(shellSource).text());
+async function buildShell(mainAsset: string, styleAsset: string): Promise<void> {
+  const source = await Bun.file(shellSource).text();
+
+  if (!source.includes("/_app/main.js")) {
+    throw new Error("build:ui shell is missing /_app/main.js");
+  }
+
+  if (!source.includes("/_app/style.css")) {
+    throw new Error("build:ui shell is missing /_app/style.css");
+  }
+
+  const page = source.replace("/_app/main.js", `/_app/assets/${mainAsset}`).replace("/_app/style.css", `/_app/assets/${styleAsset}`);
+
+  await Bun.write(join(staticDir, "index.html"), page);
   console.log(`build:ui → ${join(staticDir, "index.html")}`);
 }
 
-async function buildJs(): Promise<void> {
+async function buildJs(): Promise<string> {
   const build = await Bun.build({
     entrypoints: [mainEntry],
     target: "browser",
@@ -57,8 +88,10 @@ async function buildJs(): Promise<void> {
     throw new Error("build:ui main.js failed");
   }
 
-  await Bun.write(join(staticDir, "main.js"), await build.outputs[0]!.text());
-  console.log(`build:ui → ${join(staticDir, "main.js")}`);
+  const fileName = await writeHashedAsset("main", "js", await build.outputs[0]!.arrayBuffer());
+  console.log(`build:ui → ${join(assetsDir, fileName)}`);
+
+  return fileName;
 }
 
 const readerDir = join(uiDir, "reader");
@@ -204,10 +237,12 @@ async function buildReader(): Promise<void> {
   console.log(`build:ui → ${join(staticDir, "read.html")}`);
 }
 
-await buildShell();
+await resetShellAssets();
 
-await buildCss();
+const styleAsset = await buildCss();
 
-await buildJs();
+const mainAsset = await buildJs();
+
+await buildShell(mainAsset, styleAsset);
 
 await buildReader();

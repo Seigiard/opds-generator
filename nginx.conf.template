@@ -54,9 +54,8 @@ http {
 
         # Static assets from /_app folder
         # ^~ so the .xml/image regex locations below cannot capture /_app/* into /data
-        # no-cache (ETag revalidation): style.css/main.js have unversioned URLs, and a
-        # deploy regenerates index.html against the NEW assets — "immutable" left
-        # browsers on day-old CSS/JS with mismatched markup (popup dead).
+        # no-cache (ETag revalidation): unversioned reader.js and favicons remain here.
+        # The shell's CSS and main.js use the immutable hashed location below.
         location = /_app/ {
             return 404;
         }
@@ -68,6 +67,18 @@ http {
         location ^~ /_app/ {
             alias /app/static/;
             add_header Cache-Control "no-cache";
+        }
+
+        # Hashed shell assets: the filename matches the content, so forever-caching
+        # is safe and a new deploy gets a new URL.
+        location ^~ /_app/assets/ {
+            alias /app/static/assets/;
+            types {
+                application/javascript js;
+                text/css css;
+            }
+            default_type application/octet-stream;
+            add_header Cache-Control "public, max-age=31536000, immutable";
         }
 
         # Reader page: deny-by-default CSP (KTD-6), pinned verbatim by the e2e test.
