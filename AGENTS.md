@@ -13,7 +13,7 @@ src/
 ├── types.ts         # Shared types (MIME_TYPES, BOOK_EXTENSIONS, VIEWABLE_FORMATS)
 ├── watcher.sh       # inotifywait on /books → POST /events/books
 ├── context.ts       # AppContext, HandlerDeps, buildContext() Promise services
-├── effect-file-system.ts # Effect FileSystemService with tagged errno failures (#34)
+├── effect-file-system.ts # Effect FileSystemService with tagged errno failures
 ├── processing-versions.ts # Book/folder processing versions; bump to rebuild existing output
 ├── lifecycle/       # live-engine-lifecycle.ts (Promise adapter), live-engine-catalogue.ts, initial-engine-catalogue.ts (engineOptions + test compositions), engine-failure-key.ts (retained-failure identity), engine-freshness-describe.ts (freshness descriptors), engine-source-work.ts, engine-policy.ts, orphans.ts, handler-logging.ts, legacy-data.ts
 ├── processing/      # Event types, adapters and Effect handlers (no queue or consumer: the engine schedules)
@@ -80,7 +80,7 @@ Single-context domain docs: root `GLOSSARY.md` and `docs/adr/`. Read `docs/agent
 
 </important>
 
-<important if="you are extracting the shared synchronization engine, migrating an application to it, or changing its architecture">
+<important if="you are changing the shared synchronization engine's architecture or the responsibility boundary between it and OPDS">
 
 Read `docs/adr/0004-shared-synchronization-engine.md` and `docs/plans/shared-synchronization-engine.md` first.
 
