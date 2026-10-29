@@ -218,13 +218,31 @@
       }
     },
     {
-      "files": ["src/render/**/*.ts", "ui/gridnav/parse-feed-dom.ts"],
+      "files": [
+        "src/render/**/*.ts",
+        "ui/gridnav/**/*.ts",
+        "ui/reader/**/*.ts",
+        "src/types.ts",
+        "src/formats/utils.ts",
+        "src/formats/xml-value.ts"
+      ],
       "rules": {
         "no-restricted-globals": [
           "error",
           {
             "name": "Bun",
-            "message": "src/render/* must stay browser-importable (KTD-7): no Bun globals."
+            "message": "Browser bundle module: no Bun globals. render:pure lists the bundled modules."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*", "bun", "bun:*"],
+                "message": "Browser bundle module: no node or Bun imports. render:pure lists the bundled modules."
+              }
+            ]
           }
         ]
       }

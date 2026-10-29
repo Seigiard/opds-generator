@@ -57,7 +57,7 @@ Markup and CSS changes do not need a folder processing-version bump. Bump the fo
 ## Always-on rules
 
 - `static/` and `test/golden/*` are generated. Change their sources, run `bun run build:ui` / `bun run render:golden`, and commit the output.
-- `src/render/*` and `src/types.ts` stay browser-importable: no node builtins, no `Bun` globals. `render:pure` and an oxlint override enforce it.
+- Modules in a browser bundle stay free of node and Bun: no `node:` or `bun` imports, no `Bun` globals. `render:pure` builds every browser bundle and fails when a builtin reaches one, or when a bundled module falls outside the browser override in `.oxlintrc.json`; add such a module to that override's `files`.
 
 ## Topics
 
