@@ -22,6 +22,12 @@ Generated feed and entry links use `/_catalog/`. The static shell at `static/ind
   `navigator.connection?.saveData === true`, and never prefetches covers or book
   files. Nginx sends `Cache-Control: max-age=30`; the browser may reuse a feed
   for 30 s, so a subsequent folder navigation can reuse it.
+- An inline `<script type="speculationrules">` in `ui/gridnav/index.html` prerenders
+  folder pages on hover (eagerness `moderate`). A prerendered page runs the shell
+  and renders its feed before the click; the CSS cross-document view transition
+  animates the swap. `/_app/*`, `/_catalog/*`, and `/opds` are excluded. The shell
+  CSP allows it with `'inline-speculation-rules'`, which permits no other inline
+  script. Prerender is Chromium-only; DevTools "Disable cache" cancels it.
 
 ## Escaping
 

@@ -3,7 +3,7 @@ import { describe, test, expect, beforeAll } from "bun:test";
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:8080";
 
 const SHELL_CSP =
-  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; " +
+  "default-src 'none'; script-src 'self' 'inline-speculation-rules'; style-src 'self'; img-src 'self'; connect-src 'self'; manifest-src 'self'; " +
   "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 // Wait for a URL to return 200
@@ -70,7 +70,8 @@ describe("nginx integration", () => {
         paths.map(async (path) => {
           const response = await fetch(`${BASE_URL}${path}`, { redirect: "manual" });
           const body = await response.text();
-          const scriptTags = [...body.matchAll(/<script\b[^>]*>/g)].map(([tag]) => tag);
+          // External scripts only: the inline speculation rules are data, not code.
+          const scriptTags = [...body.matchAll(/<script\b[^>]*\bsrc=[^>]*>/g)].map(([tag]) => tag);
 
           const scripts = scriptTags.map((tag) => ({
             href: tag.match(/\bsrc="([^"]+)"/)?.[1],
