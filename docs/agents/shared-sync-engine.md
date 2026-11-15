@@ -37,9 +37,9 @@ declaration.
 Inside `Effect.scoped`, keep the scope open while calling `submit([CatalogueEvent...])`, `awaitCompletion`, and
 `status`. Closing the scope joins the owned consumer before releasing its output lease. Book and new-folder events use
 the existing Effect handlers. Confirmed absence uses engine-owned associated-output cleanup and explicit parent
-refreshes. Confirmed source-kind changes use OPDS's confined `removeOutputPath` in `engine-source-work.ts` before the
-current representation publishes. `engine-source-work.ts` supplies source authority; `engine-policy.ts` declares source
-selection and state placement.
+refreshes. Confirmed source-kind changes use the session-bound engine cleanup callback in `engine-source-work.ts` before
+the current representation publishes; the application still supplies source authority and chooses the obsolete
+projection. `engine-policy.ts` declares source selection and state placement.
 
 The engine combines pending work only for OPDS-declared folder-refresh keys. A repeated pending refresh moves behind
 intervening work. A refresh requested while equivalent work is active schedules one pending follow-up.

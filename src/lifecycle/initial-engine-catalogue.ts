@@ -91,6 +91,6 @@ export function engineOptions(
     onMinimum: options.onMinimum,
     key: (event) => (Predicate.isTagged(event, "FolderMetaSyncRequested") ? `${event._tag}:${folderFailureKey(event.path)}` : undefined),
     failureKey: failureKey(deps),
-    handle: (event) => withHandlerLogs(deps, event, engineSourceWork(deps, event, handlers[event._tag])),
+    handle: (event, cleanup) => withHandlerLogs(deps, event, engineSourceWork(deps, event, handlers[event._tag], cleanup)),
   };
 }
