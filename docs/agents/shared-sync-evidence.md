@@ -2,7 +2,29 @@
 
 This is the final cross-application evidence for the accepted shared synchronization contract in ADR 0004 and issue #49.
 
-OPDS review follow-up supersedes only OPDS's consumed package version: OPDS now uses the reviewed registry release `@seigiard/sync-engine@0.5.6` with lock integrity `sha512-jwoxuE+01kT1v0selO9NbSnXNnp+eIsWxN/1tDVoFXlWneMSjHWdwDe+tcNUx921eAJv9Dk8zBi48GMM3snerQ==`. The prior `0.5.5` evidence remains below. TTRPG Map Viewer and OPML Generator remain covered by the #64 `0.5.0` evidence below until their own update.
+OPDS now consumes registry `@seigiard/sync-engine@0.6.0` for session-bound replacement cleanup and structured source-observation failure reasons. The earlier release evidence remains below. TTRPG Map Viewer and OPML Generator remain covered by the #64 `0.5.0` evidence below until their own update.
+
+## OPDS 0.6.0 consumer update (2026-11-15)
+
+`package.json` pins `0.6.0`. Bun 1.3.14 regenerated `bun.lock`; no other dependency changed. Registry identity:
+
+- Tarball: `https://registry.npmjs.org/@seigiard/sync-engine/-/sync-engine-0.6.0.tgz`
+- Integrity, matching `bun.lock`: `sha512-ixNSNLJ3GuLnW7LVo3t1UEfo4kMsvqJwmC8O7gq1FjfjtWq8GG8H641F+yBJi/v0U5RaXyD0nTountDIIiyCGA==`
+- Registry shasum: `6fdb6f1be777e11362ab9c790be1fb5cdee0f372`
+- Packed archive SHA256: `e34146ed27614465820838cb7ba51df1a478d82c742aaff1f94b87982b3a6cec`
+- Exact peer: `effect@4.0.1`, unchanged.
+
+A clean registry `0.5.6` install reproduced PR #98's missing `OutputCleanup` and `SourceObservationFailed.reason` type errors. The `0.6.0` archive diffed cleanly against the host install; typecheck then passed without source or test changes.
+
+The rebuilt production image's installed package also diffed cleanly against the registry archive. Local `fix`, typecheck, Knip, `build:ui:check`, `render:check` and `render:pure` passed. Generated assets and goldens stayed unchanged.
+
+`COMPOSE_PROJECT_NAME=opds-pr98-release bun run test` passed on the second full run: 748 pass, 0 fail, 1022 assertions across 73 files, 344.84 s. The first run had 747 pass and one handler-chain RSS failure at 5.38 KB/book (two-point 6.04), against the unchanged 5 KB/book limit. The repeat measured slope 5.76, two-point 3.57 KB/book and 0.017 JS objects/book; the existing consensus gate passed. No test, threshold, warmup or allocator setting changed. This is a passing repeat, not proof that the RSS gate is stable.
+
+`COMPOSE_PROJECT_NAME=opds-pr98-release TEST_PORT=18998 TEST_BASE_URL=http://localhost:18998 STARTUP_PORT=18999 STARTUP_IMAGE=opds-pr98-startup bun run test:e2e` passed: nginx routing and event logging 47 pass, startup readiness 9 pass, 0 failures. Test and production images used Bun 1.4.4 from `oven/bun:1-alpine`; host UI and lock generation used the CI-pinned Bun 1.3.14. All task-owned Compose containers and networks were stopped after verification.
+
+## Historical OPDS 0.5.6 consumer update
+
+The `0.5.6` lock integrity was `sha512-jwoxuE+01kT1v0selO9NbSnXNnp+eIsWxN/1tDVoFXlWneMSjHWdwDe+tcNUx921eAJv9Dk8zBi48GMM3snerQ==`.
 
 OPDS `0.5.6` consumer-update verification (2026-10-11): `npm view` returned tarball `https://registry.npmjs.org/@seigiard/sync-engine/-/sync-engine-0.5.6.tgz`, shasum `8e5ef297d1ac2230822d89f16dff68ba244abf7a` and the lock integrity above. The packed archive SHA256 was `41edb3de1751db1cbcd3d6d8712ef260e0d39c7b872246529859c070897497f2`. It diffed cleanly against the host install and against `/app/node_modules/@seigiard/sync-engine` in the production image. Bun 1.3.14 regenerated `bun.lock` and rebuilt the UI without a `static/` diff. `cssnano@9.6.0` requires Node `^22.22.3 || ^24.15.0 || >=26.0`; host Node 26.11.1 satisfies it. The release update records no new engine behavior claim.
 
@@ -27,11 +49,11 @@ The release was made from a clean engine checkout with `bun scripts/verify-pack.
 
 ## Consumers
 
-| Application      | Branch revision                            | Dependency evidence                                                                                                                                                                         | Installed package equality                                                                                                            |
-| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| OPDS Generator   | Registry `0.5.6` dependency update         | `package.json` pins `@seigiard/sync-engine` to exact version `0.5.6`; `bun.lock` records `sha512-jwoxuE+01kT1v0selO9NbSnXNnp+eIsWxN/1tDVoFXlWneMSjHWdwDe+tcNUx921eAJv9Dk8zBi48GMM3snerQ==`. | The registry 0.5.6 package diffed cleanly against the host install and the production image install.                                  |
-| TTRPG Map Viewer | `0578de20523115a393127704150658bf1c2e55e6` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                                                                                                              | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
-| OPML Generator   | `704d3056b0126012b4199ea057f1bc4210e4f908` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                                                                                                              | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
+| Application      | Branch revision                            | Dependency evidence                                                                                | Installed package equality                                                                                                            |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| OPDS Generator   | Registry `0.6.0` dependency update         | Exact version and registry integrity are recorded in the OPDS 0.6.0 consumer-update section above. | The registry 0.6.0 package diffed cleanly against the host install and the production image install.                                  |
+| TTRPG Map Viewer | `0578de20523115a393127704150658bf1c2e55e6` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                     | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
+| OPML Generator   | `704d3056b0126012b4199ea057f1bc4210e4f908` | `spec/49-shared-sync:bun.lock` pins `0.5.0` with the registry integrity above.                     | Detached temp worktree installed with `bun install --frozen-lockfile`; installed package diffed cleanly against the same npm tarball. |
 
 Verification commands used for the equality checks:
 
