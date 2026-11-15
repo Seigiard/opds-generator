@@ -1,19 +1,23 @@
 import {
-  engineStatePath,
   nativeSourceFileSystem,
   observeSourcePath,
   readSourceDirectory,
   removeAssociatedOutputs,
+  type OutputCleanup,
 } from "@seigiard/sync-engine";
 import { Effect, Predicate } from "effect";
-import { lstat, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type { HandlerDeps } from "../context.ts";
 import { CatalogueEvent, type EffectHandler } from "../processing/effect-handler.ts";
 import type { EventType } from "../processing/types.ts";
 import { catalogueStatePath, includeCatalogueSource } from "./engine-policy.ts";
 
-export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: EffectHandler | undefined) {
+export function engineSourceWork(
+  deps: HandlerDeps,
+  event: EventType,
+  handler: EffectHandler | undefined,
+  cleanup: OutputCleanup | undefined,
+) {
   return Effect.gen(function* () {
     if (Predicate.isTagged(event, "Ignored")) return [];
     const { filesPath, dataPath } = deps.config;
@@ -30,7 +34,7 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
 
     const observation = yield* observeSourcePath(filesPath, path, sourceFs).pipe(
       Effect.catchTag("SourceObservationFailed", (error) => {
-        if (deleted && isObsoleteSourceReplacement(error)) {
+        if (deleted && error.reason === "unsupported-path") {
           unsupportedSourceReplacement = true;
 
           return Effect.succeed({ state: "absent" } as const);
@@ -42,7 +46,7 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
 
     if (observation.state === "absent") {
       const removed = unsupportedSourceReplacement
-        ? yield* removeOutputPath(deps, path)
+        ? yield* removeObsoleteOutput(cleanup, path)
         : yield* removeAssociatedOutputs(
             {
               sourcePath: filesPath,
@@ -70,7 +74,7 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
 
       if (!obsoleteBook && !obsoleteFolder) return [];
 
-      const removed = yield* removeOutputPath(deps, path);
+      const removed = yield* removeObsoleteOutput(cleanup, path);
 
       return removed ? [CatalogueEvent.FolderMetaSyncRequested({ path: dirname(join(dataPath, path)) })] : [];
     }
@@ -85,12 +89,6 @@ export function engineSourceWork(deps: HandlerDeps, event: EventType, handler: E
   }).pipe(Effect.uninterruptible);
 }
 
-const OBSOLETE_SOURCE_REPLACEMENT_MESSAGES = new Set(["Unsupported source path"]);
-
-function isObsoleteSourceReplacement(error: { readonly message: string }): boolean {
-  return OBSOLETE_SOURCE_REPLACEMENT_MESSAGES.has(error.message);
-}
-
 function isDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeof nativeSourceFileSystem): Effect.Effect<boolean> {
   return observeSourcePath(sourcePath, path, sourceFs).pipe(
     Effect.match({
@@ -100,54 +98,6 @@ function isDirectorySourcePath(sourcePath: string, path: string, sourceFs: typeo
   );
 }
 
-function overlaps(parent: string, child: string): boolean {
-  const path = relative(parent, child);
-
-  return path === "" || (path !== ".." && !path.startsWith(".." + sep) && !isAbsolute(path));
-}
-
-function removeOutputPath(deps: HandlerDeps, output: string): Effect.Effect<boolean, Error> {
-  return Effect.tryPromise({
-    try: async () => {
-      const root = await realpath(deps.config.dataPath);
-      const state = await Effect.runPromise(engineStatePath(deps.config.dataPath, catalogueStatePath(deps.config.dataPath)));
-      const path = confinedPath(root, output);
-
-      if (overlaps(path, state) || overlaps(state, path)) {
-        throw new Error("OPDS cleanup overlaps engine state");
-      }
-
-      let current = root;
-
-      const components = relative(root, dirname(path)).split(sep).filter(Boolean);
-
-      for (const component of components) {
-        current = join(current, component);
-        const info = await lstat(current);
-
-        if (info.isSymbolicLink() || !info.isDirectory()) {
-          throw new Error("OPDS cleanup ancestor is not an owned directory");
-        }
-      }
-
-      const existed = await deps.fs.exists(path);
-
-      if (existed) await deps.fs.rm(path, { recursive: true });
-
-      return existed;
-    },
-    catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
-  }).pipe(Effect.uninterruptible);
-}
-
-function confinedPath(root: string, path: string): string {
-  if (isAbsolute(path) || path.split(sep).includes("..")) throw new Error("Expected a confined relative path");
-  const absolute = resolve(root, path);
-  const within = relative(root, absolute);
-
-  if (within === "" || within === ".." || within.startsWith(".." + sep) || isAbsolute(within)) {
-    throw new Error("Path leaves its owned tree");
-  }
-
-  return absolute;
+function removeObsoleteOutput(cleanup: OutputCleanup | undefined, path: string) {
+  return cleanup ? cleanup([path]) : Effect.fail(new Error("Engine cleanup capability is unavailable"));
 }
