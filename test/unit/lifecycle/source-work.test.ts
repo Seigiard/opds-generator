@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -113,23 +113,34 @@ test("observation faults with an unsupported-path message retain stale output", 
   await mkdir(filesPath);
   await mkdir(dataPath);
   await mkdir(join(dataPath, "Book.fb2"));
-  const deps = handlerDeps(filesPath, dataPath, () => Promise.reject(new Error("Unsupported source path")));
+  const sourceCause = new Error("Unsupported source path");
+  const calls: string[][] = [];
+  const deps = handlerDeps(filesPath, dataPath, () => Promise.reject(sourceCause));
 
   try {
     // #when a deletion event cannot authoritatively observe its missing source
     const exit = await Effect.runPromiseExit(
       engineOptions(deps)
-        .handle(CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }))
+        .handle(CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }), cleanupOutput(dataPath, calls))
         .pipe(
           Effect.provideService(CatalogueDeps, deps),
           Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
         ),
     );
 
+    const firstFailure = exit._tag === "Failure" && exit.cause.reasons.length === 1 ? exit.cause.reasons[0] : undefined;
+    const failure = firstFailure !== undefined && Cause.isFailReason(firstFailure) ? firstFailure.error : undefined;
+
     // #then message text cannot authorize cleanup
-    expect({ exit: exit._tag, staleOutput: await pathExists(join(dataPath, "Book.fb2")) }).toEqual({
-      exit: "Failure",
+    expect({
+      calls,
+      staleOutput: await pathExists(join(dataPath, "Book.fb2")),
+      failure:
+        failure instanceof SourceObservationFailed ? { tag: failure._tag, causeIsOriginal: failure.cause === sourceCause } : undefined,
+    }).toEqual({
+      calls: [],
       staleOutput: true,
+      failure: { tag: "SourceObservationFailed", causeIsOriginal: true },
     });
   } finally {
     await rm(root, { recursive: true, force: true });
