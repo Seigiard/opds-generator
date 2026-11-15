@@ -37,9 +37,9 @@ declaration.
 Inside `Effect.scoped`, keep the scope open while calling `submit([CatalogueEvent...])`, `awaitCompletion`, and
 `status`. Closing the scope joins the owned consumer before releasing its output lease. Book and new-folder events use
 the existing Effect handlers. Confirmed absence uses engine-owned associated-output cleanup and explicit parent
-refreshes. Confirmed source-kind changes use OPDS's confined `removeOutputPath` in `engine-source-work.ts` before the
-current representation publishes. `engine-source-work.ts` supplies source authority; `engine-policy.ts` declares source
-selection and state placement.
+refreshes. Confirmed source-kind changes use the session-bound engine cleanup callback in `engine-source-work.ts` before
+the current representation publishes; the application still supplies source authority and chooses the obsolete
+projection. `engine-policy.ts` declares source selection and state placement.
 
 The engine combines pending work only for OPDS-declared folder-refresh keys. A repeated pending refresh moves behind
 intervening work. A refresh requested while equivalent work is active schedules one pending follow-up.
@@ -327,7 +327,7 @@ The immutable `vendor/seigiard-sync-engine-0.3.0-…tgz` stays: it is the previo
 
 ## Final release evidence (#64 and OPDS review update)
 
-OPDS runs the reviewed `@seigiard/sync-engine@0.5.6` registry release. Record future registry identity and package equality in `docs/agents/shared-sync-evidence.md`.
+OPDS runs registry `@seigiard/sync-engine@0.6.0`, which supplies session-bound replacement cleanup and structured source-observation failure reasons. Registry identity and consumer verification live in `docs/agents/shared-sync-evidence.md`.
 
 Historical `0.5.5` release evidence: registry `0.5.4` is an older build. Changes over `0.5.3`: a queued resync after a recoverable warm-start opening failure retries in the same live scope. Changes over `0.5.4`: persistent failed-opening retries are bounded to admitted requests, descendants below a file ancestor observe as absent instead of raising `Source ancestor is not a directory`, freshness stamp and declared-output `ENOTDIR` are treated as absence, request payloads are owned in one holder so a failed one-shot retry keeps its force and hints, every live activity reports exactly one outcome whatever its exit, a failed trailing traversal no longer re-runs an applied request, `enqueue` evaluates keys once and compacts queues in place, later pass resources are released when a pass ends after its handlers stop, reconcile ticks no longer keep a retry cycle alive, live session state is driven by `src/live-machine.ts`, `followUp` is null while a failed session waits, closing-window requests after a failed attempt answer `queued`, fatal failure closes admission at detection, and ticks act only while idle.
 

@@ -114,6 +114,40 @@ test("packaged engine publishes a TXT book, its root catalogue and a working dow
   }
 });
 
+test("initial processing replaces a stale book projection with the current folder projection", async () => {
+  // #given a published TXT book whose source path is replaced by an empty folder
+  const root = await mkdtemp(join(tmpdir(), "opds-engine-kind-replacement-"));
+  const sourcePath = join(root, "source");
+  const outputPath = join(root, "output");
+  const name = "Replaced.txt";
+  await mkdir(sourcePath);
+  await Bun.write(join(sourcePath, name), "Initial book bytes.\n");
+  const ctx = await buildContext();
+  const deps = { ...ctx, config: { ...ctx.config, filesPath: sourcePath, dataPath: outputPath, reconcileInterval: 0 } };
+
+  try {
+    await Effect.runPromise(initialEngineCatalogue(deps));
+    await rm(join(sourcePath, name));
+    await mkdir(join(sourcePath, name));
+
+    // #when a new initial pass sees the same source path as a folder
+    await Effect.runPromise(initialEngineCatalogue(deps));
+
+    // #then the old book entry is gone and the current folder is the root catalogue target
+    expect({
+      staleBookEntry: await Bun.file(join(outputPath, name, "entry.xml")).exists(),
+      folderFeed: await Bun.file(join(outputPath, name, "feed.xml")).exists(),
+      rootLinks: parseFeed(await Bun.file(join(outputPath, "feed.xml")).text()).entries.map((entry) => entry.href),
+    }).toEqual({
+      staleBookEntry: false,
+      folderFeed: true,
+      rootLinks: [`/_catalog/${name}/feed.xml`],
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("a resync during startup against another owner's output queues and publishes nothing", async () => {
   // #given another composition owns the output before the production lifecycle starts
   const root = await mkdtemp(join(tmpdir(), "opds-engine-admission-"));

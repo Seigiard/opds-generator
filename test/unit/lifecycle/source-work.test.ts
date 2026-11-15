@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { mkdir, mkdtemp, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { observeSourcePath, OutputCleanupFailed, SourceObservationFailed, type OutputCleanup } from "@seigiard/sync-engine";
 import type { HandlerDeps } from "../../../src/context.ts";
 import { EffectFileSystem, effectFileSystemFromPromiseService } from "../../../src/effect-file-system.ts";
-import { engineSourceWork } from "../../../src/lifecycle/engine-source-work.ts";
+import { engineOptions } from "../../../src/lifecycle/initial-engine-catalogue.ts";
 import { CatalogueDeps } from "../../../src/processing/effect-handler.ts";
 import { CatalogueEvent } from "../../../src/processing/effect-handler.ts";
 
@@ -21,8 +22,55 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-test("unsupported source replacement cleanup is decided through source work", async () => {
-  // #given a source symlink replacement and a stale OPDS output
+function cleanupOutput(dataPath: string, calls: string[][]): OutputCleanup {
+  return (outputs) =>
+    Effect.tryPromise({
+      try: async () => {
+        calls.push([...outputs]);
+        await Promise.all(outputs.map((output) => rm(join(dataPath, output), { recursive: true, force: true })));
+
+        return true;
+      },
+      catch: (cause) => new OutputCleanupFailed({ path: dataPath, cause, message: String(cause) }),
+    }).pipe(Effect.uninterruptible);
+}
+
+test("source-kind replacement delegates obsolete book output cleanup to the engine session", async () => {
+  // #given a source folder that replaced a published book and an engine-session cleanup capability
+  const root = await mkdtemp(join(tmpdir(), "opds-source-work-"));
+  const filesPath = join(root, "source");
+  const dataPath = join(root, "output");
+  await mkdir(filesPath);
+  await mkdir(dataPath);
+  await mkdir(join(filesPath, "Book.fb2"));
+  await mkdir(join(dataPath, "Book.fb2"));
+  const calls: string[][] = [];
+  const deps = handlerDeps(filesPath, dataPath);
+
+  try {
+    // #when source work receives the old book deletion through the engine handler seam
+    const cascade = await Effect.runPromise(
+      engineOptions(deps)
+        .handle(CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }), cleanupOutput(dataPath, calls))
+        .pipe(
+          Effect.provideService(CatalogueDeps, deps),
+          Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+        ),
+    );
+
+    // #then only the session capability removes the obsolete projection and requests the parent publication
+    expect({ calls, cascade, staleOutput: await pathExists(join(dataPath, "Book.fb2")) }).toEqual({
+      calls: [["Book.fb2"]],
+      cascade: [CatalogueEvent.FolderMetaSyncRequested({ path: dataPath })],
+      staleOutput: false,
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("unsupported source-kind replacement delegates obsolete output cleanup to the engine session", async () => {
+  // #given a source symlink replacement and an engine-session cleanup capability
   const root = await mkdtemp(join(tmpdir(), "opds-source-work-"));
   const filesPath = join(root, "source");
   const dataPath = join(root, "output");
@@ -32,40 +80,23 @@ test("unsupported source replacement cleanup is decided through source work", as
   await mkdir(external);
   await mkdir(join(dataPath, "Book.fb2"));
   await symlink(external, join(filesPath, "Book.fb2"));
-
-  const deps: HandlerDeps = {
-    config: { filesPath, dataPath, port: 3000, reconcileInterval: 0 },
-    logger: { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined },
-    fs: {
-      mkdir: async (path, options) => {
-        await mkdir(path, options);
-      },
-      rm,
-      readdir: async () => [],
-      stat: async (path) => {
-        const info = await stat(path);
-
-        return { isDirectory: () => info.isDirectory(), size: info.size };
-      },
-      exists: pathExists,
-      writeFile: async () => undefined,
-      atomicWrite: async () => undefined,
-      symlink: async () => undefined,
-      unlink: async () => undefined,
-    },
-  };
+  const calls: string[][] = [];
+  const deps = handlerDeps(filesPath, dataPath);
 
   try {
-    // #when a deletion event re-observes the unsupported source path
+    // #when source work receives the old book deletion through the engine handler seam
     const cascade = await Effect.runPromise(
-      engineSourceWork(deps, CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }), undefined).pipe(
-        Effect.provideService(CatalogueDeps, deps),
-        Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
-      ),
+      engineOptions(deps)
+        .handle(CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }), cleanupOutput(dataPath, calls))
+        .pipe(
+          Effect.provideService(CatalogueDeps, deps),
+          Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+        ),
     );
 
-    // #then OPDS removes its stale output and refreshes the root folder
-    expect({ cascade, staleOutput: await pathExists(join(dataPath, "Book.fb2")) }).toEqual({
+    // #then the typed unsupported observation removes the stale projection through the session capability
+    expect({ calls, cascade, staleOutput: await pathExists(join(dataPath, "Book.fb2")) }).toEqual({
+      calls: [["Book.fb2"]],
       cascade: [CatalogueEvent.FolderMetaSyncRequested({ path: dataPath })],
       staleOutput: false,
     });
@@ -74,16 +105,77 @@ test("unsupported source replacement cleanup is decided through source work", as
   }
 });
 
-test("source observation failures that only contain the unsupported path sentinel keep stale output", async () => {
-  // #given an unreadable supported source folder whose name contains the unsupported-source sentinel
+test("observation faults with an unsupported-path message retain stale output", async () => {
+  // #given an unreadable parent that reports the old unsupported-source message without its typed reason
   const root = await mkdtemp(join(tmpdir(), "opds-source-work-"));
   const filesPath = join(root, "source");
   const dataPath = join(root, "output");
-  const sentinelFolder = "Unsupported source path";
-  await mkdir(join(filesPath, sentinelFolder), { recursive: true });
-  await mkdir(join(dataPath, sentinelFolder, "Book.fb2"), { recursive: true });
+  await mkdir(filesPath);
+  await mkdir(dataPath);
+  await mkdir(join(dataPath, "Book.fb2"));
+  const sourceCause = new Error("Unsupported source path");
+  const calls: string[][] = [];
+  const deps = handlerDeps(filesPath, dataPath, () => Promise.reject(sourceCause));
 
-  const deps: HandlerDeps = {
+  try {
+    // #when a deletion event cannot authoritatively observe its missing source
+    const exit = await Effect.runPromiseExit(
+      engineOptions(deps)
+        .handle(CatalogueEvent.BookDeleted({ parent: filesPath, name: "Book.fb2" }), cleanupOutput(dataPath, calls))
+        .pipe(
+          Effect.provideService(CatalogueDeps, deps),
+          Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+        ),
+    );
+
+    const firstFailure = exit._tag === "Failure" && exit.cause.reasons.length === 1 ? exit.cause.reasons[0] : undefined;
+    const failure = firstFailure !== undefined && Cause.isFailReason(firstFailure) ? firstFailure.error : undefined;
+
+    // #then message text cannot authorize cleanup
+    expect({
+      calls,
+      staleOutput: await pathExists(join(dataPath, "Book.fb2")),
+      failure:
+        failure instanceof SourceObservationFailed ? { tag: failure._tag, causeIsOriginal: failure.cause === sourceCause } : undefined,
+    }).toEqual({
+      calls: [],
+      staleOutput: true,
+      failure: { tag: "SourceObservationFailed", causeIsOriginal: true },
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("public engine source-observation exports compose with the consumer Effect runtime", async () => {
+  // #given a real source root with an unsupported child symlink
+  const root = await mkdtemp(join(tmpdir(), "opds-source-work-"));
+  const filesPath = join(root, "source");
+  const external = join(root, "external-source");
+  await mkdir(filesPath);
+  await mkdir(external);
+  await symlink(external, join(filesPath, "Book.fb2"));
+
+  try {
+    // #when the application runs the package-root observation export with its Effect runtime
+    const observation = await Effect.runPromise(
+      observeSourcePath(filesPath, "Book.fb2").pipe(
+        Effect.match({
+          onFailure: (error) => ({ error: error instanceof SourceObservationFailed, reason: error.reason }),
+          onSuccess: () => ({ error: false, reason: undefined }),
+        }),
+      ),
+    );
+
+    // #then the public API supplies the structured unsupported-path reason
+    expect(observation).toEqual({ error: true, reason: "unsupported-path" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function handlerDeps(filesPath: string, dataPath: string, readdir: (path: string) => Promise<string[]> = async () => []): HandlerDeps {
+  return {
     config: { filesPath, dataPath, port: 3000, reconcileInterval: 0 },
     logger: { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined },
     fs: {
@@ -91,13 +183,7 @@ test("source observation failures that only contain the unsupported path sentine
         await mkdir(path, options);
       },
       rm,
-      readdir: async (path) => {
-        if (path === join(filesPath, sentinelFolder)) {
-          throw new Error(`EACCES: permission denied, scandir '${join(filesPath, sentinelFolder)}'`);
-        }
-
-        return [];
-      },
+      readdir,
       stat: async (path) => {
         const info = await stat(path);
 
@@ -110,22 +196,4 @@ test("source observation failures that only contain the unsupported path sentine
       unlink: async () => undefined,
     },
   };
-
-  try {
-    // #when a deletion event fails while re-observing the existing parent directory
-    const exit = await Effect.runPromiseExit(
-      engineSourceWork(deps, CatalogueEvent.BookDeleted({ parent: join(filesPath, sentinelFolder), name: "Book.fb2" }), undefined).pipe(
-        Effect.provideService(CatalogueDeps, deps),
-        Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
-      ),
-    );
-
-    // #then OPDS treats the read failure as a failure, not as an obsolete source replacement
-    expect({ exit: exit._tag, staleOutput: await pathExists(join(dataPath, sentinelFolder, "Book.fb2")) }).toEqual({
-      exit: "Failure",
-      staleOutput: true,
-    });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+}
