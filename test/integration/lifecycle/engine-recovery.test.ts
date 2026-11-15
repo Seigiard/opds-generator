@@ -1,17 +1,24 @@
 import { test, expect } from "bun:test";
 import { Effect, Cause, Exit } from "effect";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, utimes } from "node:fs/promises";
-import { engineStatePath, acquireOutputTree } from "@seigiard/sync-engine";
+import {
+  acquireOutputTree,
+  engineStatePath,
+  openLiveSynchronization,
+  OutputCleanupFailed,
+  type OutputCleanup,
+} from "@seigiard/sync-engine";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createCatalogueHttpHandler } from "../../../src/catalogue-http.ts";
-import { initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
-import { openLiveEngineCatalogue } from "../../../src/lifecycle/live-engine-catalogue.ts";
+import { engineOptions, initialEngineCatalogue, openEngineCatalogue } from "../../../src/lifecycle/initial-engine-catalogue.ts";
 import { createLiveEngineLifecycle } from "../../../src/lifecycle/live-engine-lifecycle.ts";
 import { buildContext } from "../../../src/context.ts";
+import { EffectFileSystem, effectFileSystemFromPromiseService } from "../../../src/effect-file-system.ts";
+import { CatalogueDeps } from "../../../src/processing/effect-handler.ts";
 import { CatalogueEvent } from "../../../src/processing/effect-handler.ts";
-import { parseFeed } from "../../../src/render/parse-feed.ts";
 import type { LogContext } from "../../../src/logging/types.ts";
+import { parseFeed } from "../../../src/render/parse-feed.ts";
 
 const fixture = join(import.meta.dir, "../../../files/test/Test Book - Test Author.fb2");
 
@@ -436,44 +443,54 @@ test.each(["folder-to-book", "book-to-folder"] as const)("a source kind change r
 });
 
 test("folder-to-book cleanup retries after a failed obsolete-folder removal", async () => {
-  // #given a folder source that becomes a same-name book after the first obsolete cleanup fails
+  // #given a folder source that becomes a same-name book after the first public cleanup callback fails
   const { root, sourcePath, outputPath, deps } = await tree();
   const name = "Novel.fb2";
   await mkdir(join(sourcePath, name));
   await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
   let failCleanup = true;
 
-  const faultyDeps = {
-    ...deps,
-    fs: {
-      ...deps.fs,
-      rm: async (path: string, options?: { recursive?: boolean; force?: boolean }) => {
-        if (failCleanup && path === join(outputPath, name)) {
-          failCleanup = false;
-          throw new Error("Cleanup denied once");
-        }
-
-        await deps.fs.rm(path, options);
-      },
-    },
-  };
-
   try {
     const observation = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const session = yield* openLiveEngineCatalogue(faultyDeps);
+          const options = engineOptions(deps);
+
+          const session = yield* openLiveSynchronization({
+            ...options,
+            declare: (entries) => options.declare(entries),
+            handle: (event, cleanup) =>
+              options.handle(
+                event,
+                cleanup === undefined
+                  ? undefined
+                  : (((outputs) => {
+                      if (!failCleanup) return cleanup(outputs);
+
+                      failCleanup = false;
+                      const cause = new Error("Cleanup denied once");
+
+                      return Effect.fail(new OutputCleanupFailed({ path: outputPath, cause, message: cause.message }));
+                    }) satisfies OutputCleanup),
+              ),
+            reconcileIntervalMs: 0,
+            recovery: { existing: Effect.succeed(false) },
+          }).pipe(
+            Effect.provideService(CatalogueDeps, deps),
+            Effect.provideService(EffectFileSystem, effectFileSystemFromPromiseService(deps.fs)),
+          );
 
           return yield* io(async () => {
             await rm(join(sourcePath, name), { recursive: true });
             await copyFile(fixture, join(sourcePath, name));
 
-            // #when the first real pass publishes the new book but cannot remove the old folder marker
+            // #when the first session work publishes the new book but cannot remove the old folder marker
             const firstAdmission = await Effect.runPromise(session.requestPass());
             await Effect.runPromise(session.awaitCompletion);
             const failed = await Effect.runPromise(session.status);
+            const folderMarkerAfterFailure = await pathExists(join(outputPath, name, "_entry.xml"));
 
-            // #when a later real pass retries the obsolete folder cleanup after cleanup is possible again
+            // #when a later session work retries the obsolete folder cleanup after the callback succeeds
             const retryAdmission = await Effect.runPromise(session.requestPass());
             await Effect.runPromise(session.awaitCompletion);
             const retried = await Effect.runPromise(session.status);
@@ -482,6 +499,7 @@ test("folder-to-book cleanup retries after a failed obsolete-folder removal", as
               firstAdmission,
               failedState: failed.work.state,
               failedErrors: failed.work.errors.map((error) => error.work._tag),
+              folderMarkerAfterFailure,
               retryAdmission,
               retriedState: retried.work.state,
               retriedErrors: retried.work.errors.map((error) => error.work._tag),
@@ -501,6 +519,7 @@ test("folder-to-book cleanup retries after a failed obsolete-folder removal", as
       firstAdmission: "started",
       failedState: "complete-with-errors",
       failedErrors: ["FolderDeleted"],
+      folderMarkerAfterFailure: true,
       retryAdmission: "started",
       retriedState: "complete",
       retriedErrors: [],
@@ -571,12 +590,12 @@ test("source kind-change cleanup refuses to delete through a symlinked DATA ance
               await Effect.runPromise(session.awaitCompletion);
               const status = await Effect.runPromise(session.status);
 
-              // #then the cleanup is rejected before rm can traverse the DATA symlink
+              // #then the engine rejects cleanup before it can traverse the DATA symlink
               expect({
                 state: status.state,
-                errors: status.errors.map((error) => Cause.pretty(error.cause).includes("OPDS cleanup ancestor is not an owned directory")),
+                cleanupFailures: status.errors.map((error) => Cause.squash(error.cause) instanceof OutputCleanupFailed),
                 externalEntry: await pathExists(join(external, "Novel.fb2", "entry.xml")),
-              }).toEqual({ state: "complete-with-errors", errors: [true], externalEntry: true });
+              }).toEqual({ state: "complete-with-errors", cleanupFailures: [true], externalEntry: true });
             }),
           ),
         ),
@@ -910,23 +929,11 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
   const name = "Novel.fb2";
   await mkdir(join(sourcePath, name));
   await copyFile(fixture, join(sourcePath, name, "Inside.fb2"));
-  const errors: string[] = [];
-
-  const countedDeps = {
-    ...deps,
-    logger: {
-      ...deps.logger,
-      error: (component: string, message: string, cause?: unknown, ctx?: LogContext) => {
-        errors.push(`${message}: ${cause instanceof Error ? cause.message : String(cause)}`);
-        deps.logger.error(component, message, cause, ctx);
-      },
-    },
-  };
 
   try {
     const observation = await Effect.runPromise(
       Effect.scoped(
-        openEngineCatalogue(countedDeps).pipe(
+        openEngineCatalogue(deps).pipe(
           Effect.flatMap((session) =>
             io(async () => {
               const outputFolder = join(outputPath, name);
@@ -935,7 +942,7 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
               await rm(join(sourcePath, name), { recursive: true });
               await copyFile(fixture, join(sourcePath, name));
 
-              // #when local kind-change cleanup fails and the same path also publishes as a book
+              // #when engine-owned kind-change cleanup fails and the same path also publishes as a book
               await Effect.runPromise(
                 session.submit([
                   CatalogueEvent.FolderDeleted({ parent: sourcePath, name }),
@@ -947,7 +954,7 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
 
               return {
                 state: status.state,
-                failedSafely: errors.some((error) => error.includes("OPDS cleanup overlaps engine state")),
+                cleanupFailures: status.errors.map((error) => Cause.squash(error.cause) instanceof OutputCleanupFailed),
                 retainedErrors: status.errors.map((error) => error.work._tag),
                 outputFeed: await pathExists(join(outputFolder, "feed.xml")),
                 stateAlias: await pathExists(join(outputPath, ".sync-engine", "feed.xml")),
@@ -961,7 +968,7 @@ test("source kind-change cleanup refuses a state symlink alias", async () => {
     // #then the failed folder cleanup remains visible even though the same source path published as a book
     expect(observation).toEqual({
       state: "complete-with-errors",
-      failedSafely: true,
+      cleanupFailures: [true],
       retainedErrors: ["FolderDeleted"],
       outputFeed: true,
       stateAlias: true,
